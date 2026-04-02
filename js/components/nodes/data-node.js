@@ -22,8 +22,11 @@ class DataNode extends HTMLElement {
     const node = this.#node ?? {};
     const label = node.label ?? this.getAttribute("label") ?? "Data";
     const description = node.description ?? this.getAttribute("description") ?? "";
-    const source = node.data?.source ?? "Local";
+    const sourceType = String(node.data?.sourceType ?? node.data?.source ?? "json").toUpperCase();
     const readonly = node.data?.readonly !== false;
+    const lastUpdated = node.data?.lastUpdated
+      ? new Date(node.data.lastUpdated).toLocaleTimeString()
+      : "Never";
 
     this.className = "mg-node data";
     this.innerHTML = `
@@ -32,7 +35,10 @@ class DataNode extends HTMLElement {
         <span class="readonly-badge">${readonly ? "Read-only" : "Writable"}</span>
       </div>
       <p>${description}</p>
-      <div class="node-meta-inline">Source: <strong>${source}</strong></div>
+      <div class="node-meta-grid">
+        <span>Source</span><strong>${sourceType}</strong>
+        <span>Updated</span><strong>${lastUpdated}</strong>
+      </div>
     `;
   }
 }

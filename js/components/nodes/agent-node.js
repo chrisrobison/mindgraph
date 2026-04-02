@@ -27,7 +27,11 @@ class AgentNode extends HTMLElement {
     const role = node.data?.role ?? "Agent";
     const mode = node.data?.mode ?? "auto";
     const status = node.data?.status ?? "unknown";
-    const linkedDataCount = Number(node.data?.linkedDataCount ?? 0);
+    const linkedByIds = Array.isArray(node.data?.allowedDataSources)
+      ? node.data.allowedDataSources.length
+      : 0;
+    const linkedByCount = Number(node.data?.linkedDataCount ?? 0);
+    const linkedDataCount = Math.max(linkedByIds, linkedByCount);
 
     this.className = "mg-node agent";
     this.innerHTML = `

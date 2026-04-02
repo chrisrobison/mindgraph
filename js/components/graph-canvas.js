@@ -30,12 +30,30 @@ const nodeTemplates = {
   agent: {
     label: "New Agent",
     description: "Define a role and objective.",
-    data: { role: "Research Agent", mode: "orchestrate", status: "idle", linkedDataCount: 0 }
+    data: {
+      role: "Research Agent",
+      mode: "orchestrate",
+      status: "idle",
+      allowedDataSources: [],
+      linkedDataCount: 0
+    }
   },
   data: {
     label: "New Data",
     description: "Connect a data source.",
-    data: { source: "Local JSON", sourceType: "local", readonly: true }
+    data: {
+      source: "json",
+      sourceType: "json",
+      sourcePath: "embedded:site_config",
+      sourceUrl: "",
+      jsonPath: "",
+      refreshMode: "manual",
+      refreshInterval: 60,
+      readonly: true,
+      cachedData: null,
+      cachedSchema: null,
+      lastUpdated: ""
+    }
   },
   transformer: {
     label: "New Transformer",

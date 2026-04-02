@@ -21,6 +21,7 @@ import "./components/inspector/inspector-activity.js";
 import "./components/inspector/inspector-output.js";
 import "./components/inspector/inspector-automation.js";
 import "./components/inspector/inspector-permissions.js";
+import "./runtime/data-connectors.js";
 
 import { EVENTS } from "./core/event-constants.js";
 import { publish } from "./core/pan.js";

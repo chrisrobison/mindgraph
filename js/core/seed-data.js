@@ -16,7 +16,13 @@ export const seedDocument = createGraphDocument({
         role: "Agent Coordinator",
         mode: "orchestrate",
         status: "active",
-        linkedDataCount: 0
+        allowedDataSources: [
+          "data_site_config",
+          "data_market_data",
+          "data_ads_api_mock",
+          "data_support_db"
+        ],
+        linkedDataCount: 4
       }
     },
     {
@@ -29,6 +35,7 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "build",
         status: "ready",
+        allowedDataSources: ["data_site_config"],
         linkedDataCount: 1
       }
     },
@@ -42,6 +49,7 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "analyze",
         status: "active",
+        allowedDataSources: ["data_market_data"],
         linkedDataCount: 1
       }
     },
@@ -55,6 +63,7 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "optimize",
         status: "idle",
+        allowedDataSources: ["data_ads_api_mock"],
         linkedDataCount: 1
       }
     },
@@ -68,6 +77,7 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "assist",
         status: "ready",
+        allowedDataSources: ["data_support_db"],
         linkedDataCount: 1
       }
     },
@@ -78,7 +88,16 @@ export const seedDocument = createGraphDocument({
       description: "Website structure and launch copy settings.",
       position: { x: 220, y: 780 },
       data: {
-        source: "Project File",
+        source: "json",
+        sourceType: "json",
+        sourcePath: "site_config.json",
+        sourceUrl: "",
+        jsonPath: "",
+        refreshMode: "onOpen",
+        refreshInterval: 60,
+        cachedData: null,
+        cachedSchema: null,
+        lastUpdated: "",
         readonly: true
       }
     },
@@ -89,7 +108,16 @@ export const seedDocument = createGraphDocument({
       description: "Market intelligence snapshots and trend extracts.",
       position: { x: 650, y: 780 },
       data: {
-        source: "Market Feed",
+        source: "json",
+        sourceType: "json",
+        sourcePath: "market_data.json",
+        sourceUrl: "",
+        jsonPath: "",
+        refreshMode: "periodic",
+        refreshInterval: 45,
+        cachedData: null,
+        cachedSchema: null,
+        lastUpdated: "",
         readonly: true
       }
     },
@@ -100,7 +128,16 @@ export const seedDocument = createGraphDocument({
       description: "Mock ad-platform metrics and conversion signals.",
       position: { x: 1080, y: 780 },
       data: {
-        source: "Mock API",
+        source: "mock",
+        sourceType: "mock",
+        sourcePath: "ads_api_mock.json",
+        sourceUrl: "",
+        jsonPath: "",
+        refreshMode: "periodic",
+        refreshInterval: 30,
+        cachedData: null,
+        cachedSchema: null,
+        lastUpdated: "",
         readonly: true
       }
     },
@@ -111,7 +148,16 @@ export const seedDocument = createGraphDocument({
       description: "Support backlog and issue category records.",
       position: { x: 1510, y: 780 },
       data: {
-        source: "Support DB",
+        source: "json",
+        sourceType: "json",
+        sourcePath: "support_db.json",
+        sourceUrl: "",
+        jsonPath: "",
+        refreshMode: "manual",
+        refreshInterval: 60,
+        cachedData: null,
+        cachedSchema: null,
+        lastUpdated: "",
         readonly: true
       }
     }

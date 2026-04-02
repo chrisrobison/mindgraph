@@ -247,6 +247,7 @@
 .inspector-field input[type="text"],
 .inspector-field input[type="url"],
 .inspector-field input[type="number"],
+.inspector-field select,
 .inspector-field textarea {
   width: 100%;
   border: 1px solid #cdd9ea;
@@ -290,6 +291,53 @@
   margin: 0;
   color: var(--text-soft);
   font-size: 0.8rem;
+}
+
+.inspector-source-list {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.inspector-source-item {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  font-size: 0.79rem;
+  color: #2f415d;
+}
+
+.inspector-source-item code {
+  font-size: 0.67rem;
+  color: #516784;
+}
+
+.inspector-inline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.inspector-last-updated {
+  font-size: 0.72rem;
+  color: #5f7391;
+}
+
+.inspector-preview {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid #d7e2f1;
+  border-radius: 8px;
+  background: #ffffff;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .log-list {
