@@ -27,6 +27,7 @@
 .mg-canvas {
   grid-area: canvas;
   display: flex;
+  flex-direction: column;
   min-height: 0;
   min-width: 0;
 }
