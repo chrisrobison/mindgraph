@@ -1,4 +1,5 @@
 import { mockAgentRuntime } from "../../runtime/mock-agent-runtime.js";
+import { uiStore } from "../../store/ui-store.js";
 import { emitNodePatch, escapeHtml, numberValue, patchNodeData, textValue } from "./shared.js";
 
 const toActivityEntries = (value) => (Array.isArray(value) ? value : []);
@@ -55,7 +56,22 @@ class InspectorActivity extends HTMLElement {
 
     const status = escapeHtml(textValue(node.data?.status ?? "idle"));
     const confidence = numberValue(node.data?.confidence, 0.5);
-    const activity = toActivityEntries(node.data?.activityHistory).slice(0, 12);
+    const fallbackActivity = uiStore
+      .getRuntimeState()
+      .activityItems.filter((entry) => entry?.context?.nodeId === node.id)
+      .map((entry) => ({
+        at: entry?.at ?? entry?.timestamp,
+        level: entry?.level ?? "info",
+        message: entry?.message ?? "(no message)"
+      }));
+
+    const activity = toActivityEntries(node.data?.activityHistory)
+      .concat(fallbackActivity)
+      .filter((entry, index, list) => {
+        const key = `${entry?.at ?? "unknown"}:${entry?.level ?? "info"}:${entry?.message ?? ""}`;
+        return index === list.findIndex((other) => `${other?.at ?? "unknown"}:${other?.level ?? "info"}:${other?.message ?? ""}` === key);
+      })
+      .slice(0, 12);
     const runHistory = toActivityEntries(node.data?.runHistory).slice(0, 8);
 
     const activityMarkup = activity.length

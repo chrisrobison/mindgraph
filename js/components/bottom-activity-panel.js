@@ -1,40 +1,73 @@
 import { EVENTS } from "../core/event-constants.js";
-import { publish, subscribe } from "../core/pan.js";
+import { subscribe } from "../core/pan.js";
+import { graphStore } from "../store/graph-store.js";
+import { uiStore } from "../store/ui-store.js";
+
+const tabs = [
+  { key: "messages", label: "Messages", tag: "bottom-messages-view" },
+  { key: "activity", label: "Activity Log", tag: "bottom-activity-log-view" },
+  { key: "queue", label: "Task Queue", tag: "bottom-task-queue-view" },
+  { key: "history", label: "Run History", tag: "bottom-run-history-view" },
+  { key: "errors", label: "Errors", tag: "bottom-error-view" }
+];
+
+const tabByKey = Object.fromEntries(tabs.map((tab) => [tab.key, tab]));
+const normalizeTab = (value) => (tabByKey[value] ? value : "messages");
 
 class BottomActivityPanel extends HTMLElement {
   #dispose = [];
-  #tab = "activity";
-  #logs = [];
-  #tasks = [];
+  #tab = "messages";
+  #runtime = uiStore.getRuntimeState();
+  #selectedNodeId = null;
+  #selectedNode = null;
 
   connectedCallback() {
+    const state = uiStore.getState();
+    this.#tab = normalizeTab(state.bottomTab);
+    this.#runtime = uiStore.getRuntimeState();
+    this.#selectedNodeId = state.selectedNodeId;
+    this.#selectedNode = state.selectedNodeId ? graphStore.getNode(state.selectedNodeId) : null;
+
     this.render();
+    this.#bind();
 
     this.#dispose.push(
       subscribe(EVENTS.PANEL_BOTTOM_TAB_CHANGED, ({ payload }) => {
-        this.#tab = payload?.tab ?? "activity";
+        this.#tab = normalizeTab(payload?.tab);
         this.render();
+        this.#bind();
       })
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.ACTIVITY_LOG_APPENDED, ({ payload, timestamp }) => {
-        this.#logs = [
-          {
-            timestamp,
-            level: payload?.level ?? "info",
-            message: payload?.message ?? "(empty log message)"
-          },
-          ...this.#logs
-        ].slice(0, 50);
-        if (this.#tab === "activity") this.render();
+      subscribe(EVENTS.UI_RUNTIME_STATE_CHANGED, () => {
+        this.#runtime = uiStore.getRuntimeState();
+        this.renderView();
+        this.#syncDevConsoleToggle();
       })
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.TASK_QUEUE_UPDATED, ({ payload }) => {
-        this.#tasks = payload?.tasks ?? [];
-        if (this.#tab === "queue") this.render();
+      subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
+        this.#selectedNodeId = payload?.nodeId ?? null;
+        this.#selectedNode = this.#selectedNodeId ? graphStore.getNode(this.#selectedNodeId) : null;
+        if (this.#tab === "activity") this.renderView();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
+        this.#selectedNodeId = null;
+        this.#selectedNode = null;
+        if (this.#tab === "activity") this.renderView();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
+        if (!this.#selectedNodeId || payload?.nodeId !== this.#selectedNodeId) return;
+        this.#selectedNode = graphStore.getNode(this.#selectedNodeId);
+        if (this.#tab === "activity") this.renderView();
       })
     );
   }
@@ -44,60 +77,78 @@ class BottomActivityPanel extends HTMLElement {
     this.#dispose = [];
   }
 
-  #bindTabs() {
+  #bind() {
     this.querySelectorAll("[data-bottom-tab]").forEach((button) => {
       button.addEventListener("click", () => {
-        publish(EVENTS.PANEL_BOTTOM_TAB_CHANGED, { tab: button.dataset.bottomTab });
+        uiStore.setBottomTab(button.dataset.bottomTab);
       });
+    });
+
+    this.querySelector("[data-action='toggle-dev-console']")?.addEventListener("click", () => {
+      uiStore.setDevConsoleVisible(!this.#runtime.devConsoleVisible);
     });
   }
 
-  #renderActivity() {
-    if (!this.#logs.length) return "<p>No activity yet.</p>";
-
-    return `<ul class="log-list">${this.#logs
-      .map(
-        (entry) => `<li class="log-item">${new Date(entry.timestamp).toLocaleTimeString()} [${entry.level}] ${entry.message}</li>`
-      )
-      .join("")}</ul>`;
+  #syncDevConsoleToggle() {
+    const button = this.querySelector("[data-action='toggle-dev-console']");
+    if (!button) return;
+    button.setAttribute("aria-pressed", this.#runtime.devConsoleVisible ? "true" : "false");
+    button.textContent = this.#runtime.devConsoleVisible ? "Hide PAN Console" : "Show PAN Console";
   }
 
-  #renderQueue() {
-    if (!this.#tasks.length) return "<p>No queued tasks.</p>";
+  renderView() {
+    const panel = this.querySelector("[data-role='bottom-tab-content']");
+    if (!panel) return;
 
-    return `<ol>${this.#tasks
-      .map((task) => {
-        const progress = Number(task.progress);
-        const showProgress = Number.isFinite(progress);
-        const progressLabel = showProgress ? ` ${Math.round(progress * 100)}%` : "";
-        return `<li>${task.label} <em>(${task.status}${progressLabel})</em></li>`;
-      })
-      .join("")}</ol>`;
+    const active = tabByKey[this.#tab] ?? tabByKey.messages;
+    panel.innerHTML = "";
+    const view = document.createElement(active.tag);
+
+    if (this.#tab === "messages") {
+      view.items = this.#runtime.activityItems;
+    } else if (this.#tab === "activity") {
+      view.items = this.#runtime.activityItems;
+      view.selectedNode = this.#selectedNode;
+    } else if (this.#tab === "queue") {
+      view.items = this.#runtime.taskQueue;
+    } else if (this.#tab === "history") {
+      view.items = this.#runtime.runHistory;
+    } else {
+      view.items = this.#runtime.errors;
+    }
+
+    panel.append(view);
+
+    const devPanel = this.querySelector("[data-role='pan-dev-console']");
+    if (!devPanel) return;
+
+    devPanel.innerHTML = this.#runtime.devConsoleVisible ? "<pan-event-console></pan-event-console>" : "";
   }
 
   render() {
-    const content =
-      this.#tab === "activity"
-        ? this.#renderActivity()
-        : this.#tab === "queue"
-          ? this.#renderQueue()
-          : "<pan-event-console></pan-event-console>";
-
     this.innerHTML = `
       <section class="mg-panel">
         <header>Activity & Runtime</header>
-        <div class="content">
-          <div class="toolbar-actions" style="margin-bottom:0.5rem;">
-            <button type="button" data-bottom-tab="activity" aria-pressed="${this.#tab === "activity"}">Activity</button>
-            <button type="button" data-bottom-tab="queue" aria-pressed="${this.#tab === "queue"}">Task Queue</button>
-            <button type="button" data-bottom-tab="events" aria-pressed="${this.#tab === "events"}">PAN Events</button>
+        <div class="content bottom-panel-content">
+          <div class="bottom-panel-toolbar">
+            <div class="toolbar-actions" role="tablist" aria-label="Bottom activity tabs">
+              ${tabs
+                .map(
+                  (tab) => `<button type="button" role="tab" data-bottom-tab="${tab.key}" aria-pressed="${this.#tab === tab.key}">${tab.label}</button>`
+                )
+                .join("")}
+            </div>
+            <button type="button" class="bottom-dev-toggle" data-action="toggle-dev-console" aria-pressed="${this.#runtime.devConsoleVisible}">
+              ${this.#runtime.devConsoleVisible ? "Hide PAN Console" : "Show PAN Console"}
+            </button>
           </div>
-          ${content}
+          <section class="bottom-panel-tab-content" data-role="bottom-tab-content"></section>
+          <section class="bottom-panel-dev" data-role="pan-dev-console"></section>
         </div>
       </section>
     `;
 
-    this.#bindTabs();
+    this.renderView();
   }
 }
 

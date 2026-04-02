@@ -401,6 +401,182 @@
   overflow: auto;
 }
 
+.bottom-panel-content {
+  display: grid;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+  gap: 0.65rem;
+}
+
+.bottom-panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.bottom-dev-toggle {
+  border: 1px solid #c6d5e8;
+  background: #f3f8ff;
+  color: #2c517c;
+  border-radius: 8px;
+  padding: 0.38rem 0.56rem;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.bottom-dev-toggle[aria-pressed="true"] {
+  border-color: #2e5b94;
+  color: #20466f;
+  background: #e8f1fe;
+}
+
+.bottom-panel-tab-content {
+  min-height: 0;
+}
+
+.bottom-panel-dev {
+  border-top: 1px solid #dee7f3;
+  padding-top: 0.55rem;
+}
+
+.panel-empty {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.panel-split {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+}
+
+.panel-split:last-child {
+  margin-bottom: 0;
+}
+
+.panel-split h4 {
+  margin: 0;
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+  color: #36567a;
+}
+
+.row-meta {
+  color: #607793;
+  margin-right: 0.4rem;
+}
+
+.level-info {
+  color: #2b5f95;
+}
+
+.level-warn {
+  color: #8d5f1a;
+}
+
+.level-error {
+  color: #8a2f38;
+}
+
+.panel-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.panel-row {
+  border: 1px solid #dbe6f3;
+  border-radius: 8px;
+  background: #f9fcff;
+  padding: 0.45rem 0.55rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.panel-row-error {
+  border-color: #edcfd3;
+  background: #fff8f9;
+}
+
+.panel-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.panel-row-main code,
+.pan-event-row code {
+  padding: 0.12rem 0.28rem;
+  border: 1px solid #d8e3f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #3b4f67;
+  font-size: 0.7rem;
+}
+
+.chip {
+  border: 1px solid #cddbed;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  background: #edf4ff;
+  color: #34587d;
+}
+
+.panel-row-meta {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: #5f7691;
+}
+
+.panel-row-detail {
+  font-size: 0.76rem;
+  color: #2d425d;
+}
+
+.pan-console {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.pan-console-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.pan-console-toolbar input {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid #c8d8eb;
+  border-radius: 8px;
+  padding: 0.36rem 0.46rem;
+  font: inherit;
+  font-size: 0.76rem;
+  background: #fbfdff;
+}
+
+.pan-console-toolbar button {
+  border: 1px solid #c6d5e8;
+  background: #ffffff;
+  color: #304e70;
+  border-radius: 8px;
+  padding: 0.34rem 0.54rem;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.pan-event-row {
+  display: grid;
+  gap: 0.2rem;
+}
+
 .graph-workspace {
   height: 100%;
   min-height: 360px;

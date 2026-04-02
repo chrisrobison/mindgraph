@@ -1,16 +1,27 @@
 import { subscribe } from "../core/pan.js";
+import { compactPreview, escapeHtml, formatTime } from "./bottom-panel/shared.js";
+
+const hasAttr = (element, name) => element.hasAttribute(name);
 
 class PanEventConsole extends HTMLElement {
   #dispose = [];
   #events = [];
+  #filter = "";
+  #maxEvents = 80;
 
   connectedCallback() {
+    const configuredMax = Number(this.getAttribute("max-events"));
+    if (Number.isFinite(configuredMax) && configuredMax > 0) {
+      this.#maxEvents = Math.min(200, Math.max(10, Math.floor(configuredMax)));
+    }
+
     this.render();
+    this.#bind();
 
     this.#dispose.push(
       subscribe("*", (event) => {
-        this.#events = [event, ...this.#events].slice(0, 30);
-        this.render();
+        this.#events = [event, ...this.#events].slice(0, this.#maxEvents);
+        this.renderList();
       })
     );
   }
@@ -20,15 +31,64 @@ class PanEventConsole extends HTMLElement {
     this.#dispose = [];
   }
 
-  render() {
-    const lines = this.#events
-      .map(
-        (entry) =>
-          `<li class="log-item">${new Date(entry.timestamp).toLocaleTimeString()} ${entry.eventName}</li>`
-      )
-      .join("");
+  #bind() {
+    this.querySelector("[data-action='clear-events']")?.addEventListener("click", () => {
+      this.#events = [];
+      this.renderList();
+    });
 
-    this.innerHTML = lines ? `<ul class="log-list">${lines}</ul>` : "<p>No PAN events captured yet.</p>";
+    this.querySelector("[data-role='event-filter']")?.addEventListener("input", (event) => {
+      this.#filter = String(event.target?.value ?? "").trim().toLowerCase();
+      this.renderList();
+    });
+  }
+
+  #isVisible(entry) {
+    if (!this.#filter) return true;
+    const payloadText = compactPreview(entry?.payload ?? {}, 220).toLowerCase();
+    const eventName = String(entry?.eventName ?? "").toLowerCase();
+    return eventName.includes(this.#filter) || payloadText.includes(this.#filter);
+  }
+
+  renderList() {
+    const list = this.querySelector("[data-role='events-list']");
+    if (!list) return;
+
+    const visibleItems = this.#events.filter((entry) => this.#isVisible(entry));
+    if (!visibleItems.length) {
+      list.innerHTML = '<p class="panel-empty">No PAN events captured for this filter.</p>';
+      return;
+    }
+
+    list.innerHTML = `
+      <ul class="log-list">
+        ${visibleItems
+          .map((entry) => {
+            const timestamp = escapeHtml(formatTime(entry?.timestamp));
+            const name = escapeHtml(entry?.eventName ?? "unknown.event");
+            const preview = escapeHtml(compactPreview(entry?.payload ?? {}, 180));
+            return `<li class="log-item pan-event-row"><span class="row-meta">${timestamp}</span> <strong>${name}</strong><code>${preview}</code></li>`;
+          })
+          .join("")}
+      </ul>
+    `;
+  }
+
+  render() {
+    const showFilter = !hasAttr(this, "disable-filter");
+    const showClear = !hasAttr(this, "disable-clear");
+
+    this.innerHTML = `
+      <section class="pan-console">
+        <div class="pan-console-toolbar">
+          ${showFilter ? '<input type="search" data-role="event-filter" placeholder="Filter events or payload..." aria-label="Filter PAN events" />' : ""}
+          ${showClear ? '<button type="button" data-action="clear-events">Clear</button>' : ""}
+        </div>
+        <div data-role="events-list"></div>
+      </section>
+    `;
+
+    this.renderList();
   }
 }
 

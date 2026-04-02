@@ -5,6 +5,11 @@ import "./components/graph-canvas.js";
 import "./components/inspector-panel.js";
 import "./components/bottom-activity-panel.js";
 import "./components/pan-event-console.js";
+import "./components/bottom-panel/messages-view.js";
+import "./components/bottom-panel/activity-log-view.js";
+import "./components/bottom-panel/task-queue-view.js";
+import "./components/bottom-panel/run-history-view.js";
+import "./components/bottom-panel/error-view.js";
 
 import "./components/nodes/note-node.js";
 import "./components/nodes/agent-node.js";
@@ -33,7 +38,8 @@ const bootstrap = () => {
   graphStore.loadSeededGraph();
   uiStore.setTool("select");
   uiStore.setInspectorTab("overview");
-  uiStore.setBottomTab("activity");
+  uiStore.setBottomTab("messages");
+  uiStore.setDevConsoleVisible(true);
 
   publish(EVENTS.ACTIVITY_LOG_APPENDED, {
     level: "info",

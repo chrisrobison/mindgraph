@@ -59,6 +59,14 @@ export class MockAgentRuntime extends AgentRuntime {
       const message = `Run failed: node ${nodeId} not found`;
       this.#appendActivity("error", message, { nodeId, runId });
       this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, { nodeId, runId, reason: message, trigger });
+      this.publish(this.events.RUNTIME_ERROR_APPENDED, {
+        nodeId,
+        nodeLabel: "Unknown node",
+        runId,
+        message,
+        source: "mock-agent-runtime",
+        at: new Date().toISOString()
+      });
       return { ok: false, nodeId, runId, error: message };
     }
 
@@ -66,6 +74,14 @@ export class MockAgentRuntime extends AgentRuntime {
       const message = `Run skipped: ${node.label} is not an agent node`;
       this.#appendActivity("warn", message, { nodeId, runId });
       this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, { nodeId, runId, reason: message, trigger });
+      this.publish(this.events.RUNTIME_ERROR_APPENDED, {
+        nodeId,
+        nodeLabel: node.label,
+        runId,
+        message,
+        source: "mock-agent-runtime",
+        at: new Date().toISOString()
+      });
       return { ok: false, nodeId, runId, error: message };
     }
 
@@ -190,6 +206,16 @@ export class MockAgentRuntime extends AgentRuntime {
         status: "completed",
         confidence,
         output
+      });
+      this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
+        nodeId,
+        nodeLabel: node.label,
+        runId,
+        status: "completed",
+        summary: output.summary,
+        confidence,
+        output,
+        at: runEntry.at
       });
 
       this.#appendActivity("info", `Completed run for ${node.label} (confidence ${confidence.toFixed(2)})`, {
@@ -365,6 +391,25 @@ export class MockAgentRuntime extends AgentRuntime {
       runId,
       reason,
       output
+    });
+    this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
+      nodeId: node.id,
+      nodeLabel: node.label,
+      runId,
+      status: "failed",
+      summary: reason,
+      confidence,
+      output,
+      at: failedAt
+    });
+    this.publish(this.events.RUNTIME_ERROR_APPENDED, {
+      nodeId: node.id,
+      nodeLabel: node.label,
+      runId,
+      message: reason,
+      source: "mock-agent-runtime",
+      output,
+      at: failedAt
     });
 
     this.#appendActivity("error", `Run failed for ${node.label}: ${reason}`, {

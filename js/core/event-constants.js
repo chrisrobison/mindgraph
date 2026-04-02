@@ -10,10 +10,14 @@ export const EVENTS = Object.freeze({
   RUNTIME_AGENT_RUN_STARTED: "runtime.agent.run.started",
   RUNTIME_AGENT_RUN_COMPLETED: "runtime.agent.run.completed",
   RUNTIME_AGENT_RUN_FAILED: "runtime.agent.run.failed",
+  RUNTIME_RUN_HISTORY_APPENDED: "runtime.run.history.appended",
+  RUNTIME_ERROR_APPENDED: "runtime.error.appended",
   RUNTIME_DATA_REFRESHED: "runtime.data.refreshed",
   ACTIVITY_LOG_APPENDED: "activity.log.appended",
   TASK_QUEUE_UPDATED: "task.queue.updated",
   PANEL_BOTTOM_TAB_CHANGED: "panel.bottom.tab.changed",
+  PANEL_DEV_CONSOLE_TOGGLED: "panel.dev.console.toggled",
+  UI_RUNTIME_STATE_CHANGED: "ui.runtime.state.changed",
   GRAPH_DOCUMENT_LOADED: "graph.document.loaded",
   GRAPH_DOCUMENT_SAVED: "graph.document.saved"
 });
