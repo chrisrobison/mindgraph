@@ -32,10 +32,17 @@ import "./runtime/mock-agent-runtime.js";
 import { EVENTS } from "./core/event-constants.js";
 import { publish } from "./core/pan.js";
 import { graphStore } from "./store/graph-store.js";
+import { persistenceStore } from "./store/persistence-store.js";
 import { uiStore } from "./store/ui-store.js";
 
 const bootstrap = () => {
-  graphStore.loadSeededGraph();
+  persistenceStore.initialize();
+
+  const restored = persistenceStore.restoreLastSession();
+  if (!restored) {
+    graphStore.loadSeededGraph();
+  }
+
   uiStore.setTool("select");
   uiStore.setInspectorTab("overview");
   uiStore.setBottomTab("messages");
@@ -43,7 +50,7 @@ const bootstrap = () => {
 
   publish(EVENTS.ACTIVITY_LOG_APPENDED, {
     level: "info",
-    message: "MindGraph AI initialized"
+    message: restored ? "MindGraph AI restored from last session" : "MindGraph AI initialized"
   });
 };
 

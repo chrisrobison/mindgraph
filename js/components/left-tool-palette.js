@@ -13,21 +13,17 @@ const TOOL_GROUPS = [
   {
     title: "Add Nodes",
     tools: [
-      { id: "create:note", label: "Add Note Node" },
-      { id: "create:agent", label: "Add Agent Node" },
-      { id: "create:data", label: "Add Data Node" },
-      { id: "create:transformer", label: "Add Transformer Node" },
-      { id: "create:view", label: "Add View Node" },
-      { id: "create:action", label: "Add Action Node" }
+      { id: "create:note", label: "Note Node" },
+      { id: "create:agent", label: "Agent Node" },
+      { id: "create:data", label: "Data Node" },
+      { id: "create:transformer", label: "Transformer Node" },
+      { id: "create:view", label: "View Node" },
+      { id: "create:action", label: "Action Node" }
     ]
   },
   {
     title: "Structure",
-    tools: [
-      { id: "connect", label: "Connect" },
-      { id: "comment", label: "Comment" },
-      { id: "frame", label: "Frame/Group" }
-    ]
+    tools: [{ id: "connect", label: "Connect Edge" }]
   }
 ];
 
@@ -99,6 +95,13 @@ class LeftToolPalette extends HTMLElement {
         <header>Tools</header>
         <div class="content palette-content">
           ${sections}
+          <section class="palette-shortcuts">
+            <h4>Shortcuts</h4>
+            <p><kbd>Delete</kbd> remove selected node</p>
+            <p><kbd>Cmd/Ctrl+D</kbd> duplicate selected node</p>
+            <p><kbd>Cmd/Ctrl+Z</kbd> / <kbd>Shift+Cmd/Ctrl+Z</kbd> undo/redo</p>
+            <p><kbd>Esc</kbd> reset tool or clear selection</p>
+          </section>
         </div>
       </aside>
     `;

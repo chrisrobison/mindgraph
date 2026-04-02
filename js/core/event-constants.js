@@ -5,6 +5,11 @@ export const EVENTS = Object.freeze({
   GRAPH_EDGE_UPDATED: "graph.edge.updated",
   GRAPH_SELECTION_CLEARED: "graph.selection.cleared",
   GRAPH_VIEWPORT_CHANGED: "graph.viewport.changed",
+  GRAPH_HISTORY_CHANGED: "graph.history.changed",
+  GRAPH_AUTOSAVE_STATE_CHANGED: "graph.autosave.state.changed",
+  GRAPH_DOCUMENT_LOADED: "graph.document.loaded",
+  GRAPH_DOCUMENT_SAVED: "graph.document.saved",
+  GRAPH_DOCUMENT_AUTOSAVED: "graph.document.autosaved",
   TOOLBAR_TOOL_CHANGED: "toolbar.tool.changed",
   INSPECTOR_TAB_CHANGED: "inspector.tab.changed",
   RUNTIME_AGENT_RUN_STARTED: "runtime.agent.run.started",
@@ -17,7 +22,5 @@ export const EVENTS = Object.freeze({
   TASK_QUEUE_UPDATED: "task.queue.updated",
   PANEL_BOTTOM_TAB_CHANGED: "panel.bottom.tab.changed",
   PANEL_DEV_CONSOLE_TOGGLED: "panel.dev.console.toggled",
-  UI_RUNTIME_STATE_CHANGED: "ui.runtime.state.changed",
-  GRAPH_DOCUMENT_LOADED: "graph.document.loaded",
-  GRAPH_DOCUMENT_SAVED: "graph.document.saved"
+  UI_RUNTIME_STATE_CHANGED: "ui.runtime.state.changed"
 });

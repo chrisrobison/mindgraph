@@ -1,17 +1,27 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
 :root {
-  --bg: #f2f5f9;
+  --bg: #edf2f8;
+  --bg-2: #dce7f6;
   --surface: #ffffff;
-  --surface-muted: #edf2f8;
-  --line: #d3ddeb;
-  --text: #1f2a3d;
-  --text-soft: #5f6f88;
-  --accent: #2e5b94;
-  --toolbar-height: 64px;
-  --bottom-height: 210px;
-  --left-width: 210px;
-  --right-width: 340px;
-  --radius: 10px;
-  --font: "IBM Plex Sans", "Segoe UI", "SF Pro Text", Arial, sans-serif;
+  --surface-muted: #f4f8fe;
+  --line: #d7e1ef;
+  --line-strong: #b5c4d8;
+  --text: #172235;
+  --text-soft: #5f728c;
+  --accent: #245e9b;
+  --accent-soft: #e4eefb;
+  --danger: #a0303f;
+  --success: #1f7040;
+  --shadow-soft: 0 10px 28px -20px rgba(11, 28, 53, 0.45);
+  --shadow-panel: 0 18px 40px -26px rgba(17, 38, 70, 0.36);
+  --toolbar-height: 72px;
+  --bottom-height: 228px;
+  --left-width: 238px;
+  --right-width: 370px;
+  --radius: 14px;
+  --font: "Manrope", "Segoe UI", "SF Pro Text", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SF Mono", Menlo, monospace;
 }
 
 * {
@@ -26,16 +36,55 @@ body {
   height: 100%;
   color: var(--text);
   font-family: var(--font);
-  background: radial-gradient(circle at top left, #f8fbff 0%, var(--bg) 55%);
+  background:
+    radial-gradient(circle at 7% 3%, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 92% 84%, rgba(196, 218, 244, 0.55) 0%, rgba(196, 218, 244, 0) 38%),
+    linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
 }
 
 body {
   min-height: 100vh;
+  font-size: 14px;
+  letter-spacing: 0.01em;
 }
 
 app-shell {
   display: block;
   min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(36, 94, 155, 0.22);
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  padding: 0.06rem 0.3rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: #fbfdff;
+  color: #324b6c;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.4;
 }
 
 @media (min-width: 961px) {
