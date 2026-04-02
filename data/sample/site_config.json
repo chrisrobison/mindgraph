@@ -1,0 +1,5 @@
+{
+  "siteName": "MindGraph Demo Site",
+  "theme": "light",
+  "regions": ["hero", "features", "footer"]
+}

@@ -1,0 +1,6 @@
+{
+  "tickets": [
+    { "id": "t-1001", "priority": "high", "state": "open" },
+    { "id": "t-1002", "priority": "medium", "state": "open" }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "campaigns": [
+    { "id": "cmp_1", "name": "Spring Launch", "status": "active" },
+    { "id": "cmp_2", "name": "Retargeting", "status": "paused" }
+  ]
+}

@@ -1,0 +1,39 @@
+:root {
+  --bg: #f2f5f9;
+  --surface: #ffffff;
+  --surface-muted: #edf2f8;
+  --line: #d3ddeb;
+  --text: #1f2a3d;
+  --text-soft: #5f6f88;
+  --accent: #2e5b94;
+  --toolbar-height: 64px;
+  --bottom-height: 210px;
+  --left-width: 230px;
+  --right-width: 340px;
+  --radius: 10px;
+  --font: "IBM Plex Sans", "Segoe UI", "SF Pro Text", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--text);
+  font-family: var(--font);
+  background: radial-gradient(circle at top left, #f8fbff 0%, var(--bg) 55%);
+}
+
+body {
+  min-height: 100vh;
+}
+
+app-shell {
+  display: block;
+  min-height: 100vh;
+}

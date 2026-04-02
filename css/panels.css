@@ -1,0 +1,155 @@
+.mg-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 0.5rem;
+  overflow: hidden;
+}
+
+.mg-panel header {
+  background: linear-gradient(180deg, #f7f9fd 0%, var(--surface-muted) 100%);
+  border-bottom: 1px solid var(--line);
+  padding: 0.65rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.93rem;
+}
+
+.mg-panel .content {
+  padding: 0.85rem;
+  font-size: 0.88rem;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.toolbar-actions button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+}
+
+.toolbar-actions button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.palette-tools,
+.inspector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.log-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.log-item {
+  padding: 0.45rem 0.6rem;
+  background: #f8fbff;
+  border: 1px solid #e0e8f3;
+  border-radius: 8px;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.mg-canvas {
+  min-height: 0;
+}
+
+.mg-graph-panel {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 1rem);
+}
+
+.mg-graph-content {
+  flex: 1;
+  min-height: 380px;
+  padding: 0.65rem !important;
+}
+
+.graph-workspace {
+  height: 100%;
+  min-height: 360px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #cfdbeb;
+  background-color: #f8fbff;
+  background-image:
+    linear-gradient(to right, rgba(157, 175, 200, 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(157, 175, 200, 0.25) 1px, transparent 1px);
+  background-size: 24px 24px;
+  cursor: grab;
+}
+
+.graph-workspace.is-dragging-node {
+  cursor: grabbing;
+}
+
+.graph-scene {
+  position: absolute;
+  inset: 0;
+  width: 3200px;
+  height: 2200px;
+  transform-origin: 0 0;
+}
+
+.graph-edges-layer {
+  position: absolute;
+  inset: 0;
+  width: 3200px;
+  height: 2200px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.graph-node-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.graph-edge-path {
+  fill: none;
+  stroke: #90a5c0;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+}
+
+.graph-edge-parent_of {
+  stroke: #2f6aaa;
+}
+
+.graph-edge-reports_to {
+  stroke: #3e6ea5;
+  stroke-dasharray: 5 4;
+}
+
+.graph-edge-reads_from {
+  stroke: #28846f;
+}
+
+.graph-edge-arrow {
+  fill: #7b92af;
+}
+
+.graph-edge-label {
+  font-size: 11px;
+  fill: #4f6582;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: #f8fbff;
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}

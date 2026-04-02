@@ -1,0 +1,52 @@
+.mg-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: var(--toolbar-height) 1fr var(--bottom-height);
+  grid-template-columns: var(--left-width) minmax(0, 1fr) var(--right-width);
+  grid-template-areas:
+    "toolbar toolbar toolbar"
+    "palette canvas inspector"
+    "activity activity inspector";
+}
+
+.mg-toolbar {
+  grid-area: toolbar;
+}
+
+.mg-palette {
+  grid-area: palette;
+}
+
+.mg-canvas {
+  grid-area: canvas;
+  display: flex;
+  min-height: 0;
+}
+
+.mg-inspector {
+  grid-area: inspector;
+}
+
+.mg-activity {
+  grid-area: activity;
+}
+
+@media (max-width: 1200px) {
+  :root {
+    --left-width: 200px;
+    --right-width: 300px;
+  }
+}
+
+@media (max-width: 960px) {
+  .mg-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--toolbar-height) auto minmax(300px, 1fr) auto auto;
+    grid-template-areas:
+      "toolbar"
+      "palette"
+      "canvas"
+      "inspector"
+      "activity";
+  }
+}
