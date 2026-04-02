@@ -1,5 +1,7 @@
 import { EVENTS } from "../core/event-constants.js";
+import { EDGE_TYPE_VALUES } from "../core/types.js";
 import { publish, subscribe } from "../core/pan.js";
+import { graphStore } from "../store/graph-store.js";
 
 const nodeTagByType = {
   note: "note-node",
@@ -19,16 +21,52 @@ const nodeSizeByType = {
   action: { width: 210, height: 104 }
 };
 
+const nodeTemplates = {
+  note: {
+    label: "New Note",
+    description: "Capture context and decisions.",
+    data: { color: "#f4f9ff", tags: [] }
+  },
+  agent: {
+    label: "New Agent",
+    description: "Define a role and objective.",
+    data: { role: "Research Agent", mode: "orchestrate", status: "idle", linkedDataCount: 0 }
+  },
+  data: {
+    label: "New Data",
+    description: "Connect a data source.",
+    data: { source: "Local JSON", sourceType: "local", readonly: true }
+  },
+  transformer: {
+    label: "New Transformer",
+    description: "Transform source inputs.",
+    data: { inputSchema: {}, outputSchema: {} }
+  },
+  view: {
+    label: "New View",
+    description: "Render output for review.",
+    data: { outputTemplate: "summary_card" }
+  },
+  action: {
+    label: "New Action",
+    description: "Run an external action.",
+    data: { command: "noop", config: {} }
+  }
+};
+
 const worldSize = {
   width: 3200,
   height: 2200
 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const clampZoom = (value) => clamp(value, 0.45, 1.8);
 
 class GraphCanvas extends HTMLElement {
   #document = null;
   #selectedNodeId = null;
+  #activeTool = "select";
+  #connectState = { sourceNodeId: null };
   #dispose = [];
   #viewport = { x: 0, y: 0, zoom: 1 };
   #workspaceEl = null;
@@ -50,11 +88,34 @@ class GraphCanvas extends HTMLElement {
           this.#viewport = {
             x: Number(nextDocument.viewport.x ?? 0),
             y: Number(nextDocument.viewport.y ?? 0),
-            zoom: clamp(Number(nextDocument.viewport.zoom ?? 1), 0.45, 1.8)
+            zoom: clampZoom(Number(nextDocument.viewport.zoom ?? 1))
           };
+          publish(EVENTS.GRAPH_VIEWPORT_CHANGED, { zoom: this.#viewport.zoom, origin: "graph-canvas" });
         }
 
         this.#renderGraph();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_VIEWPORT_CHANGED, ({ payload }) => {
+        const nextZoom = Number(payload?.zoom ?? this.#viewport.zoom);
+        const nextX = Number(payload?.x ?? this.#viewport.x);
+        const nextY = Number(payload?.y ?? this.#viewport.y);
+        if (!Number.isFinite(nextZoom)) return;
+        this.#viewport.zoom = clampZoom(nextZoom);
+        this.#viewport.x = Number.isFinite(nextX) ? nextX : this.#viewport.x;
+        this.#viewport.y = Number.isFinite(nextY) ? nextY : this.#viewport.y;
+        this.#applyViewportTransform();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.TOOLBAR_TOOL_CHANGED, ({ payload }) => {
+        this.#activeTool = payload?.tool ?? "select";
+        if (this.#activeTool !== "connect") this.#connectState.sourceNodeId = null;
+        this.#syncInteractionMode();
+        this.#highlightSelection();
       })
     );
 
@@ -117,6 +178,8 @@ class GraphCanvas extends HTMLElement {
         this.#renderEdges();
       })
     );
+
+    this.#syncInteractionMode();
   }
 
   disconnectedCallback() {
@@ -129,7 +192,7 @@ class GraphCanvas extends HTMLElement {
       <section class="mg-panel mg-graph-panel">
         <header>Graph Canvas</header>
         <div class="content mg-graph-content">
-          <div class="graph-workspace" data-role="workspace">
+          <div class="graph-workspace" data-role="workspace" tabindex="0">
             <div class="graph-scene" data-role="scene">
               <svg class="graph-edges-layer" data-role="edges" width="${worldSize.width}" height="${worldSize.height}" viewBox="0 0 ${worldSize.width} ${worldSize.height}" aria-hidden="true"></svg>
               <div class="graph-node-layer" data-role="nodes"></div>
@@ -155,6 +218,7 @@ class GraphCanvas extends HTMLElement {
     this.#workspaceEl.addEventListener("pointermove", (event) => this.#onWorkspacePointerMove(event));
     this.#workspaceEl.addEventListener("pointerup", (event) => this.#onWorkspacePointerUp(event));
     this.#workspaceEl.addEventListener("pointercancel", (event) => this.#onWorkspacePointerUp(event));
+    this.#workspaceEl.addEventListener("keydown", (event) => this.#onWorkspaceKeyDown(event));
     this.#workspaceEl.addEventListener(
       "wheel",
       (event) => {
@@ -166,7 +230,19 @@ class GraphCanvas extends HTMLElement {
 
   #onWorkspacePointerDown(event) {
     if (event.button !== 0 && event.button !== 1) return;
+    this.#workspaceEl.focus();
     if (event.target.closest("[data-node-id]")) return;
+
+    if (event.button === 0 && this.#activeTool.startsWith("create:")) {
+      const nodeType = this.#activeTool.split(":")[1] ?? "note";
+      const worldPoint = this.#screenToWorld(event.clientX, event.clientY);
+      this.#createNodeAt(nodeType, worldPoint);
+      event.preventDefault();
+      return;
+    }
+
+    const canPan = this.#activeTool === "pan" || this.#activeTool === "select" || event.button === 1;
+    if (!canPan) return;
 
     this.#panState = {
       pointerId: event.pointerId,
@@ -214,12 +290,20 @@ class GraphCanvas extends HTMLElement {
     if (!this.#panState || event.pointerId !== this.#panState.pointerId) return;
 
     this.#workspaceEl.releasePointerCapture(event.pointerId);
-    const shouldClearSelection = this.#panState.mouseButton === 0 && !this.#panState.moved;
+    const shouldClearSelection =
+      this.#activeTool === "select" && this.#panState.mouseButton === 0 && !this.#panState.moved;
     this.#panState = null;
 
     if (shouldClearSelection) {
       publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-canvas" });
     }
+
+    publish(EVENTS.GRAPH_VIEWPORT_CHANGED, {
+      x: this.#viewport.x,
+      y: this.#viewport.y,
+      zoom: this.#viewport.zoom,
+      origin: "graph-canvas"
+    });
   }
 
   #onWorkspaceWheel(event) {
@@ -228,7 +312,7 @@ class GraphCanvas extends HTMLElement {
 
     const direction = event.deltaY < 0 ? 1 : -1;
     const zoomFactor = direction > 0 ? 1.08 : 0.92;
-    const nextZoom = clamp(this.#viewport.zoom * zoomFactor, 0.45, 1.8);
+    const nextZoom = clampZoom(this.#viewport.zoom * zoomFactor);
     if (nextZoom === this.#viewport.zoom) return;
 
     const rect = this.#workspaceEl.getBoundingClientRect();
@@ -238,12 +322,54 @@ class GraphCanvas extends HTMLElement {
     this.#viewport.x = event.clientX - rect.left - worldPointBeforeZoom.x * nextZoom;
     this.#viewport.y = event.clientY - rect.top - worldPointBeforeZoom.y * nextZoom;
     this.#applyViewportTransform();
+    publish(EVENTS.GRAPH_VIEWPORT_CHANGED, {
+      x: this.#viewport.x,
+      y: this.#viewport.y,
+      zoom: this.#viewport.zoom,
+      origin: "graph-canvas"
+    });
+  }
+
+  #onWorkspaceKeyDown(event) {
+    if (!this.#selectedNodeId) return;
+
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      const removed = graphStore.removeNode(this.#selectedNodeId);
+      if (removed) {
+        publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+          level: "info",
+          message: `Deleted node ${removed.label}`
+        });
+      }
+      return;
+    }
+
+    const isDuplicateShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d";
+    if (isDuplicateShortcut) {
+      event.preventDefault();
+      this.#duplicateSelectedNode();
+    }
   }
 
   #onNodePointerDown(event, node) {
     if (event.button !== 0) return;
-
+    this.#workspaceEl.focus();
     event.stopPropagation();
+
+    if (this.#activeTool === "connect") {
+      this.#handleConnectClick(node);
+      return;
+    }
+
+    if (this.#activeTool !== "select") {
+      publish(EVENTS.GRAPH_NODE_SELECTED, {
+        nodeId: node.id,
+        origin: "graph-canvas"
+      });
+      return;
+    }
+
     this.#workspaceEl.setPointerCapture(event.pointerId);
     this.#workspaceEl.classList.add("is-dragging-node");
 
@@ -259,6 +385,98 @@ class GraphCanvas extends HTMLElement {
     publish(EVENTS.GRAPH_NODE_SELECTED, {
       nodeId: node.id,
       origin: "graph-canvas"
+    });
+  }
+
+  #handleConnectClick(node) {
+    if (!this.#connectState.sourceNodeId) {
+      this.#connectState.sourceNodeId = node.id;
+      publish(EVENTS.GRAPH_NODE_SELECTED, { nodeId: node.id, origin: "graph-canvas" });
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "info",
+        message: `Connect: source set to ${node.label}`
+      });
+      return;
+    }
+
+    const sourceNodeId = this.#connectState.sourceNodeId;
+    const targetNodeId = node.id;
+    if (sourceNodeId === targetNodeId) return;
+
+    const defaultType = "depends_on";
+    const selected = window.prompt(
+      `Edge type (${EDGE_TYPE_VALUES.join(", ")}):`,
+      defaultType
+    );
+    if (selected === null) {
+      this.#connectState.sourceNodeId = null;
+      return;
+    }
+
+    const edgeType = EDGE_TYPE_VALUES.includes(selected.trim()) ? selected.trim() : defaultType;
+    const edge = graphStore.addEdge({
+      source: sourceNodeId,
+      target: targetNodeId,
+      type: edgeType,
+      label: edgeType.replaceAll("_", " ")
+    });
+
+    if (edge) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "info",
+        message: `Created edge ${edge.type}`
+      });
+    }
+
+    this.#connectState.sourceNodeId = null;
+    publish(EVENTS.GRAPH_NODE_SELECTED, { nodeId: targetNodeId, origin: "graph-canvas" });
+  }
+
+  #createNodeAt(nodeType, position) {
+    const template = nodeTemplates[nodeType] ?? nodeTemplates.note;
+    const normalizedPosition = {
+      x: Math.round(clamp(position.x, -150, worldSize.width - 100)),
+      y: Math.round(clamp(position.y, -100, worldSize.height - 80))
+    };
+
+    const node = graphStore.addNode({
+      type: nodeType,
+      label: template.label,
+      description: template.description,
+      position: normalizedPosition,
+      data: structuredClone(template.data),
+      metadata: { createdFromTool: this.#activeTool }
+    });
+    if (!node) return;
+
+    graphStore.setSelectedNode(node.id);
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: `Created ${nodeType} node`
+    });
+  }
+
+  #duplicateSelectedNode() {
+    const source = graphStore.getNode(this.#selectedNodeId);
+    if (!source) return;
+
+    const copy = graphStore.addNode({
+      type: source.type,
+      label: `${source.label} Copy`,
+      description: source.description,
+      position: {
+        x: Number(source.position?.x ?? 0) + 36,
+        y: Number(source.position?.y ?? 0) + 28
+      },
+      data: structuredClone(source.data ?? {}),
+      metadata: { ...(source.metadata ?? {}), duplicatedFrom: source.id }
+    });
+    if (!copy) return;
+
+    graphStore.setSelectedNode(copy.id);
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: `Duplicated node ${source.label}`
     });
   }
 
@@ -306,6 +524,11 @@ class GraphCanvas extends HTMLElement {
       },
       origin: "graph-canvas"
     });
+  }
+
+  #syncInteractionMode() {
+    if (!this.#workspaceEl) return;
+    this.#workspaceEl.dataset.tool = this.#activeTool;
   }
 
   #applyViewportTransform() {
@@ -397,14 +620,10 @@ class GraphCanvas extends HTMLElement {
     const dy = oy - cy;
 
     if (Math.abs(dx) > Math.abs(dy)) {
-      return dx >= 0
-        ? { x: nx + size.width, y: cy }
-        : { x: nx, y: cy };
+      return dx >= 0 ? { x: nx + size.width, y: cy } : { x: nx, y: cy };
     }
 
-    return dy >= 0
-      ? { x: cx, y: ny + size.height }
-      : { x: cx, y: ny };
+    return dy >= 0 ? { x: cx, y: ny + size.height } : { x: cx, y: ny };
   }
 
   #buildCurve(sourcePoint, targetPoint) {
@@ -430,6 +649,7 @@ class GraphCanvas extends HTMLElement {
     this.#nodeLayerEl.querySelectorAll("[data-node-id]").forEach((nodeEl) => {
       const isSelected = nodeEl.dataset.nodeId === this.#selectedNodeId;
       nodeEl.classList.toggle("is-selected", isSelected);
+      nodeEl.classList.toggle("is-connect-source", nodeEl.dataset.nodeId === this.#connectState.sourceNodeId);
     });
   }
 

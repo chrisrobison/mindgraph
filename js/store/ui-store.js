@@ -5,6 +5,7 @@ class UiStore {
   #state = {
     selectedNodeId: null,
     selectedTool: "select",
+    viewportZoom: 1,
     inspectorTab: "overview",
     bottomTab: "activity"
   };
@@ -20,6 +21,13 @@ class UiStore {
 
     subscribe(EVENTS.TOOLBAR_TOOL_CHANGED, ({ payload }) => {
       this.#state.selectedTool = payload?.tool ?? "select";
+    });
+
+    subscribe(EVENTS.GRAPH_VIEWPORT_CHANGED, ({ payload }) => {
+      const nextZoom = Number(payload?.zoom ?? this.#state.viewportZoom);
+      if (Number.isFinite(nextZoom)) {
+        this.#state.viewportZoom = nextZoom;
+      }
     });
 
     subscribe(EVENTS.INSPECTOR_TAB_CHANGED, ({ payload }) => {
@@ -45,6 +53,10 @@ class UiStore {
 
   setTool(tool) {
     publish(EVENTS.TOOLBAR_TOOL_CHANGED, { tool });
+  }
+
+  setViewportZoom(zoom) {
+    publish(EVENTS.GRAPH_VIEWPORT_CHANGED, { zoom });
   }
 
   setInspectorTab(tab) {

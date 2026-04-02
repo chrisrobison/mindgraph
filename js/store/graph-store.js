@@ -39,6 +39,19 @@ class GraphStore {
     subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
       this.#selectedNodeId = null;
     });
+
+    subscribe(EVENTS.GRAPH_VIEWPORT_CHANGED, ({ payload }) => {
+      if (!this.#document) return;
+      const nextZoom = Number(payload?.zoom ?? this.#document.viewport?.zoom ?? 1);
+      const nextX = Number(payload?.x ?? this.#document.viewport?.x ?? 0);
+      const nextY = Number(payload?.y ?? this.#document.viewport?.y ?? 0);
+
+      this.#document.viewport = {
+        x: Number.isFinite(nextX) ? nextX : 0,
+        y: Number.isFinite(nextY) ? nextY : 0,
+        zoom: Number.isFinite(nextZoom) ? nextZoom : 1
+      };
+    });
   }
 
   load(documentLike) {

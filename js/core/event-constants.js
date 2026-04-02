@@ -4,6 +4,7 @@ export const EVENTS = Object.freeze({
   GRAPH_EDGE_CREATED: "graph.edge.created",
   GRAPH_EDGE_UPDATED: "graph.edge.updated",
   GRAPH_SELECTION_CLEARED: "graph.selection.cleared",
+  GRAPH_VIEWPORT_CHANGED: "graph.viewport.changed",
   TOOLBAR_TOOL_CHANGED: "toolbar.tool.changed",
   INSPECTOR_TAB_CHANGED: "inspector.tab.changed",
   RUNTIME_AGENT_RUN_STARTED: "runtime.agent.run.started",

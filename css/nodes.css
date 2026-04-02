@@ -16,10 +16,16 @@
   box-shadow: 0 10px 22px -14px rgba(22, 44, 76, 0.5);
 }
 
-.mg-node.is-selected {
+.mg-node.is-selected,
+.mg-node-instance.is-selected .mg-node {
   border-color: #2e5b94;
   box-shadow: 0 0 0 2px rgba(46, 91, 148, 0.2), 0 12px 28px -14px rgba(20, 45, 86, 0.55);
   transform: translateY(-1px);
+}
+
+.mg-node-instance.is-connect-source .mg-node {
+  border-color: #9b5c13;
+  box-shadow: 0 0 0 2px rgba(155, 92, 19, 0.18), 0 12px 28px -14px rgba(95, 58, 13, 0.45);
 }
 
 .mg-node h4 {
