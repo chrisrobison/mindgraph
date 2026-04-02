@@ -1,3 +1,4 @@
+import { HISTORY_LIMITS } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import {
   createEdge,
@@ -14,6 +15,8 @@ import { publish, subscribe } from "../core/pan.js";
 class GraphStore {
   #document = null;
   #selectedNodeId = null;
+  #undoStack = [];
+  #redoStack = [];
 
   constructor() {
     subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
@@ -54,7 +57,7 @@ class GraphStore {
     });
   }
 
-  load(documentLike) {
+  load(documentLike, { fromHistory = false } = {}) {
     const normalized = normalizeGraphDocument(documentLike);
     const validation = validateGraphDocument(normalized);
 
@@ -62,7 +65,16 @@ class GraphStore {
       throw new Error(`Invalid graph document: ${validation.errors.join(", ")}`);
     }
 
+    if (!fromHistory && this.#document) {
+      this.#pushUndo(this.#document);
+      this.#redoStack = [];
+      this.#emitHistoryState();
+    }
+
     this.#document = normalized;
+    this.#syncSelectionToDocument();
+    this.#emitHistoryState();
+
     publish(EVENTS.GRAPH_DOCUMENT_LOADED, { document: this.getDocument() });
     return this.getDocument();
   }
@@ -75,6 +87,57 @@ class GraphStore {
     const snapshot = this.getDocument();
     publish(EVENTS.GRAPH_DOCUMENT_SAVED, { document: snapshot });
     return snapshot;
+  }
+
+  undo() {
+    if (!this.canUndo() || !this.#document) return null;
+    const previous = this.#undoStack.pop();
+    this.#redoStack.push(clone(this.#document));
+    this.#document = clone(previous);
+    this.#syncSelectionToDocument();
+    this.#emitHistoryState();
+
+    publish(EVENTS.GRAPH_DOCUMENT_LOADED, {
+      document: this.getDocument(),
+      origin: "graph-store",
+      operation: "undo"
+    });
+
+    return this.getDocument();
+  }
+
+  redo() {
+    if (!this.canRedo() || !this.#document) return null;
+    const next = this.#redoStack.pop();
+    this.#undoStack.push(clone(this.#document));
+    this.#document = clone(next);
+    this.#syncSelectionToDocument();
+    this.#emitHistoryState();
+
+    publish(EVENTS.GRAPH_DOCUMENT_LOADED, {
+      document: this.getDocument(),
+      origin: "graph-store",
+      operation: "redo"
+    });
+
+    return this.getDocument();
+  }
+
+  canUndo() {
+    return this.#undoStack.length > 0;
+  }
+
+  canRedo() {
+    return this.#redoStack.length > 0;
+  }
+
+  getHistoryState() {
+    return {
+      canUndo: this.canUndo(),
+      canRedo: this.canRedo(),
+      undoCount: this.#undoStack.length,
+      redoCount: this.#redoStack.length
+    };
   }
 
   getDocument() {
@@ -137,7 +200,10 @@ class GraphStore {
       };
     }
 
-    this.#document = patchGraphNode(this.#document, nodeId, normalizedPatch);
+    this.#applyMutation(() => {
+      this.#document = patchGraphNode(this.#document, nodeId, normalizedPatch);
+    });
+
     const node = this.getNode(nodeId);
 
     if (emit) {
@@ -160,7 +226,10 @@ class GraphStore {
     if (!this.#document) return null;
 
     const node = createNode(nodeLike);
-    this.#document.nodes = [...(this.#document.nodes ?? []), node];
+
+    this.#applyMutation(() => {
+      this.#document.nodes = [...(this.#document.nodes ?? []), node];
+    });
 
     if (emit) {
       publish(EVENTS.GRAPH_NODE_UPDATED, {
@@ -181,10 +250,12 @@ class GraphStore {
     const node = findNodeById(this.#document, nodeId);
     if (!node) return null;
 
-    this.#document.nodes = (this.#document.nodes ?? []).filter((entry) => entry.id !== nodeId);
-    this.#document.edges = (this.#document.edges ?? []).filter(
-      (edge) => edge.source !== nodeId && edge.target !== nodeId
-    );
+    this.#applyMutation(() => {
+      this.#document.nodes = (this.#document.nodes ?? []).filter((entry) => entry.id !== nodeId);
+      this.#document.edges = (this.#document.edges ?? []).filter(
+        (edge) => edge.source !== nodeId && edge.target !== nodeId
+      );
+    });
 
     if (this.#selectedNodeId === nodeId) {
       this.#selectedNodeId = null;
@@ -211,7 +282,9 @@ class GraphStore {
     const duplicate = (this.#document.edges ?? []).some((entry) => entry.id === edge.id);
     if (duplicate) return null;
 
-    this.#document.edges = [...(this.#document.edges ?? []), edge];
+    this.#applyMutation(() => {
+      this.#document.edges = [...(this.#document.edges ?? []), edge];
+    });
 
     if (emit) {
       publish(EVENTS.GRAPH_EDGE_CREATED, {
@@ -221,6 +294,35 @@ class GraphStore {
     }
 
     return clone(edge);
+  }
+
+  #applyMutation(run) {
+    if (!this.#document) return;
+    this.#pushUndo(this.#document);
+    this.#redoStack = [];
+    run();
+    this.#emitHistoryState();
+  }
+
+  #pushUndo(document) {
+    this.#undoStack.push(clone(document));
+    if (this.#undoStack.length > HISTORY_LIMITS.graphSnapshots) {
+      this.#undoStack.shift();
+    }
+  }
+
+  #emitHistoryState() {
+    publish(EVENTS.GRAPH_HISTORY_CHANGED, {
+      ...this.getHistoryState(),
+      origin: "graph-store"
+    });
+  }
+
+  #syncSelectionToDocument() {
+    if (this.#selectedNodeId && !findNodeById(this.#document, this.#selectedNodeId)) {
+      this.#selectedNodeId = null;
+      publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-store" });
+    }
   }
 }
 

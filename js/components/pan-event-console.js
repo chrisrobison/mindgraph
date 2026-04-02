@@ -81,7 +81,7 @@ class PanEventConsole extends HTMLElement {
     this.innerHTML = `
       <section class="pan-console">
         <div class="pan-console-toolbar">
-          ${showFilter ? '<input type="search" data-role="event-filter" placeholder="Filter events or payload..." aria-label="Filter PAN events" />' : ""}
+          ${showFilter ? '<input type="search" name="pan-event-filter" data-role="event-filter" placeholder="Filter events or payload..." aria-label="Filter PAN events" />' : ""}
           ${showClear ? '<button type="button" data-action="clear-events">Clear</button>' : ""}
         </div>
         <div data-role="events-list"></div>

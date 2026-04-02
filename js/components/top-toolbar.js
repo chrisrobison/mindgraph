@@ -1,18 +1,26 @@
+import { clampZoom, GRAPH_LIMITS } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
 import { mockAgentRuntime } from "../runtime/mock-agent-runtime.js";
 import { graphStore } from "../store/graph-store.js";
+import { persistenceStore } from "../store/persistence-store.js";
 import { uiStore } from "../store/ui-store.js";
-
-const clampZoom = (value) => Math.min(1.8, Math.max(0.45, value));
 
 class TopToolbar extends HTMLElement {
   #dispose = [];
   #activeTool = "select";
   #zoom = 1;
   #running = false;
+  #canUndo = false;
+  #canRedo = false;
+  #autosaveEnabled = true;
 
   connectedCallback() {
+    const history = graphStore.getHistoryState();
+    this.#canUndo = history.canUndo;
+    this.#canRedo = history.canRedo;
+    this.#autosaveEnabled = persistenceStore.isAutosaveEnabled();
+
     this.render();
     this.#bind();
 
@@ -32,9 +40,26 @@ class TopToolbar extends HTMLElement {
       })
     );
 
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_HISTORY_CHANGED, ({ payload }) => {
+        this.#canUndo = Boolean(payload?.canUndo);
+        this.#canRedo = Boolean(payload?.canRedo);
+        this.#syncHistoryButtons();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_AUTOSAVE_STATE_CHANGED, ({ payload }) => {
+        this.#autosaveEnabled = Boolean(payload?.enabled);
+        this.#syncAutosaveToggle();
+      })
+    );
+
     this.#syncPressedState();
     this.#syncZoom();
     this.#syncRunButtons();
+    this.#syncHistoryButtons();
+    this.#syncAutosaveToggle();
   }
 
   disconnectedCallback() {
@@ -60,11 +85,18 @@ class TopToolbar extends HTMLElement {
     this.querySelector("[data-action='save']")?.addEventListener("click", () => this.#onSave());
     this.querySelector("[data-action='load']")?.addEventListener("click", () => this.#onLoadRequest());
 
+    this.querySelector("[data-action='undo']")?.addEventListener("click", () => this.#undo());
+    this.querySelector("[data-action='redo']")?.addEventListener("click", () => this.#redo());
+
+    this.querySelector("[data-action='toggle-autosave']")?.addEventListener("click", () => {
+      persistenceStore.setAutosaveEnabled(!this.#autosaveEnabled);
+    });
+
     this.querySelector("[data-action='zoom-in']")?.addEventListener("click", () =>
-      this.#changeZoom(1.1)
+      this.#changeZoom(GRAPH_LIMITS.zoomInFactor)
     );
     this.querySelector("[data-action='zoom-out']")?.addEventListener("click", () =>
-      this.#changeZoom(0.9)
+      this.#changeZoom(GRAPH_LIMITS.zoomOutFactor)
     );
     this.querySelector("[data-action='zoom-reset']")?.addEventListener("click", () =>
       uiStore.setViewportZoom(1)
@@ -78,6 +110,24 @@ class TopToolbar extends HTMLElement {
   #changeZoom(factor) {
     const nextZoom = clampZoom(this.#zoom * factor);
     uiStore.setViewportZoom(nextZoom);
+  }
+
+  #undo() {
+    const snapshot = graphStore.undo();
+    if (!snapshot) return;
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: "Undo applied"
+    });
+  }
+
+  #redo() {
+    const snapshot = graphStore.redo();
+    if (!snapshot) return;
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: "Redo applied"
+    });
   }
 
   async #runRuntimeAction(run) {
@@ -140,6 +190,20 @@ class TopToolbar extends HTMLElement {
     });
   }
 
+  #syncHistoryButtons() {
+    const undoButton = this.querySelector("[data-action='undo']");
+    const redoButton = this.querySelector("[data-action='redo']");
+    if (undoButton) undoButton.disabled = !this.#canUndo;
+    if (redoButton) redoButton.disabled = !this.#canRedo;
+  }
+
+  #syncAutosaveToggle() {
+    const toggle = this.querySelector("[data-action='toggle-autosave']");
+    if (!toggle) return;
+    toggle.setAttribute("aria-pressed", this.#autosaveEnabled ? "true" : "false");
+    toggle.textContent = this.#autosaveEnabled ? "Autosave On" : "Autosave Off";
+  }
+
   #onSave() {
     const snapshot = graphStore.save();
     if (!snapshot) return;
@@ -158,6 +222,11 @@ class TopToolbar extends HTMLElement {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: "Graph exported as JSON"
+    });
   }
 
   #onLoadRequest() {
@@ -196,13 +265,18 @@ class TopToolbar extends HTMLElement {
             <div class="brand-glyph" aria-hidden="true">MG</div>
             <div class="brand-text">
               <strong>MindGraph AI</strong>
-              <span>Browser-native orchestration map</span>
+              <span>Visual Agent Graph Workbench</span>
             </div>
           </div>
 
           <div class="toolbar-actions toolbar-action-group">
             <button data-action="run-all" type="button">Run All</button>
-            <button data-action="summarize-subtree" type="button">Summarize Subtree</button>
+            <button data-action="summarize-subtree" type="button">Run Subtree</button>
+          </div>
+
+          <div class="toolbar-actions toolbar-action-group">
+            <button data-action="undo" type="button" title="Undo (Cmd/Ctrl+Z)">Undo</button>
+            <button data-action="redo" type="button" title="Redo (Shift+Cmd/Ctrl+Z)">Redo</button>
           </div>
 
           <div class="toolbar-actions toolbar-action-group">
@@ -211,19 +285,16 @@ class TopToolbar extends HTMLElement {
           </div>
 
           <div class="toolbar-actions toolbar-action-group">
-            <button data-action="save" type="button">Save</button>
-            <button data-action="load" type="button">Load</button>
-            <input data-role="load-input" type="file" accept="application/json,.json" hidden />
+            <button data-action="save" type="button">Save JSON</button>
+            <button data-action="load" type="button">Load JSON</button>
+            <button data-action="toggle-autosave" type="button" aria-pressed="true">Autosave On</button>
+            <input data-role="load-input" name="graph-load-file" type="file" accept="application/json,.json" hidden />
           </div>
 
           <div class="toolbar-actions toolbar-action-group toolbar-zoom">
             <button data-action="zoom-out" type="button" aria-label="Zoom out">-</button>
             <button data-action="zoom-reset" type="button" data-role="zoom-label">100%</button>
             <button data-action="zoom-in" type="button" aria-label="Zoom in">+</button>
-          </div>
-
-          <div class="toolbar-search">
-            <input type="search" placeholder="Search nodes, edges, or notes..." aria-label="Search graph" />
           </div>
         </div>
       </section>

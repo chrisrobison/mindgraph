@@ -2,8 +2,10 @@
   min-height: 100vh;
   height: 100vh;
   display: grid;
+  gap: 0;
+  padding: 0.4rem 0.45rem 0.5rem;
   grid-template-rows: auto 1fr var(--bottom-height);
-  grid-template-columns: minmax(180px, var(--left-width)) minmax(0, 1fr) minmax(280px, var(--right-width));
+  grid-template-columns: minmax(200px, var(--left-width)) minmax(0, 1fr) minmax(300px, var(--right-width));
   grid-template-areas:
     "toolbar toolbar toolbar"
     "palette canvas inspector"
@@ -44,15 +46,15 @@
 
 @media (max-width: 1200px) {
   :root {
-    --left-width: 200px;
-    --right-width: 280px;
+    --left-width: 210px;
+    --right-width: 294px;
   }
 }
 
 @media (max-width: 1380px) {
   .mg-shell {
-    grid-template-columns: minmax(180px, var(--left-width)) minmax(0, 1fr);
-    grid-template-rows: auto minmax(360px, 1fr) auto var(--bottom-height);
+    grid-template-columns: minmax(188px, var(--left-width)) minmax(0, 1fr);
+    grid-template-rows: auto minmax(370px, 1fr) auto var(--bottom-height);
     grid-template-areas:
       "toolbar toolbar"
       "palette canvas"
@@ -66,6 +68,7 @@
     height: auto;
     min-height: 100vh;
     overflow: visible;
+    padding: 0.35rem;
     grid-template-columns: 1fr;
     grid-template-rows: auto auto minmax(300px, 1fr) auto auto;
     grid-template-areas:
