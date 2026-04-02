@@ -1,5 +1,6 @@
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
+import { mockAgentRuntime } from "../runtime/mock-agent-runtime.js";
 import { graphStore } from "../store/graph-store.js";
 import { uiStore } from "../store/ui-store.js";
 
@@ -9,6 +10,7 @@ class TopToolbar extends HTMLElement {
   #dispose = [];
   #activeTool = "select";
   #zoom = 1;
+  #running = false;
 
   connectedCallback() {
     this.render();
@@ -32,6 +34,7 @@ class TopToolbar extends HTMLElement {
 
     this.#syncPressedState();
     this.#syncZoom();
+    this.#syncRunButtons();
   }
 
   disconnectedCallback() {
@@ -46,20 +49,13 @@ class TopToolbar extends HTMLElement {
       });
     });
 
-    this.querySelector("[data-action='run-all']")?.addEventListener("click", () => {
-      publish(EVENTS.RUNTIME_AGENT_RUN_STARTED, { scope: "graph" });
-      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-        level: "info",
-        message: "Run all requested from toolbar"
-      });
-    });
+    this.querySelector("[data-action='run-all']")?.addEventListener("click", () =>
+      this.#runRuntimeAction(() => mockAgentRuntime.runAll({ trigger: "toolbar_run_all" }))
+    );
 
-    this.querySelector("[data-action='summarize-subtree']")?.addEventListener("click", () => {
-      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-        level: "info",
-        message: "Summarize subtree requested"
-      });
-    });
+    this.querySelector("[data-action='summarize-subtree']")?.addEventListener("click", () =>
+      this.#runRuntimeAction(() => this.#summarizeSelectedSubtree())
+    );
 
     this.querySelector("[data-action='save']")?.addEventListener("click", () => this.#onSave());
     this.querySelector("[data-action='load']")?.addEventListener("click", () => this.#onLoadRequest());
@@ -84,6 +80,47 @@ class TopToolbar extends HTMLElement {
     uiStore.setViewportZoom(nextZoom);
   }
 
+  async #runRuntimeAction(run) {
+    if (this.#running) return;
+
+    this.#running = true;
+    this.#syncRunButtons();
+
+    try {
+      await run();
+    } catch (error) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "error",
+        message: `Runtime action failed: ${error?.message ?? "Unknown error"}`
+      });
+    } finally {
+      this.#running = false;
+      this.#syncRunButtons();
+    }
+  }
+
+  async #summarizeSelectedSubtree() {
+    const selectedNodeId = graphStore.getSelectedNodeId();
+    if (!selectedNodeId) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "warn",
+        message: "Select an agent node to run subtree summary"
+      });
+      return;
+    }
+
+    const selectedNode = graphStore.getNode(selectedNodeId);
+    if (!selectedNode || selectedNode.type !== "agent") {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "warn",
+        message: "Subtree summary is available for agent nodes only"
+      });
+      return;
+    }
+
+    await mockAgentRuntime.runSubtree(selectedNodeId, { trigger: "toolbar_subtree" });
+  }
+
   #syncPressedState() {
     this.querySelectorAll("[data-tool]").forEach((button) => {
       const pressed = button.dataset.tool === this.#activeTool;
@@ -95,6 +132,12 @@ class TopToolbar extends HTMLElement {
     const zoomLabel = this.querySelector("[data-role='zoom-label']");
     if (!zoomLabel) return;
     zoomLabel.textContent = `${Math.round(this.#zoom * 100)}%`;
+  }
+
+  #syncRunButtons() {
+    this.querySelectorAll("[data-action='run-all'], [data-action='summarize-subtree']").forEach((button) => {
+      button.disabled = this.#running;
+    });
   }
 
   #onSave() {

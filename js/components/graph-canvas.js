@@ -34,6 +34,13 @@ const nodeTemplates = {
       role: "Research Agent",
       mode: "orchestrate",
       status: "idle",
+      confidence: 0.5,
+      lastRunSummary: "",
+      lastOutput: null,
+      inputSchema: {},
+      outputSchema: {},
+      runHistory: [],
+      activityHistory: [],
       allowedDataSources: [],
       linkedDataCount: 0
     }

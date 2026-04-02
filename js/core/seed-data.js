@@ -16,6 +16,13 @@ export const seedDocument = createGraphDocument({
         role: "Agent Coordinator",
         mode: "orchestrate",
         status: "active",
+        confidence: 0.58,
+        lastRunSummary: "",
+        lastOutput: null,
+        inputSchema: {},
+        outputSchema: {},
+        runHistory: [],
+        activityHistory: [],
         allowedDataSources: [
           "data_site_config",
           "data_market_data",
@@ -35,6 +42,13 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "build",
         status: "ready",
+        confidence: 0.51,
+        lastRunSummary: "",
+        lastOutput: null,
+        inputSchema: {},
+        outputSchema: {},
+        runHistory: [],
+        activityHistory: [],
         allowedDataSources: ["data_site_config"],
         linkedDataCount: 1
       }
@@ -49,6 +63,13 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "analyze",
         status: "active",
+        confidence: 0.57,
+        lastRunSummary: "",
+        lastOutput: null,
+        inputSchema: {},
+        outputSchema: {},
+        runHistory: [],
+        activityHistory: [],
         allowedDataSources: ["data_market_data"],
         linkedDataCount: 1
       }
@@ -63,6 +84,13 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "optimize",
         status: "idle",
+        confidence: 0.49,
+        lastRunSummary: "",
+        lastOutput: null,
+        inputSchema: {},
+        outputSchema: {},
+        runHistory: [],
+        activityHistory: [],
         allowedDataSources: ["data_ads_api_mock"],
         linkedDataCount: 1
       }
@@ -77,6 +105,13 @@ export const seedDocument = createGraphDocument({
         role: "Agent",
         mode: "assist",
         status: "ready",
+        confidence: 0.54,
+        lastRunSummary: "",
+        lastOutput: null,
+        inputSchema: {},
+        outputSchema: {},
+        runHistory: [],
+        activityHistory: [],
         allowedDataSources: ["data_support_db"],
         linkedDataCount: 1
       }

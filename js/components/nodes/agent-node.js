@@ -32,8 +32,11 @@ class AgentNode extends HTMLElement {
       : 0;
     const linkedByCount = Number(node.data?.linkedDataCount ?? 0);
     const linkedDataCount = Math.max(linkedByIds, linkedByCount);
+    const confidence = Number(node.data?.confidence ?? 0.5);
+    const safeConfidence = Number.isFinite(confidence) ? confidence : 0.5;
+    const lastRunSummary = node.data?.lastRunSummary ?? "No runs yet.";
 
-    this.className = "mg-node agent";
+    this.className = `mg-node agent agent-status-${toStatusClass(status)}`;
     this.innerHTML = `
       <div class="node-title-row">
         <h4>${label}</h4>
@@ -44,7 +47,9 @@ class AgentNode extends HTMLElement {
         <span>Role</span><strong>${role}</strong>
         <span>Mode</span><strong>${mode}</strong>
         <span>Linked Data</span><strong>${linkedDataCount}</strong>
+        <span>Confidence</span><strong>${Math.round(safeConfidence * 100)}%</strong>
       </div>
+      <p class="node-runtime-summary">${lastRunSummary}</p>
     `;
   }
 }

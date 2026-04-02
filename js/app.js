@@ -22,6 +22,7 @@ import "./components/inspector/inspector-output.js";
 import "./components/inspector/inspector-automation.js";
 import "./components/inspector/inspector-permissions.js";
 import "./runtime/data-connectors.js";
+import "./runtime/mock-agent-runtime.js";
 
 import { EVENTS } from "./core/event-constants.js";
 import { publish } from "./core/pan.js";
@@ -37,14 +38,6 @@ const bootstrap = () => {
   publish(EVENTS.ACTIVITY_LOG_APPENDED, {
     level: "info",
     message: "MindGraph AI initialized"
-  });
-
-  publish(EVENTS.TASK_QUEUE_UPDATED, {
-    tasks: [
-      { id: "task-1", label: "Analyze Competitor Pricing", status: "in_progress" },
-      { id: "task-2", label: "Review Market Report", status: "queued" },
-      { id: "task-3", label: "Send Summary to Coordinator", status: "queued" }
-    ]
   });
 };
 

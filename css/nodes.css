@@ -107,6 +107,24 @@
   color: #50617b;
 }
 
+.status-running {
+  background: #fff6e8;
+  border-color: #f0d3a2;
+  color: #8d4f00;
+}
+
+.status-completed {
+  background: #e9f8ef;
+  border-color: #b9dfc8;
+  color: #1f7040;
+}
+
+.status-failed {
+  background: #fdeeee;
+  border-color: #f1c4c6;
+  color: #9a2d33;
+}
+
 .readonly-badge {
   background: #eff8f5;
   border-color: #c6e9dc;
@@ -129,6 +147,26 @@
 .mg-node.agent {
   width: 290px;
   border-left: 4px solid #2e5b94;
+}
+
+.mg-node.agent.agent-status-running {
+  border-left-color: #b26c10;
+}
+
+.mg-node.agent.agent-status-completed {
+  border-left-color: #1f7040;
+}
+
+.mg-node.agent.agent-status-failed {
+  border-left-color: #a1363c;
+}
+
+.node-runtime-summary {
+  margin-top: 0.62rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed #d5dfed;
+  font-size: 0.74rem;
+  color: #42556f;
 }
 
 .mg-node.data {

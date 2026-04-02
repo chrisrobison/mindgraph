@@ -66,7 +66,12 @@ class BottomActivityPanel extends HTMLElement {
     if (!this.#tasks.length) return "<p>No queued tasks.</p>";
 
     return `<ol>${this.#tasks
-      .map((task) => `<li>${task.label} <em>(${task.status})</em></li>`)
+      .map((task) => {
+        const progress = Number(task.progress);
+        const showProgress = Number.isFinite(progress);
+        const progressLabel = showProgress ? ` ${Math.round(progress * 100)}%` : "";
+        return `<li>${task.label} <em>(${task.status}${progressLabel})</em></li>`;
+      })
       .join("")}</ol>`;
   }
 

@@ -33,27 +33,35 @@ class InspectorOutput extends HTMLElement {
 
     if (node.type === "agent") {
       const outputSchema = escapeHtml(jsonToText(node.data?.outputSchema));
-      const lastOutput = escapeHtml(textValue(node.data?.lastOutput));
+      const lastRunSummary = escapeHtml(textValue(node.data?.lastRunSummary));
+      const lastOutput = escapeHtml(jsonToText(node.data?.lastOutput));
 
       this.innerHTML = `
         <section class="inspector-group">
           <h4>Agent Output</h4>
           <label class="inspector-field">
+            <span>Last Run Summary</span>
+            <textarea rows="3" data-field="lastRunSummary">${lastRunSummary}</textarea>
+          </label>
+          <label class="inspector-field">
             <span>Output Schema (JSON)</span>
             <textarea rows="7" data-field="outputSchema">${outputSchema}</textarea>
           </label>
           <label class="inspector-field">
-            <span>Last Output</span>
-            <textarea rows="6" data-field="lastOutput">${lastOutput}</textarea>
+            <span>Last Output (JSON)</span>
+            <textarea rows="10" data-field="lastOutput">${lastOutput}</textarea>
           </label>
         </section>
       `;
 
+      this.querySelector('[data-field="lastRunSummary"]')?.addEventListener("change", (event) => {
+        this.#patchData({ lastRunSummary: event.target.value });
+      });
       this.querySelector('[data-field="outputSchema"]')?.addEventListener("change", (event) => {
         this.#patchData({ outputSchema: textToJsonLike(event.target.value) });
       });
       this.querySelector('[data-field="lastOutput"]')?.addEventListener("change", (event) => {
-        this.#patchData({ lastOutput: event.target.value });
+        this.#patchData({ lastOutput: textToJsonLike(event.target.value) });
       });
       return;
     }
