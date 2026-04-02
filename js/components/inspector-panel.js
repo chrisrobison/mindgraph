@@ -1,29 +1,35 @@
 import { EVENTS } from "../core/event-constants.js";
-import { subscribe, publish } from "../core/pan.js";
+import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
+import { escapeHtml } from "./inspector/shared.js";
 
-const tabElementByKey = {
-  overview: "inspector-overview",
-  prompt: "inspector-prompt",
-  data: "inspector-data",
-  tools: "inspector-tools",
-  activity: "inspector-activity",
-  output: "inspector-output",
-  automation: "inspector-automation",
-  permissions: "inspector-permissions"
-};
+const tabs = [
+  { key: "overview", label: "Overview", tag: "inspector-overview" },
+  { key: "prompt", label: "Prompt", tag: "inspector-prompt" },
+  { key: "data", label: "Data", tag: "inspector-data" },
+  { key: "tools", label: "Tools", tag: "inspector-tools" },
+  { key: "activity", label: "Activity", tag: "inspector-activity" },
+  { key: "output", label: "Output", tag: "inspector-output" },
+  { key: "automation", label: "Automation", tag: "inspector-automation" },
+  { key: "permissions", label: "Permissions", tag: "inspector-permissions" }
+];
+
+const tabTagByKey = Object.fromEntries(tabs.map((tab) => [tab.key, tab.tag]));
+
+const normalizeTab = (value) => (tabTagByKey[value] ? value : "overview");
 
 class InspectorPanel extends HTMLElement {
   #dispose = [];
   #activeTab = "overview";
   #selectedNodeId = null;
+  #selectedNode = null;
 
   connectedCallback() {
-    this.render();
+    this.addEventListener("inspector-node-patch", (event) => this.#onNodePatch(event));
 
     this.#dispose.push(
       subscribe(EVENTS.INSPECTOR_TAB_CHANGED, ({ payload }) => {
-        this.#activeTab = payload?.tab ?? "overview";
+        this.#activeTab = normalizeTab(payload?.tab);
         this.render();
       })
     );
@@ -31,6 +37,7 @@ class InspectorPanel extends HTMLElement {
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
         this.#selectedNodeId = payload?.nodeId ?? null;
+        this.#selectedNode = this.#selectedNodeId ? graphStore.getNode(this.#selectedNodeId) : null;
         this.render();
       })
     );
@@ -38,9 +45,20 @@ class InspectorPanel extends HTMLElement {
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
         this.#selectedNodeId = null;
+        this.#selectedNode = null;
         this.render();
       })
     );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
+        if (payload?.nodeId == null || payload.nodeId !== this.#selectedNodeId) return;
+        this.#selectedNode = graphStore.getNode(this.#selectedNodeId);
+        this.render();
+      })
+    );
+
+    this.render();
   }
 
   disconnectedCallback() {
@@ -48,44 +66,62 @@ class InspectorPanel extends HTMLElement {
     this.#dispose = [];
   }
 
+  #onNodePatch(event) {
+    const patch = event.detail?.patch;
+    if (this.#selectedNodeId == null || patch == null || typeof patch !== "object") return;
+
+    publish(EVENTS.GRAPH_NODE_UPDATED, {
+      nodeId: this.#selectedNodeId,
+      patch,
+      origin: "inspector-panel"
+    });
+  }
+
   #bindTabs() {
     this.querySelectorAll("[data-inspector-tab]").forEach((button) => {
       button.addEventListener("click", () => {
-        publish(EVENTS.INSPECTOR_TAB_CHANGED, { tab: button.dataset.inspectorTab });
+        const tab = normalizeTab(button.dataset.inspectorTab);
+        publish(EVENTS.INSPECTOR_TAB_CHANGED, { tab, origin: "inspector-panel" });
       });
     });
   }
 
   render() {
-    const selectedNode = this.#selectedNodeId ? graphStore.getNode(this.#selectedNodeId) : null;
-    const selectedTitle = selectedNode?.label ?? "No node selected";
-    const selectedType = selectedNode?.type ?? "none";
-    const activeTag = tabElementByKey[this.#activeTab] ?? "inspector-overview";
+    const node = this.#selectedNode;
+    const selectedTitle = escapeHtml(node?.label ?? "No node selected");
+    const selectedType = escapeHtml(node?.type ?? "none");
 
     this.innerHTML = `
-      <aside class="mg-panel">
+      <aside class="mg-panel mg-inspector-panel">
         <header>Node Inspector</header>
-        <div class="content">
-          <p><strong>${selectedTitle}</strong></p>
-          <p>Type: ${selectedType}</p>
-          <div class="inspector-tabs">
-            <button type="button" data-inspector-tab="overview" aria-pressed="${this.#activeTab === "overview"}">Overview</button>
-            <button type="button" data-inspector-tab="prompt" aria-pressed="${this.#activeTab === "prompt"}">Prompt</button>
-            <button type="button" data-inspector-tab="data" aria-pressed="${this.#activeTab === "data"}">Data</button>
-            <button type="button" data-inspector-tab="tools" aria-pressed="${this.#activeTab === "tools"}">Tools</button>
-            <button type="button" data-inspector-tab="activity" aria-pressed="${this.#activeTab === "activity"}">Activity</button>
-            <button type="button" data-inspector-tab="output" aria-pressed="${this.#activeTab === "output"}">Output</button>
-            <button type="button" data-inspector-tab="automation" aria-pressed="${this.#activeTab === "automation"}">Automation</button>
-            <button type="button" data-inspector-tab="permissions" aria-pressed="${this.#activeTab === "permissions"}">Permissions</button>
+        <div class="content inspector-layout">
+          <div class="inspector-summary">
+            <p class="inspector-node-title">${selectedTitle}</p>
+            <p class="inspector-node-meta">Type: ${selectedType}</p>
           </div>
-          <div style="margin-top:0.6rem;">
-            <${activeTag}></${activeTag}>
+          <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
+            ${tabs
+              .map(
+                (tab) => `<button type="button" role="tab" data-inspector-tab="${tab.key}" aria-selected="${
+                  this.#activeTab === tab.key
+                }" aria-pressed="${this.#activeTab === tab.key}">${tab.label}</button>`
+              )
+              .join("")}
           </div>
+          <section class="inspector-tab-content" data-role="inspector-tab-content"></section>
         </div>
       </aside>
     `;
 
     this.#bindTabs();
+
+    const activeTag = tabTagByKey[this.#activeTab] ?? "inspector-overview";
+    const contentEl = this.querySelector('[data-role="inspector-tab-content"]');
+    if (contentEl == null) return;
+
+    const tabEl = document.createElement(activeTag);
+    tabEl.node = node;
+    contentEl.append(tabEl);
   }
 }
 

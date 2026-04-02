@@ -46,6 +46,130 @@
   gap: 0.4rem;
 }
 
+.mg-inspector-panel {
+  height: calc(100% - 1rem);
+}
+
+.inspector-layout {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.inspector-summary {
+  background: #f8fbff;
+  border: 1px solid #d9e4f3;
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+}
+
+.inspector-node-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.inspector-node-meta {
+  margin: 0.2rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.inspector-tabs button {
+  border: 1px solid #c7d6e9;
+  background: #f5f9ff;
+  color: #24476d;
+  border-radius: 999px;
+  padding: 0.28rem 0.58rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.inspector-tabs button[aria-pressed="true"] {
+  background: #2e5b94;
+  border-color: #2e5b94;
+  color: #ffffff;
+}
+
+.inspector-tab-content {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.inspector-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.62rem;
+  background: #fcfdff;
+}
+
+.inspector-group h4 {
+  margin: 0 0 0.52rem;
+  font-size: 0.8rem;
+}
+
+.inspector-field {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.inspector-field:last-child {
+  margin-bottom: 0;
+}
+
+.inspector-field > span {
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.inspector-field input[type="text"],
+.inspector-field input[type="url"],
+.inspector-field input[type="number"],
+.inspector-field textarea {
+  width: 100%;
+  border: 1px solid #cdd9ea;
+  border-radius: 8px;
+  padding: 0.43rem 0.48rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: #ffffff;
+}
+
+.inspector-field textarea {
+  resize: vertical;
+  min-height: 72px;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  line-height: 1.35;
+}
+
+.inspector-field input[type="color"] {
+  width: 100%;
+  height: 2rem;
+  border: 1px solid #cdd9ea;
+  border-radius: 8px;
+  padding: 0.2rem;
+  background: #ffffff;
+}
+
+.inspector-field.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.inspector-field.checkbox span {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.inspector-help,
+.inspector-empty {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
 .log-list {
   list-style: none;
   padding: 0;
