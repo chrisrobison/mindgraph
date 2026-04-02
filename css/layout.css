@@ -2,11 +2,11 @@
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr var(--bottom-height);
-  grid-template-columns: var(--left-width) minmax(0, 1fr) var(--right-width);
+  grid-template-columns: minmax(180px, var(--left-width)) minmax(0, 1fr) minmax(280px, var(--right-width));
   grid-template-areas:
     "toolbar toolbar toolbar"
     "palette canvas inspector"
-    "activity activity inspector";
+    "activity activity activity";
 }
 
 .mg-toolbar {
@@ -25,6 +25,7 @@
   grid-area: canvas;
   display: flex;
   min-height: 0;
+  min-width: 0;
 }
 
 .mg-inspector {
@@ -38,7 +39,19 @@
 @media (max-width: 1200px) {
   :root {
     --left-width: 200px;
-    --right-width: 300px;
+    --right-width: 280px;
+  }
+}
+
+@media (max-width: 1380px) {
+  .mg-shell {
+    grid-template-columns: minmax(180px, var(--left-width)) minmax(0, 1fr);
+    grid-template-rows: auto minmax(360px, 1fr) auto var(--bottom-height);
+    grid-template-areas:
+      "toolbar toolbar"
+      "palette canvas"
+      "inspector inspector"
+      "activity activity";
   }
 }
 
