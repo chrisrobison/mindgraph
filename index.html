@@ -10,7 +10,17 @@
     <link rel="stylesheet" href="./css/panels.css" />
   </head>
   <body>
+    <div id="mg-protocol-warning" style="display: none; margin: 1rem; padding: 0.8rem 1rem; border: 1px solid #e3b8b8; border-radius: 8px; background: #fff6f6; color: #6d1f1f; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;">
+      MindGraph AI must be opened over HTTP, not <code>file://</code>. Run
+      <code>python3 -m http.server 4173</code> in this folder and open
+      <code>http://127.0.0.1:4173</code>.
+    </div>
     <app-shell></app-shell>
+    <script>
+      if (location.protocol === "file:") {
+        document.getElementById("mg-protocol-warning").style.display = "block";
+      }
+    </script>
     <script type="module" src="./js/app.js"></script>
   </body>
 </html>

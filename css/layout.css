@@ -1,7 +1,7 @@
 .mg-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: var(--toolbar-height) 1fr var(--bottom-height);
+  grid-template-rows: auto 1fr var(--bottom-height);
   grid-template-columns: var(--left-width) minmax(0, 1fr) var(--right-width);
   grid-template-areas:
     "toolbar toolbar toolbar"
@@ -11,10 +11,14 @@
 
 .mg-toolbar {
   grid-area: toolbar;
+  position: relative;
+  z-index: 20;
 }
 
 .mg-palette {
   grid-area: palette;
+  position: relative;
+  z-index: 5;
 }
 
 .mg-canvas {
@@ -41,7 +45,7 @@
 @media (max-width: 960px) {
   .mg-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: var(--toolbar-height) auto minmax(300px, 1fr) auto auto;
+    grid-template-rows: auto auto minmax(300px, 1fr) auto auto;
     grid-template-areas:
       "toolbar"
       "palette"
