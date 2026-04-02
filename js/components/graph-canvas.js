@@ -380,7 +380,8 @@ class GraphCanvas extends HTMLElement {
       return;
     }
 
-    if (this.#activeTool !== "select") {
+    const dragEnabled = this.#activeTool === "select" || this.#activeTool.startsWith("create:");
+    if (!dragEnabled) {
       publish(EVENTS.GRAPH_NODE_SELECTED, {
         nodeId: node.id,
         origin: "graph-canvas"
