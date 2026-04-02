@@ -37,3 +37,14 @@ app-shell {
   display: block;
   min-height: 100vh;
 }
+
+@media (min-width: 961px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+
+  app-shell {
+    height: 100vh;
+  }
+}

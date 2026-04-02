@@ -17,6 +17,7 @@
 .mg-panel .content {
   padding: 0.85rem;
   font-size: 0.88rem;
+  min-height: 0;
 }
 
 .toolbar-actions {
@@ -128,6 +129,8 @@
   display: grid;
   gap: 0.8rem;
   padding: 0.6rem !important;
+  height: 100%;
+  overflow: auto;
 }
 
 .palette-group {
@@ -215,6 +218,9 @@
 .inspector-tab-content {
   display: grid;
   gap: 0.65rem;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.1rem;
 }
 
 .inspector-group {
@@ -370,7 +376,20 @@
 .mg-graph-content {
   flex: 1;
   min-height: 380px;
+  min-width: 0;
   padding: 0.65rem !important;
+}
+
+.mg-activity .mg-panel {
+  height: calc(100% - 1rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.mg-activity .mg-panel .content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .graph-workspace {
