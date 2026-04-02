@@ -8,6 +8,7 @@ const cap = (items, max = 80) => items.slice(0, max);
 class UiStore {
   #state = {
     selectedNodeId: null,
+    selectedNodeIds: [],
     selectedTool: "select",
     viewportZoom: 1,
     inspectorTab: "overview",
@@ -21,11 +22,20 @@ class UiStore {
 
   constructor() {
     subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
-      this.#state.selectedNodeId = payload?.nodeId ?? null;
+      const nodeIds = toArray(payload?.nodeIds);
+      this.#state.selectedNodeIds = nodeIds.length ? nodeIds : payload?.nodeId ? [payload.nodeId] : [];
+      this.#state.selectedNodeId = this.#state.selectedNodeIds[0] ?? null;
+    });
+
+    subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
+      const nodeIds = toArray(payload?.nodeIds);
+      this.#state.selectedNodeIds = nodeIds;
+      this.#state.selectedNodeId = nodeIds[0] ?? null;
     });
 
     subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
       this.#state.selectedNodeId = null;
+      this.#state.selectedNodeIds = [];
     });
 
     subscribe(EVENTS.TOOLBAR_TOOL_CHANGED, ({ payload }) => {
@@ -111,7 +121,14 @@ class UiStore {
   }
 
   getState() {
-    return { ...this.#state };
+    return {
+      ...this.#state,
+      selectedNodeIds: [...this.#state.selectedNodeIds],
+      activityItems: [...this.#state.activityItems],
+      taskQueue: [...this.#state.taskQueue],
+      runHistory: [...this.#state.runHistory],
+      errors: [...this.#state.errors]
+    };
   }
 
   getRuntimeState() {
@@ -124,12 +141,20 @@ class UiStore {
     };
   }
 
-  selectNode(nodeId) {
-    publish(EVENTS.GRAPH_NODE_SELECTED, { nodeId });
+  selectNode(nodeId, options = {}) {
+    publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, {
+      nodeId,
+      additive: Boolean(options?.additive),
+      toggle: Boolean(options?.toggle)
+    });
+  }
+
+  setSelection(nodeIds = []) {
+    publish(EVENTS.GRAPH_SELECTION_SET_REQUESTED, { nodeIds: toArray(nodeIds) });
   }
 
   clearSelection() {
-    publish(EVENTS.GRAPH_SELECTION_CLEARED, {});
+    publish(EVENTS.GRAPH_SELECTION_CLEAR_REQUESTED, {});
   }
 
   setTool(tool) {
@@ -137,7 +162,7 @@ class UiStore {
   }
 
   setViewportZoom(zoom) {
-    publish(EVENTS.GRAPH_VIEWPORT_CHANGED, { zoom });
+    publish(EVENTS.GRAPH_VIEWPORT_UPDATE_REQUESTED, { zoom });
   }
 
   setInspectorTab(tab) {

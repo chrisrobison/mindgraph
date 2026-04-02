@@ -1,10 +1,7 @@
 import {
-  clamp,
   clampGraphPoint,
   clampZoom,
   formatEdgeLabel,
-  GRAPH_LIMITS,
-  NODE_SIZE_BY_TYPE,
   NODE_TEMPLATES,
   WORLD_SIZE
 } from "../core/constants.js";
@@ -13,24 +10,18 @@ import { EDGE_TYPE_VALUES } from "../core/types.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { uiStore } from "../store/ui-store.js";
+import { renderEdges, renderNodes, highlightSelection } from "./graph-canvas/canvas-renderer.js";
+import { applyViewportTransform, screenToWorld, zoomAtClientPoint } from "./graph-canvas/canvas-viewport.js";
+import { findNodeIdsInWorldRect, normalizeScreenRect } from "./graph-canvas/canvas-selection.js";
 
-const nodeTagByType = {
-  note: "note-node",
-  agent: "agent-node",
-  data: "data-node",
-  transformer: "transformer-node",
-  view: "view-node",
-  action: "action-node"
-};
-
-const isUndoShortcut = (event) => (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+const isUndoShortcut = (event) =>
+  (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
 const isRedoShortcut = (event) =>
   (event.ctrlKey || event.metaKey) &&
   ((event.shiftKey && event.key.toLowerCase() === "z") || event.key.toLowerCase() === "y");
 
 class GraphCanvas extends HTMLElement {
-  #document = null;
-  #selectedNodeId = null;
+  #selectedNodeIds = [];
   #activeTool = "select";
   #connectState = { sourceNodeId: null };
   #dispose = [];
@@ -39,31 +30,36 @@ class GraphCanvas extends HTMLElement {
   #sceneEl = null;
   #nodeLayerEl = null;
   #edgeLayerEl = null;
+  #marqueeEl = null;
+  #edgePopoverEl = null;
+  #edgeTypeField = null;
+  #edgeLabelField = null;
   #panState = null;
   #dragState = null;
+  #marqueeState = null;
+  #edgePopoverState = null;
 
   connectedCallback() {
     this.#renderShell();
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_DOCUMENT_LOADED, ({ payload }) => {
-        const nextDocument = payload?.document ?? null;
-        this.#document = nextDocument;
-
-        if (nextDocument?.viewport) {
+        const nextViewport = payload?.document?.viewport;
+        if (nextViewport) {
           this.#viewport = {
-            x: Number(nextDocument.viewport.x ?? 0),
-            y: Number(nextDocument.viewport.y ?? 0),
-            zoom: clampZoom(Number(nextDocument.viewport.zoom ?? 1))
+            x: Number(nextViewport.x ?? 0),
+            y: Number(nextViewport.y ?? 0),
+            zoom: clampZoom(Number(nextViewport.zoom ?? 1))
           };
-          publish(EVENTS.GRAPH_VIEWPORT_CHANGED, {
-            x: this.#viewport.x,
-            y: this.#viewport.y,
-            zoom: this.#viewport.zoom,
-            origin: "graph-canvas"
-          });
         }
 
+        this.#renderGraph();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_DOCUMENT_CHANGED, ({ payload }) => {
+        if (payload?.reason === "viewport") return;
         this.#renderGraph();
       })
     );
@@ -84,73 +80,36 @@ class GraphCanvas extends HTMLElement {
     this.#dispose.push(
       subscribe(EVENTS.TOOLBAR_TOOL_CHANGED, ({ payload }) => {
         this.#activeTool = payload?.tool ?? "select";
-        if (this.#activeTool !== "connect") this.#connectState.sourceNodeId = null;
+        if (this.#activeTool !== "connect") {
+          this.#connectState.sourceNodeId = null;
+          this.#closeEdgePopover();
+        }
         this.#syncInteractionMode();
         this.#highlightSelection();
       })
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
-        this.#selectedNodeId = payload?.nodeId ?? null;
+      subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
+        this.#selectedNodeIds = Array.isArray(payload?.nodeIds)
+          ? [...payload.nodeIds]
+          : payload?.nodeId
+            ? [payload.nodeId]
+            : [];
         this.#highlightSelection();
       })
     );
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
-        this.#selectedNodeId = null;
+        this.#selectedNodeIds = [];
         this.#highlightSelection();
       })
     );
 
-    this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
-        if (payload?.origin === "graph-canvas") return;
-
-        const { nodeId, patch, operation, node } = payload ?? {};
-        if (!this.#document) return;
-
-        if (operation === "added" && node) {
-          this.#document.nodes = [...(this.#document.nodes ?? []), node];
-          this.#renderGraph();
-          return;
-        }
-
-        if (operation === "removed" && nodeId) {
-          this.#document.nodes = (this.#document.nodes ?? []).filter((entry) => entry.id !== nodeId);
-          this.#document.edges = (this.#document.edges ?? []).filter(
-            (edge) => edge.source !== nodeId && edge.target !== nodeId
-          );
-          this.#renderGraph();
-          return;
-        }
-
-        if (!nodeId || !patch) return;
-
-        this.#document.nodes = (this.#document.nodes ?? []).map((entry) =>
-          entry.id === nodeId ? { ...entry, ...patch } : entry
-        );
-        this.#renderGraph();
-      })
-    );
-
-    this.#dispose.push(
-      subscribe(EVENTS.GRAPH_EDGE_CREATED, ({ payload }) => {
-        if (payload?.origin === "graph-canvas") return;
-
-        const edge = payload?.edge;
-        if (!edge || !this.#document) return;
-
-        const duplicate = (this.#document.edges ?? []).some((entry) => entry.id === edge.id);
-        if (duplicate) return;
-
-        this.#document.edges = [...(this.#document.edges ?? []), edge];
-        this.#renderEdges();
-      })
-    );
-
     this.#syncInteractionMode();
+    this.#selectedNodeIds = graphStore.getSelectedNodeIds();
+    this.#renderGraph();
   }
 
   disconnectedCallback() {
@@ -168,6 +127,23 @@ class GraphCanvas extends HTMLElement {
               <svg class="graph-edges-layer" data-role="edges" width="${WORLD_SIZE.width}" height="${WORLD_SIZE.height}" viewBox="0 0 ${WORLD_SIZE.width} ${WORLD_SIZE.height}" aria-hidden="true"></svg>
               <div class="graph-node-layer" data-role="nodes"></div>
             </div>
+            <div class="graph-marquee" data-role="marquee" hidden></div>
+            <div class="graph-edge-popover" data-role="edge-popover" hidden>
+              <label>
+                Edge Type
+                <select data-role="edge-type" name="edge-type">
+                  ${EDGE_TYPE_VALUES.map((type) => `<option value="${type}">${type}</option>`).join("")}
+                </select>
+              </label>
+              <label>
+                Label
+                <input data-role="edge-label" name="edge-label" type="text" placeholder="Optional label" />
+              </label>
+              <div class="graph-edge-popover-actions">
+                <button type="button" data-action="edge-cancel">Cancel</button>
+                <button type="button" data-action="edge-create">Create Edge</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -177,8 +153,13 @@ class GraphCanvas extends HTMLElement {
     this.#sceneEl = this.querySelector('[data-role="scene"]');
     this.#nodeLayerEl = this.querySelector('[data-role="nodes"]');
     this.#edgeLayerEl = this.querySelector('[data-role="edges"]');
+    this.#marqueeEl = this.querySelector('[data-role="marquee"]');
+    this.#edgePopoverEl = this.querySelector('[data-role="edge-popover"]');
+    this.#edgeTypeField = this.querySelector('[data-role="edge-type"]');
+    this.#edgeLabelField = this.querySelector('[data-role="edge-label"]');
 
     this.#bindInteractionEvents();
+    this.#bindEdgePopoverEvents();
     this.#applyViewportTransform();
   }
 
@@ -199,6 +180,32 @@ class GraphCanvas extends HTMLElement {
     );
   }
 
+  #bindEdgePopoverEvents() {
+    this.querySelector('[data-action="edge-cancel"]')?.addEventListener("click", () => {
+      this.#closeEdgePopover();
+      this.#connectState.sourceNodeId = null;
+      this.#highlightSelection();
+    });
+
+    this.querySelector('[data-action="edge-create"]')?.addEventListener("click", () => {
+      this.#commitEdgeFromPopover();
+    });
+
+    this.#edgeTypeField?.addEventListener("change", () => {
+      if (!this.#edgePopoverState) return;
+
+      this.#edgePopoverState.edgeType = this.#edgeTypeField.value;
+      if (!this.#edgePopoverState.labelTouched) {
+        this.#edgeLabelField.value = formatEdgeLabel(this.#edgePopoverState.edgeType);
+      }
+    });
+
+    this.#edgeLabelField?.addEventListener("input", () => {
+      if (!this.#edgePopoverState) return;
+      this.#edgePopoverState.labelTouched = true;
+    });
+  }
+
   #onWorkspacePointerDown(event) {
     if (event.button !== 0 && event.button !== 1) return;
     this.#workspaceEl.focus();
@@ -212,7 +219,24 @@ class GraphCanvas extends HTMLElement {
       return;
     }
 
-    const canPan = this.#activeTool === "pan" || this.#activeTool === "select" || event.button === 1;
+    if (event.button === 0 && this.#activeTool === "select") {
+      const rect = this.#workspaceEl.getBoundingClientRect();
+      this.#marqueeState = {
+        pointerId: event.pointerId,
+        startX: event.clientX - rect.left,
+        startY: event.clientY - rect.top,
+        endX: event.clientX - rect.left,
+        endY: event.clientY - rect.top,
+        moved: false,
+        additive: event.shiftKey
+      };
+      this.#workspaceEl.setPointerCapture(event.pointerId);
+      this.#updateMarquee();
+      event.preventDefault();
+      return;
+    }
+
+    const canPan = this.#activeTool === "pan" || event.button === 1;
     if (!canPan) return;
 
     this.#panState = {
@@ -221,8 +245,7 @@ class GraphCanvas extends HTMLElement {
       startClientY: event.clientY,
       originX: this.#viewport.x,
       originY: this.#viewport.y,
-      moved: false,
-      mouseButton: event.button
+      moved: false
     };
 
     this.#workspaceEl.setPointerCapture(event.pointerId);
@@ -234,8 +257,22 @@ class GraphCanvas extends HTMLElement {
       const worldPoint = this.#screenToWorld(event.clientX, event.clientY);
       const nextX = Math.round(worldPoint.x - this.#dragState.offsetX);
       const nextY = Math.round(worldPoint.y - this.#dragState.offsetY);
+      const previewPosition = clampGraphPoint({ x: nextX, y: nextY });
+
       this.#dragState.moved = true;
-      this.#updateNodePosition(this.#dragState.nodeId, nextX, nextY);
+      this.#dragState.previewPosition = previewPosition;
+      this.#applyDragPreview();
+      return;
+    }
+
+    if (this.#marqueeState && event.pointerId === this.#marqueeState.pointerId) {
+      const rect = this.#workspaceEl.getBoundingClientRect();
+      this.#marqueeState.endX = event.clientX - rect.left;
+      this.#marqueeState.endY = event.clientY - rect.top;
+      this.#marqueeState.moved =
+        Math.abs(this.#marqueeState.endX - this.#marqueeState.startX) > 3 ||
+        Math.abs(this.#marqueeState.endY - this.#marqueeState.startY) > 3;
+      this.#updateMarquee();
       return;
     }
 
@@ -254,27 +291,56 @@ class GraphCanvas extends HTMLElement {
     if (this.#dragState && event.pointerId === this.#dragState.pointerId) {
       this.#workspaceEl.releasePointerCapture(event.pointerId);
       this.#workspaceEl.classList.remove("is-dragging-node");
+
+      const moved = this.#dragState.moved;
+      const nodeId = this.#dragState.nodeId;
+      const previewPosition = this.#dragState.previewPosition;
       this.#dragState = null;
+
+      if (moved && previewPosition) {
+        publish(EVENTS.GRAPH_NODE_MOVE_REQUESTED, {
+          nodeId,
+          position: previewPosition,
+          origin: "graph-canvas"
+        });
+      } else {
+        this.#renderGraph();
+      }
+
+      return;
+    }
+
+    if (this.#marqueeState && event.pointerId === this.#marqueeState.pointerId) {
+      this.#workspaceEl.releasePointerCapture(event.pointerId);
+      const marqueeState = this.#marqueeState;
+      this.#marqueeState = null;
+      this.#hideMarquee();
+
+      if (!marqueeState.moved) {
+        if (this.#activeTool === "select") {
+          publish(EVENTS.GRAPH_SELECTION_CLEAR_REQUESTED, { origin: "graph-canvas" });
+        }
+        return;
+      }
+
+      this.#applyMarqueeSelection(marqueeState);
       return;
     }
 
     if (!this.#panState || event.pointerId !== this.#panState.pointerId) return;
 
     this.#workspaceEl.releasePointerCapture(event.pointerId);
-    const shouldClearSelection =
-      this.#activeTool === "select" && this.#panState.mouseButton === 0 && !this.#panState.moved;
+    const changed = this.#panState.moved;
     this.#panState = null;
 
-    if (shouldClearSelection) {
-      publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-canvas" });
+    if (changed) {
+      publish(EVENTS.GRAPH_VIEWPORT_UPDATE_REQUESTED, {
+        x: this.#viewport.x,
+        y: this.#viewport.y,
+        zoom: this.#viewport.zoom,
+        origin: "graph-canvas"
+      });
     }
-
-    publish(EVENTS.GRAPH_VIEWPORT_CHANGED, {
-      x: this.#viewport.x,
-      y: this.#viewport.y,
-      zoom: this.#viewport.zoom,
-      origin: "graph-canvas"
-    });
   }
 
   #onWorkspaceWheel(event) {
@@ -282,18 +348,20 @@ class GraphCanvas extends HTMLElement {
     event.preventDefault();
 
     const direction = event.deltaY < 0 ? 1 : -1;
-    const zoomFactor = direction > 0 ? GRAPH_LIMITS.zoomInFactor : GRAPH_LIMITS.zoomOutFactor;
-    const nextZoom = clampZoom(this.#viewport.zoom * zoomFactor);
-    if (nextZoom === this.#viewport.zoom) return;
+    const nextViewport = zoomAtClientPoint(
+      this.#workspaceEl,
+      this.#viewport,
+      event.clientX,
+      event.clientY,
+      direction
+    );
 
-    const rect = this.#workspaceEl.getBoundingClientRect();
-    const worldPointBeforeZoom = this.#screenToWorld(event.clientX, event.clientY);
+    if (nextViewport.zoom === this.#viewport.zoom) return;
 
-    this.#viewport.zoom = nextZoom;
-    this.#viewport.x = event.clientX - rect.left - worldPointBeforeZoom.x * nextZoom;
-    this.#viewport.y = event.clientY - rect.top - worldPointBeforeZoom.y * nextZoom;
+    this.#viewport = nextViewport;
     this.#applyViewportTransform();
-    publish(EVENTS.GRAPH_VIEWPORT_CHANGED, {
+
+    publish(EVENTS.GRAPH_VIEWPORT_UPDATE_REQUESTED, {
       x: this.#viewport.x,
       y: this.#viewport.y,
       zoom: this.#viewport.zoom,
@@ -304,45 +372,55 @@ class GraphCanvas extends HTMLElement {
   #onWorkspaceKeyDown(event) {
     if (event.key === "Escape") {
       event.preventDefault();
-      this.#connectState.sourceNodeId = null;
+      if (this.#edgePopoverState) {
+        this.#closeEdgePopover();
+        this.#connectState.sourceNodeId = null;
+        this.#highlightSelection();
+        return;
+      }
+
+      if (this.#connectState.sourceNodeId) {
+        this.#connectState.sourceNodeId = null;
+        this.#highlightSelection();
+        return;
+      }
+
       if (this.#activeTool !== "select") {
         uiStore.setTool("select");
       } else {
-        publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-canvas" });
+        publish(EVENTS.GRAPH_SELECTION_CLEAR_REQUESTED, { origin: "graph-canvas" });
       }
-      this.#highlightSelection();
       return;
     }
 
     if (isUndoShortcut(event)) {
       event.preventDefault();
-      const snapshot = graphStore.undo();
-      if (snapshot) {
-        publish(EVENTS.ACTIVITY_LOG_APPENDED, { level: "info", message: "Undo applied" });
-      }
+      if (!graphStore.canUndo()) return;
+      publish(EVENTS.GRAPH_DOCUMENT_UNDO_REQUESTED, { origin: "graph-canvas" });
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, { level: "info", message: "Undo applied" });
       return;
     }
 
     if (isRedoShortcut(event)) {
       event.preventDefault();
-      const snapshot = graphStore.redo();
-      if (snapshot) {
-        publish(EVENTS.ACTIVITY_LOG_APPENDED, { level: "info", message: "Redo applied" });
-      }
+      if (!graphStore.canRedo()) return;
+      publish(EVENTS.GRAPH_DOCUMENT_REDO_REQUESTED, { origin: "graph-canvas" });
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, { level: "info", message: "Redo applied" });
       return;
     }
 
-    if (!this.#selectedNodeId) return;
+    if (!this.#selectedNodeIds.length) return;
 
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      const removed = graphStore.removeNode(this.#selectedNodeId);
-      if (removed) {
-        publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-          level: "info",
-          message: `Deleted node ${removed.label}`
-        });
-      }
+      publish(EVENTS.GRAPH_NODE_DELETE_REQUESTED, {
+        nodeIds: [...this.#selectedNodeIds],
+        origin: "graph-canvas"
+      });
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "info",
+        message: `Deleted ${this.#selectedNodeIds.length} node(s)`
+      });
       return;
     }
 
@@ -363,14 +441,15 @@ class GraphCanvas extends HTMLElement {
       return;
     }
 
+    publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, {
+      nodeId: node.id,
+      additive: event.shiftKey,
+      toggle: event.shiftKey,
+      origin: "graph-canvas"
+    });
+
     const dragEnabled = this.#activeTool === "select" || this.#activeTool.startsWith("create:");
-    if (!dragEnabled) {
-      publish(EVENTS.GRAPH_NODE_SELECTED, {
-        nodeId: node.id,
-        origin: "graph-canvas"
-      });
-      return;
-    }
+    if (!dragEnabled) return;
 
     this.#workspaceEl.setPointerCapture(event.pointerId);
     this.#workspaceEl.classList.add("is-dragging-node");
@@ -381,23 +460,20 @@ class GraphCanvas extends HTMLElement {
       nodeId: node.id,
       offsetX: worldPoint.x - (node.position?.x ?? 0),
       offsetY: worldPoint.y - (node.position?.y ?? 0),
+      previewPosition: node.position ?? { x: 0, y: 0 },
       moved: false
     };
-
-    publish(EVENTS.GRAPH_NODE_SELECTED, {
-      nodeId: node.id,
-      origin: "graph-canvas"
-    });
   }
 
   #handleConnectClick(node) {
     if (!this.#connectState.sourceNodeId) {
       this.#connectState.sourceNodeId = node.id;
-      publish(EVENTS.GRAPH_NODE_SELECTED, { nodeId: node.id, origin: "graph-canvas" });
+      publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, { nodeId: node.id, origin: "graph-canvas" });
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
         level: "info",
-        message: `Connect: source set to ${node.label}`
+        message: `Connect mode: source set to ${node.label}`
       });
+      this.#highlightSelection();
       return;
     }
 
@@ -405,50 +481,169 @@ class GraphCanvas extends HTMLElement {
     const targetNodeId = node.id;
     if (sourceNodeId === targetNodeId) return;
 
-    const defaultType = "depends_on";
-    const selected = window.prompt(
-      `Edge type (${EDGE_TYPE_VALUES.join(", ")}):`,
-      defaultType
+    this.#openEdgePopover(sourceNodeId, targetNodeId);
+  }
+
+  #openEdgePopover(sourceNodeId, targetNodeId) {
+    const document = graphStore.getDocument();
+    const source = (document?.nodes ?? []).find((node) => node.id === sourceNodeId);
+    const target = (document?.nodes ?? []).find((node) => node.id === targetNodeId);
+    if (!source || !target || !this.#edgePopoverEl) return;
+
+    const edgeType = "depends_on";
+    const label = formatEdgeLabel(edgeType);
+
+    this.#edgePopoverState = {
+      sourceNodeId,
+      targetNodeId,
+      edgeType,
+      labelTouched: false
+    };
+
+    this.#edgeTypeField.value = edgeType;
+    this.#edgeLabelField.value = label;
+
+    const worldX = ((source.position?.x ?? 0) + (target.position?.x ?? 0)) / 2;
+    const worldY = ((source.position?.y ?? 0) + (target.position?.y ?? 0)) / 2;
+    const screenX = worldX * this.#viewport.zoom + this.#viewport.x;
+    const screenY = worldY * this.#viewport.zoom + this.#viewport.y;
+
+    this.#edgePopoverEl.hidden = false;
+    this.#edgePopoverEl.style.left = `${screenX}px`;
+    this.#edgePopoverEl.style.top = `${screenY}px`;
+    this.#edgeLabelField.focus();
+  }
+
+  #commitEdgeFromPopover() {
+    if (!this.#edgePopoverState) return;
+
+    const edgeType = EDGE_TYPE_VALUES.includes(this.#edgeTypeField.value)
+      ? this.#edgeTypeField.value
+      : "depends_on";
+    const rawLabel = String(this.#edgeLabelField.value ?? "").trim();
+
+    publish(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, {
+      source: this.#edgePopoverState.sourceNodeId,
+      target: this.#edgePopoverState.targetNodeId,
+      type: edgeType,
+      label: rawLabel || formatEdgeLabel(edgeType),
+      origin: "graph-canvas"
+    });
+
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: `Created edge ${edgeType}`
+    });
+
+    publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, {
+      nodeId: this.#edgePopoverState.targetNodeId,
+      origin: "graph-canvas"
+    });
+
+    this.#closeEdgePopover();
+    this.#connectState.sourceNodeId = null;
+    this.#highlightSelection();
+  }
+
+  #closeEdgePopover() {
+    this.#edgePopoverState = null;
+    if (this.#edgePopoverEl) {
+      this.#edgePopoverEl.hidden = true;
+    }
+  }
+
+  #applyDragPreview() {
+    if (!this.#dragState) return;
+
+    const nodeEl = this.#nodeLayerEl?.querySelector(`[data-node-id="${this.#dragState.nodeId}"]`);
+    if (nodeEl) {
+      nodeEl.style.left = `${this.#dragState.previewPosition.x}px`;
+      nodeEl.style.top = `${this.#dragState.previewPosition.y}px`;
+    }
+
+    const document = graphStore.getDocument();
+    const previewNodes = (document?.nodes ?? []).map((node) =>
+      node.id === this.#dragState.nodeId
+        ? {
+            ...node,
+            position: this.#dragState.previewPosition
+          }
+        : node
     );
-    if (selected === null) {
-      this.#connectState.sourceNodeId = null;
+
+    renderEdges(this.#edgeLayerEl, previewNodes, document?.edges ?? []);
+  }
+
+  #updateMarquee() {
+    if (!this.#marqueeEl || !this.#marqueeState) return;
+
+    const rect = normalizeScreenRect(
+      this.#marqueeState.startX,
+      this.#marqueeState.startY,
+      this.#marqueeState.endX,
+      this.#marqueeState.endY
+    );
+
+    this.#marqueeEl.hidden = false;
+    this.#marqueeEl.style.left = `${rect.left}px`;
+    this.#marqueeEl.style.top = `${rect.top}px`;
+    this.#marqueeEl.style.width = `${rect.width}px`;
+    this.#marqueeEl.style.height = `${rect.height}px`;
+  }
+
+  #hideMarquee() {
+    if (!this.#marqueeEl) return;
+    this.#marqueeEl.hidden = true;
+    this.#marqueeEl.style.width = "0px";
+    this.#marqueeEl.style.height = "0px";
+  }
+
+  #applyMarqueeSelection(marqueeState) {
+    const rect = normalizeScreenRect(
+      marqueeState.startX,
+      marqueeState.startY,
+      marqueeState.endX,
+      marqueeState.endY
+    );
+
+    const boundsTopLeft = this.#screenToWorld(rect.left + this.#workspaceEl.getBoundingClientRect().left, rect.top + this.#workspaceEl.getBoundingClientRect().top);
+    const boundsBottomRight = this.#screenToWorld(rect.right + this.#workspaceEl.getBoundingClientRect().left, rect.bottom + this.#workspaceEl.getBoundingClientRect().top);
+
+    const worldRect = {
+      left: Math.min(boundsTopLeft.x, boundsBottomRight.x),
+      top: Math.min(boundsTopLeft.y, boundsBottomRight.y),
+      right: Math.max(boundsTopLeft.x, boundsBottomRight.x),
+      bottom: Math.max(boundsTopLeft.y, boundsBottomRight.y)
+    };
+
+    const document = graphStore.getDocument();
+    const ids = findNodeIdsInWorldRect(document?.nodes ?? [], worldRect);
+    if (!marqueeState.additive) {
+      publish(EVENTS.GRAPH_SELECTION_SET_REQUESTED, { nodeIds: ids, origin: "graph-canvas" });
       return;
     }
 
-    const edgeType = EDGE_TYPE_VALUES.includes(selected.trim()) ? selected.trim() : defaultType;
-    const edge = graphStore.addEdge({
-      source: sourceNodeId,
-      target: targetNodeId,
-      type: edgeType,
-      label: formatEdgeLabel(edgeType)
-    });
-
-    if (edge) {
-      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-        level: "info",
-        message: `Created edge ${edge.type}`
-      });
-    }
-
-    this.#connectState.sourceNodeId = null;
-    publish(EVENTS.GRAPH_NODE_SELECTED, { nodeId: targetNodeId, origin: "graph-canvas" });
+    const merged = [...new Set([...this.#selectedNodeIds, ...ids])];
+    publish(EVENTS.GRAPH_SELECTION_SET_REQUESTED, { nodeIds: merged, origin: "graph-canvas" });
   }
 
   #createNodeAt(nodeType, position) {
     const template = NODE_TEMPLATES[nodeType] ?? NODE_TEMPLATES.note;
     const normalizedPosition = clampGraphPoint(position);
 
-    const node = graphStore.addNode({
-      type: nodeType,
-      label: template.label,
-      description: template.description,
-      position: normalizedPosition,
-      data: structuredClone(template.data),
-      metadata: { createdFromTool: this.#activeTool }
+    publish(EVENTS.GRAPH_NODE_CREATE_REQUESTED, {
+      node: {
+        type: nodeType,
+        label: template.label,
+        description: template.description,
+        position: normalizedPosition,
+        data: structuredClone(template.data),
+        metadata: { createdFromTool: this.#activeTool }
+      },
+      selectAfterCreate: true,
+      origin: "graph-canvas"
     });
-    if (!node) return;
 
-    graphStore.setSelectedNode(node.id);
     publish(EVENTS.ACTIVITY_LOG_APPENDED, {
       level: "info",
       message: `Created ${nodeType} node`
@@ -456,23 +651,27 @@ class GraphCanvas extends HTMLElement {
   }
 
   #duplicateSelectedNode() {
-    const source = graphStore.getNode(this.#selectedNodeId);
+    const sourceId = this.#selectedNodeIds[0] ?? null;
+    if (!sourceId) return;
+    const source = graphStore.getNode(sourceId);
     if (!source) return;
 
-    const copy = graphStore.addNode({
-      type: source.type,
-      label: `${source.label} Copy`,
-      description: source.description,
-      position: clampGraphPoint({
-        x: Number(source.position?.x ?? 0) + 36,
-        y: Number(source.position?.y ?? 0) + 28
-      }),
-      data: structuredClone(source.data ?? {}),
-      metadata: { ...(source.metadata ?? {}), duplicatedFrom: source.id }
+    publish(EVENTS.GRAPH_NODE_CREATE_REQUESTED, {
+      node: {
+        type: source.type,
+        label: `${source.label} Copy`,
+        description: source.description,
+        position: clampGraphPoint({
+          x: Number(source.position?.x ?? 0) + 36,
+          y: Number(source.position?.y ?? 0) + 28
+        }),
+        data: structuredClone(source.data ?? {}),
+        metadata: { ...(source.metadata ?? {}), duplicatedFrom: source.id }
+      },
+      selectAfterCreate: true,
+      origin: "graph-canvas"
     });
-    if (!copy) return;
 
-    graphStore.setSelectedNode(copy.id);
     publish(EVENTS.ACTIVITY_LOG_APPENDED, {
       level: "info",
       message: `Duplicated node ${source.label}`
@@ -480,41 +679,7 @@ class GraphCanvas extends HTMLElement {
   }
 
   #screenToWorld(clientX, clientY) {
-    const rect = this.#workspaceEl.getBoundingClientRect();
-    return {
-      x: (clientX - rect.left - this.#viewport.x) / this.#viewport.zoom,
-      y: (clientY - rect.top - this.#viewport.y) / this.#viewport.zoom
-    };
-  }
-
-  #updateNodePosition(nodeId, x, y) {
-    if (!this.#document) return;
-    const clampedPosition = clampGraphPoint({ x, y });
-
-    this.#document.nodes = (this.#document.nodes ?? []).map((node) =>
-      node.id === nodeId
-        ? {
-            ...node,
-            position: clampedPosition
-          }
-        : node
-    );
-
-    const nodeEl = this.#nodeLayerEl?.querySelector(`[data-node-id="${nodeId}"]`);
-    if (nodeEl) {
-      nodeEl.style.left = `${clampedPosition.x}px`;
-      nodeEl.style.top = `${clampedPosition.y}px`;
-    }
-
-    this.#renderEdges();
-
-    publish(EVENTS.GRAPH_NODE_UPDATED, {
-      nodeId,
-      patch: {
-        position: clampedPosition
-      },
-      origin: "graph-canvas"
-    });
+    return screenToWorld(this.#workspaceEl, this.#viewport, clientX, clientY);
   }
 
   #syncInteractionMode() {
@@ -523,166 +688,22 @@ class GraphCanvas extends HTMLElement {
   }
 
   #applyViewportTransform() {
-    if (!this.#sceneEl || !this.#workspaceEl) return;
-
-    this.#sceneEl.style.transform = `translate(${this.#viewport.x}px, ${this.#viewport.y}px) scale(${this.#viewport.zoom})`;
-    const backgroundGrid = GRAPH_LIMITS.gridSize * this.#viewport.zoom;
-    this.#workspaceEl.style.backgroundSize = `${backgroundGrid}px ${backgroundGrid}px`;
-    this.#workspaceEl.style.backgroundPosition = `${this.#viewport.x}px ${this.#viewport.y}px`;
+    applyViewportTransform(this.#sceneEl, this.#workspaceEl, this.#viewport);
   }
 
   #renderGraph() {
-    this.#renderNodes();
-    this.#renderEdges();
+    const document = graphStore.getDocument();
+    const nodes = document?.nodes ?? [];
+    const edges = document?.edges ?? [];
+
+    renderNodes(this.#nodeLayerEl, nodes, (event, node) => this.#onNodePointerDown(event, node));
+    renderEdges(this.#edgeLayerEl, nodes, edges);
     this.#highlightSelection();
     this.#applyViewportTransform();
   }
 
-  #renderNodes() {
-    if (!this.#nodeLayerEl) return;
-
-    const nodes = this.#document?.nodes ?? [];
-    this.#nodeLayerEl.innerHTML = "";
-
-    for (const node of nodes) {
-      const tag = nodeTagByType[node.type] ?? "note-node";
-      const nodeEl = document.createElement(tag);
-      nodeEl.classList.add("mg-node-instance");
-      nodeEl.dataset.nodeId = node.id;
-      nodeEl.dataset.nodeType = node.type;
-      nodeEl.style.left = `${node.position?.x ?? 0}px`;
-      nodeEl.style.top = `${node.position?.y ?? 0}px`;
-      nodeEl.node = node;
-      nodeEl.addEventListener("pointerdown", (event) => this.#onNodePointerDown(event, node));
-      this.#nodeLayerEl.append(nodeEl);
-    }
-  }
-
-  #renderEdges() {
-    if (!this.#edgeLayerEl) return;
-
-    const nodes = this.#document?.nodes ?? [];
-    const edges = this.#document?.edges ?? [];
-    const nodeById = new Map(nodes.map((node) => [node.id, node]));
-
-    const defs = `
-      <defs>
-        <marker id="mg-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" class="graph-edge-arrow"></path>
-        </marker>
-      </defs>
-    `;
-
-    const edgeMarkup = edges
-      .map((edge) => {
-        const source = nodeById.get(edge.source);
-        const target = nodeById.get(edge.target);
-        if (!source || !target) return "";
-
-        const sourcePoint = this.#edgeAnchor(source, target);
-        const targetPoint = this.#edgeAnchor(target, source);
-        const curve = this.#buildCurve(sourcePoint, targetPoint);
-        const rawLabel = String(edge.label ?? "").trim();
-        const labelValue = rawLabel || formatEdgeLabel(edge.type || "");
-        const label = this.#escapeHtml(labelValue);
-        const mid = this.#bezierPoint(curve, 0.5);
-        const labelWidth = clamp(labelValue.length * 6.2 + 18, 44, 170);
-
-        return `
-          <path class="graph-edge-path graph-edge-${edge.type}" d="${curve.path}" marker-end="url(#mg-arrow)"></path>
-          <g class="graph-edge-label-group" transform="translate(${mid.x}, ${mid.y - 8})">
-            <rect class="graph-edge-label-bg" x="${-labelWidth / 2}" y="-9" width="${labelWidth}" height="18" rx="9" ry="9"></rect>
-            <text class="graph-edge-label" x="0" y="4">${label}</text>
-          </g>
-        `;
-      })
-      .join("");
-
-    this.#edgeLayerEl.innerHTML = `${defs}${edgeMarkup}`;
-  }
-
-  #edgeAnchor(node, otherNode) {
-    const size = NODE_SIZE_BY_TYPE[node.type] ?? NODE_SIZE_BY_TYPE.note;
-    const nx = node.position?.x ?? 0;
-    const ny = node.position?.y ?? 0;
-    const cx = nx + size.width / 2;
-    const cy = ny + size.height / 2;
-
-    const otherSize = NODE_SIZE_BY_TYPE[otherNode.type] ?? NODE_SIZE_BY_TYPE.note;
-    const ox = (otherNode.position?.x ?? 0) + otherSize.width / 2;
-    const oy = (otherNode.position?.y ?? 0) + otherSize.height / 2;
-
-    const dx = ox - cx;
-    const dy = oy - cy;
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      return dx >= 0 ? { x: nx + size.width, y: cy } : { x: nx, y: cy };
-    }
-
-    return dy >= 0 ? { x: cx, y: ny + size.height } : { x: cx, y: ny };
-  }
-
-  #buildCurve(sourcePoint, targetPoint) {
-    const dx = targetPoint.x - sourcePoint.x;
-    const dy = targetPoint.y - sourcePoint.y;
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      const control = clamp(Math.abs(dx) * 0.35, 40, 200);
-      const c1 = { x: sourcePoint.x + Math.sign(dx || 1) * control, y: sourcePoint.y };
-      const c2 = { x: targetPoint.x - Math.sign(dx || 1) * control, y: targetPoint.y };
-      return {
-        path: `M ${sourcePoint.x} ${sourcePoint.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${targetPoint.x} ${targetPoint.y}`,
-        source: sourcePoint,
-        c1,
-        c2,
-        target: targetPoint
-      };
-    }
-
-    const control = clamp(Math.abs(dy) * 0.35, 40, 200);
-    const c1 = { x: sourcePoint.x, y: sourcePoint.y + Math.sign(dy || 1) * control };
-    const c2 = { x: targetPoint.x, y: targetPoint.y - Math.sign(dy || 1) * control };
-    return {
-      path: `M ${sourcePoint.x} ${sourcePoint.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${targetPoint.x} ${targetPoint.y}`,
-      source: sourcePoint,
-      c1,
-      c2,
-      target: targetPoint
-    };
-  }
-
-  #bezierPoint(curve, t) {
-    const p0 = curve.source;
-    const p1 = curve.c1;
-    const p2 = curve.c2;
-    const p3 = curve.target;
-    const mt = 1 - t;
-    const mt2 = mt * mt;
-    const t2 = t * t;
-
-    return {
-      x: mt2 * mt * p0.x + 3 * mt2 * t * p1.x + 3 * mt * t2 * p2.x + t2 * t * p3.x,
-      y: mt2 * mt * p0.y + 3 * mt2 * t * p1.y + 3 * mt * t2 * p2.y + t2 * t * p3.y
-    };
-  }
-
   #highlightSelection() {
-    if (!this.#nodeLayerEl) return;
-
-    this.#nodeLayerEl.querySelectorAll("[data-node-id]").forEach((nodeEl) => {
-      const isSelected = nodeEl.dataset.nodeId === this.#selectedNodeId;
-      nodeEl.classList.toggle("is-selected", isSelected);
-      nodeEl.classList.toggle("is-connect-source", nodeEl.dataset.nodeId === this.#connectState.sourceNodeId);
-    });
-  }
-
-  #escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
+    highlightSelection(this.#nodeLayerEl, this.#selectedNodeIds, this.#connectState.sourceNodeId);
   }
 }
 

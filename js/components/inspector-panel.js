@@ -35,7 +35,7 @@ class InspectorPanel extends HTMLElement {
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
+      subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
         this.#selectedNodeId = payload?.nodeId ?? null;
         this.#selectedNode = this.#selectedNodeId ? graphStore.getNode(this.#selectedNodeId) : null;
         this.render();
@@ -58,6 +58,15 @@ class InspectorPanel extends HTMLElement {
       })
     );
 
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_NODE_DELETED, ({ payload }) => {
+        if (payload?.nodeId == null || payload.nodeId !== this.#selectedNodeId) return;
+        this.#selectedNodeId = null;
+        this.#selectedNode = null;
+        this.render();
+      })
+    );
+
     this.render();
   }
 
@@ -70,7 +79,7 @@ class InspectorPanel extends HTMLElement {
     const patch = event.detail?.patch;
     if (this.#selectedNodeId == null || patch == null || typeof patch !== "object") return;
 
-    publish(EVENTS.GRAPH_NODE_UPDATED, {
+    publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
       nodeId: this.#selectedNodeId,
       patch,
       origin: "inspector-panel"

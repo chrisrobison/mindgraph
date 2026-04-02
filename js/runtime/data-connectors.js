@@ -131,23 +131,21 @@ class DataConnectors {
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
-        const node =
-          payload?.node ??
-          (payload?.nodeId && payload?.operation !== "removed" ? graphStore.getNode(payload.nodeId) : null);
-
-        if (payload?.operation === "removed" && payload?.nodeId) {
-          this.#clearTimer(payload.nodeId);
-          this.#cache.delete(payload.nodeId);
-          return;
-        }
-
+        const node = payload?.node ?? (payload?.nodeId ? graphStore.getNode(payload.nodeId) : null);
         if (!node || node.type !== "data") return;
         this.#syncPeriodicRefresh();
       })
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
+      subscribe(EVENTS.GRAPH_NODE_CREATED, ({ payload }) => {
+        if (payload?.node?.type !== "data") return;
+        this.#syncPeriodicRefresh();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
         const node = graphStore.getNode(payload?.nodeId);
         if (!node || node.type !== "data") return;
 
@@ -159,8 +157,17 @@ class DataConnectors {
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_UPDATED, () => {
+      subscribe(EVENTS.GRAPH_DOCUMENT_CHANGED, () => {
         this.#syncAgentLinkedDataCounts();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_NODE_DELETED, ({ payload }) => {
+        if (!payload?.nodeId) return;
+        this.#clearTimer(payload.nodeId);
+        this.#cache.delete(payload.nodeId);
+        this.#syncPeriodicRefresh();
       })
     );
   }
@@ -189,7 +196,7 @@ class DataConnectors {
         }
       };
 
-      publish(EVENTS.GRAPH_NODE_UPDATED, {
+      publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
         nodeId: node.id,
         patch,
         origin: "data-connectors"
@@ -279,7 +286,7 @@ class DataConnectors {
 
       if (currentCount === nextCount && validIds.length === allowed.length) return;
 
-      publish(EVENTS.GRAPH_NODE_UPDATED, {
+      publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
         nodeId: node.id,
         patch: {
           data: {

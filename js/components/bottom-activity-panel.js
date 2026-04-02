@@ -48,7 +48,7 @@ class BottomActivityPanel extends HTMLElement {
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
+      subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
         this.#selectedNodeId = payload?.nodeId ?? null;
         this.#selectedNode = this.#selectedNodeId ? graphStore.getNode(this.#selectedNodeId) : null;
         if (this.#tab === "activity") this.renderView();
@@ -67,6 +67,15 @@ class BottomActivityPanel extends HTMLElement {
       subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
         if (!this.#selectedNodeId || payload?.nodeId !== this.#selectedNodeId) return;
         this.#selectedNode = graphStore.getNode(this.#selectedNodeId);
+        if (this.#tab === "activity") this.renderView();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_NODE_DELETED, ({ payload }) => {
+        if (!this.#selectedNodeId || payload?.nodeId !== this.#selectedNodeId) return;
+        this.#selectedNodeId = null;
+        this.#selectedNode = null;
         if (this.#tab === "activity") this.renderView();
       })
     );

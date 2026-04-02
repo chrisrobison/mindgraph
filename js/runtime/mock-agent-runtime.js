@@ -425,7 +425,7 @@ export class MockAgentRuntime extends AgentRuntime {
       ...dataPatch
     };
 
-    this.publish(this.events.GRAPH_NODE_UPDATED, {
+    this.publish(this.events.GRAPH_NODE_UPDATE_REQUESTED, {
       nodeId,
       patch: {
         data: mergedData
