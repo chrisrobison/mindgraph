@@ -75,7 +75,13 @@ class TopToolbar extends HTMLElement {
     });
 
     this.querySelector("[data-action='run-all']")?.addEventListener("click", () =>
-      this.#runRuntimeAction(() => mockAgentRuntime.runAll({ trigger: "toolbar_run_all" }))
+      this.#runRuntimeAction(() => {
+        publish(EVENTS.RUNTIME_ALL_RUN_REQUESTED, {
+          trigger: "toolbar_run_all",
+          origin: "top-toolbar"
+        });
+        return mockAgentRuntime.runAll({ trigger: "toolbar_run_all" });
+      })
     );
 
     this.querySelector("[data-action='summarize-subtree']")?.addEventListener("click", () =>
@@ -113,8 +119,8 @@ class TopToolbar extends HTMLElement {
   }
 
   #undo() {
-    const snapshot = graphStore.undo();
-    if (!snapshot) return;
+    if (!this.#canUndo) return;
+    publish(EVENTS.GRAPH_DOCUMENT_UNDO_REQUESTED, { origin: "top-toolbar" });
     publish(EVENTS.ACTIVITY_LOG_APPENDED, {
       level: "info",
       message: "Undo applied"
@@ -122,8 +128,8 @@ class TopToolbar extends HTMLElement {
   }
 
   #redo() {
-    const snapshot = graphStore.redo();
-    if (!snapshot) return;
+    if (!this.#canRedo) return;
+    publish(EVENTS.GRAPH_DOCUMENT_REDO_REQUESTED, { origin: "top-toolbar" });
     publish(EVENTS.ACTIVITY_LOG_APPENDED, {
       level: "info",
       message: "Redo applied"
@@ -168,6 +174,11 @@ class TopToolbar extends HTMLElement {
       return;
     }
 
+    publish(EVENTS.RUNTIME_SUBTREE_RUN_REQUESTED, {
+      nodeId: selectedNodeId,
+      trigger: "toolbar_subtree",
+      origin: "top-toolbar"
+    });
     await mockAgentRuntime.runSubtree(selectedNodeId, { trigger: "toolbar_subtree" });
   }
 
@@ -205,8 +216,10 @@ class TopToolbar extends HTMLElement {
   }
 
   #onSave() {
-    const snapshot = graphStore.save();
+    const snapshot = graphStore.getDocument();
     if (!snapshot) return;
+
+    publish(EVENTS.GRAPH_DOCUMENT_SAVE_REQUESTED, { origin: "top-toolbar" });
 
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -244,7 +257,11 @@ class TopToolbar extends HTMLElement {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      graphStore.load(parsed);
+      publish(EVENTS.GRAPH_DOCUMENT_LOAD_REQUESTED, {
+        document: parsed,
+        reason: "toolbar_load_file",
+        origin: "top-toolbar"
+      });
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
         level: "info",
         message: `Loaded graph from ${file.name}`

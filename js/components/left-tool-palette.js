@@ -100,6 +100,8 @@ class LeftToolPalette extends HTMLElement {
             <p><kbd>Delete</kbd> remove selected node</p>
             <p><kbd>Cmd/Ctrl+D</kbd> duplicate selected node</p>
             <p><kbd>Cmd/Ctrl+Z</kbd> / <kbd>Shift+Cmd/Ctrl+Z</kbd> undo/redo</p>
+            <p><kbd>Shift+Click</kbd> add/remove node in selection</p>
+            <p>Drag empty canvas to marquee-select nodes</p>
             <p><kbd>Esc</kbd> reset tool or clear selection</p>
           </section>
         </div>

@@ -27,20 +27,8 @@ class PersistenceStore {
     );
 
     this.#dispose.push(
-      subscribe(EVENTS.GRAPH_NODE_UPDATED, () => {
-        this.#autosaveCurrent("node");
-      })
-    );
-
-    this.#dispose.push(
-      subscribe(EVENTS.GRAPH_EDGE_CREATED, () => {
-        this.#autosaveCurrent("edge");
-      })
-    );
-
-    this.#dispose.push(
-      subscribe(EVENTS.GRAPH_VIEWPORT_CHANGED, () => {
-        this.#autosaveCurrent("viewport");
+      subscribe(EVENTS.GRAPH_DOCUMENT_CHANGED, ({ payload }) => {
+        this.#autosaveCurrent(payload?.reason ?? "document_changed");
       })
     );
 

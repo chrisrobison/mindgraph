@@ -1,4 +1,6 @@
 import { mockAgentRuntime } from "../../runtime/mock-agent-runtime.js";
+import { EVENTS } from "../../core/event-constants.js";
+import { publish } from "../../core/pan.js";
 import { uiStore } from "../../store/ui-store.js";
 import { emitNodePatch, escapeHtml, numberValue, patchNodeData, textValue } from "./shared.js";
 
@@ -28,6 +30,11 @@ class InspectorActivity extends HTMLElement {
     this.render();
 
     try {
+      publish(EVENTS.RUNTIME_AGENT_RUN_REQUESTED, {
+        nodeId: this.#node.id,
+        trigger: "inspector_run_node",
+        origin: "inspector-activity"
+      });
       await mockAgentRuntime.runNode(this.#node.id, { trigger: "inspector_run_node" });
     } finally {
       this.#running = false;
