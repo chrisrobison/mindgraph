@@ -122,8 +122,8 @@ export const createNebulaClouds = () => {
 		const r = (hex >> 16) & 0xff;
 		const g = (hex >> 8) & 0xff;
 		const b = hex & 0xff;
-		gradient.addColorStop(0, `rgba(${r},${g},${b},0.06)`);
-		gradient.addColorStop(0.5, `rgba(${r},${g},${b},0.02)`);
+		gradient.addColorStop(0, `rgba(${r},${g},${b},0.15)`);
+		gradient.addColorStop(0.4, `rgba(${r},${g},${b},0.06)`);
 		gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
 		ctx.fillStyle = gradient;
 		ctx.fillRect(0, 0, 256, 256);
@@ -138,10 +138,10 @@ export const createNebulaClouds = () => {
 		});
 
 		const sprite = new THREE.Sprite(material);
-		sprite.scale.set(400, 400, 1);
+		sprite.scale.set(500 + Math.random() * 200, 500 + Math.random() * 200, 1);
 		sprite.position.set(
-			(Math.random() - 0.5) * 400,
-			(Math.random() - 0.5) * 200,
+			(Math.random() - 0.5) * 600,
+			(Math.random() - 0.5) * 300,
 			DEPTH_PLANES.NEBULA_NEAR +
 				Math.random() * (DEPTH_PLANES.NEBULA_FAR - DEPTH_PLANES.NEBULA_NEAR),
 		);

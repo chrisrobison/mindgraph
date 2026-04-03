@@ -115,7 +115,7 @@ class GraphCanvas extends HTMLElement {
 		this.#renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		this.#renderer.setClearColor(FOG.COLOR, 1);
 		this.#renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		this.#renderer.toneMappingExposure = 1.2;
+		this.#renderer.toneMappingExposure = 0.85;
 		this.#containerEl.appendChild(this.#renderer.domElement);
 
 		// Scene
@@ -176,6 +176,13 @@ class GraphCanvas extends HTMLElement {
 		this.#atmosphereGroup.add(this.#ambientParticles);
 		this.#atmosphereGroup.add(createStarField());
 		this.#atmosphereGroup.add(createNebulaClouds());
+
+		// Subtle reference grid on the floor plane
+		const gridHelper = new THREE.GridHelper(800, 40, 0x0a1628, 0x0a1628);
+		gridHelper.position.y = -120;
+		gridHelper.material.transparent = true;
+		gridHelper.material.opacity = 0.15;
+		this.#atmosphereGroup.add(gridHelper);
 	}
 
 	#initControls() {
@@ -319,11 +326,17 @@ class GraphCanvas extends HTMLElement {
 		const nodes = doc.nodes ?? [];
 		const edges = doc.edges ?? [];
 
-		// Create node meshes
+		// Create node meshes + sprite labels
 		for (const node of nodes) {
 			const mesh = createNodeMesh(node);
 			this.#nodeGroup.add(mesh);
 			this.#nodeMeshMap.set(node.id, mesh);
+
+			// Add sprite text label (skip clusters)
+			if (node.type !== "cluster") {
+				const label = this.#createSpriteLabel(node.label ?? "", mesh);
+				if (label) mesh.add(label);
+			}
 		}
 
 		// Update cluster shells to enclose members
@@ -711,6 +724,42 @@ class GraphCanvas extends HTMLElement {
 		} else {
 			this.#renderer?.render(this.#scene, this.#camera);
 		}
+	}
+
+	/* ── Sprite text label ── */
+	#createSpriteLabel(text, parentMesh) {
+		const truncated = text.length > 18 ? `${text.slice(0, 18)}...` : text;
+		const canvas = document.createElement("canvas");
+		const ctx = canvas.getContext("2d");
+		canvas.width = 256;
+		canvas.height = 64;
+
+		ctx.clearRect(0, 0, 256, 64);
+		ctx.font = "bold 22px 'IBM Plex Mono', monospace";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+
+		// Glow effect
+		ctx.shadowColor = "rgba(0, 245, 255, 0.5)";
+		ctx.shadowBlur = 8;
+		ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+		ctx.fillText(truncated, 128, 32);
+
+		const texture = new THREE.CanvasTexture(canvas);
+		texture.minFilter = THREE.LinearFilter;
+		const material = new THREE.SpriteMaterial({
+			map: texture,
+			transparent: true,
+			depthWrite: false,
+			depthTest: false,
+		});
+
+		const sprite = new THREE.Sprite(material);
+		const radius = parentMesh.geometry?.boundingSphere?.radius ?? 5;
+		sprite.scale.set(30, 8, 1);
+		sprite.position.set(0, radius + 4, 0);
+		sprite.renderOrder = 10;
+		return sprite;
 	}
 }
 

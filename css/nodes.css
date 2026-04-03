@@ -1,6 +1,20 @@
 /* ── CAR Brain: 3D nodes are rendered in Three.js, not DOM ── */
 /* This file contains styles for the 2D overlay elements only */
 
+/* ── Floating node labels (CSS2DRenderer) ── */
+
+.car-node-label {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 0 6px rgba(0, 245, 255, 0.4), 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  transform: translateY(-8px);
+  letter-spacing: 0.3px;
+}
+
 /* Node tooltip is styled in panels.css (.node-tooltip) */
 /* All 3D node rendering is in three-nodes.js */
 
