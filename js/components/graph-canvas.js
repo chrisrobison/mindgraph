@@ -264,7 +264,7 @@ class GraphCanvas extends HTMLElement {
 
   #onWorkspacePointerUp(event) {
     if (this.#connectDragState && event.pointerId === this.#connectDragState.pointerId) {
-      this.#workspaceEl.releasePointerCapture(event.pointerId);
+      this.#connectDragState.captureEl?.releasePointerCapture?.(event.pointerId);
       this.#commitConnectDrag();
       return;
     }
@@ -472,10 +472,11 @@ class GraphCanvas extends HTMLElement {
       sourceNodeId: node.id,
       sourcePoint,
       pointerWorld,
-      hoveredNodeId: null
+      hoveredNodeId: null,
+      captureEl: event.currentTarget
     };
 
-    this.#workspaceEl.setPointerCapture(event.pointerId);
+    this.#connectDragState.captureEl?.setPointerCapture?.(event.pointerId);
     publish(EVENTS.GRAPH_EDGE_SELECTION_CLEAR_REQUESTED, { origin: "graph-canvas" });
     this.#renderConnectDraft();
     this.#highlightSelection();

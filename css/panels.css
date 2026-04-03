@@ -665,9 +665,11 @@
 .graph-node-layer {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 
 .graph-node-layer [data-node-id] {
+  pointer-events: auto;
   touch-action: none;
 }
 
