@@ -1,4 +1,5 @@
 import { clamp, formatEdgeLabel, NODE_SIZE_BY_TYPE } from "../../core/constants.js";
+import { getEdgeTypeSpec } from "../../core/graph-semantics.js";
 
 const escapeHtml = (value) =>
   String(value)
@@ -96,14 +97,16 @@ export const renderEdgesSvg = (edgeLayerEl, nodes = [], edges = [], selectedEdge
       const curve = buildCurve(sourcePoint, targetPoint);
       const rawLabel = String(edge.label ?? "").trim();
       const labelValue = rawLabel || formatEdgeLabel(edge.type || "");
+      const semantic = getEdgeTypeSpec(edge.type);
       const label = escapeHtml(labelValue);
       const mid = bezierPoint(curve, 0.5);
       const labelWidth = clamp(labelValue.length * 6.2 + 18, 44, 170);
+      const semanticClass = `graph-edge-category-${semantic?.category ?? "unknown"}`;
 
       return `
         <path class="graph-edge-hit-area" data-edge-id="${edge.id}" d="${curve.path}"></path>
-        <path class="graph-edge-path graph-edge-${edge.type} ${edge.id === selectedEdgeId ? "is-selected" : ""}" data-edge-visual-id="${edge.id}" d="${curve.path}" marker-end="url(#mg-arrow)"></path>
-        <g class="graph-edge-label-group" transform="translate(${mid.x}, ${mid.y - 8})">
+        <path class="graph-edge-path graph-edge-${edge.type} ${semanticClass} ${edge.id === selectedEdgeId ? "is-selected" : ""}" data-edge-visual-id="${edge.id}" d="${curve.path}" marker-end="url(#mg-arrow)"></path>
+        <g class="graph-edge-label-group ${semanticClass}" transform="translate(${mid.x}, ${mid.y - 8})">
           <rect class="graph-edge-label-bg" x="${-labelWidth / 2}" y="-9" width="${labelWidth}" height="18" rx="9" ry="9"></rect>
           <text class="graph-edge-label" x="0" y="4">${label}</text>
         </g>

@@ -5,6 +5,9 @@ import {
   textToList,
   textValue
 } from "./shared.js";
+import { getNodeTypeSpec } from "../../core/graph-semantics.js";
+import { getNodePlan } from "../../runtime/execution-planner.js";
+import { graphStore } from "../../store/graph-store.js";
 
 class InspectorOverview extends HTMLElement {
   #node = null;
@@ -38,6 +41,8 @@ class InspectorOverview extends HTMLElement {
     const type = node.type ?? "note";
     const title = escapeHtml(textValue(node.label));
     const description = escapeHtml(textValue(node.description));
+    const spec = getNodeTypeSpec(type);
+    const nodePlan = getNodePlan(graphStore.getDocument(), node.id);
 
     if (type === "note") {
       const color = escapeHtml(textValue(node.data?.color ?? "#fff9b1"));
@@ -98,8 +103,25 @@ class InspectorOverview extends HTMLElement {
         </label>
       </section>
       <section class="inspector-group">
-        <h4>Node Type</h4>
-        <p class="inspector-help">Editing ${escapeHtml(type)} node.</p>
+        <h4>Node Semantics</h4>
+        <p class="inspector-help">${escapeHtml(spec.description)}</p>
+        <p class="inspector-help">
+          Role: <strong>${escapeHtml(spec.role)}</strong> |
+          Runnable: <strong>${spec.executable ? "yes" : "no"}</strong> |
+          Required inputs: <strong>${spec.requiredInputSources ?? 0}</strong>
+        </p>
+        ${
+          nodePlan
+            ? `<p class="inspector-help">
+                Planner: <strong>${nodePlan.runnable ? (nodePlan.ready ? "Ready" : "Blocked") : "Not Runnable"}</strong>
+                ${
+                  nodePlan.blockedReasons?.length
+                    ? ` - ${escapeHtml(nodePlan.blockedReasons[0])}`
+                    : ""
+                }
+              </p>`
+            : ""
+        }
       </section>
     `;
 

@@ -116,6 +116,20 @@ class InspectorData extends HTMLElement {
     });
   }
 
+  #bindRunnableContractFields() {
+    this.querySelector('[data-field="transformExpression"]')?.addEventListener("change", (event) => {
+      this.#patchData({ transformExpression: event.target.value.trim() || "identity" });
+    });
+
+    this.querySelector('[data-field="outputTemplate"]')?.addEventListener("change", (event) => {
+      this.#patchData({ outputTemplate: event.target.value.trim() || "summary_card" });
+    });
+
+    this.querySelector('[data-field="command"]')?.addEventListener("change", (event) => {
+      this.#patchData({ command: event.target.value.trim() || "noop" });
+    });
+  }
+
   render() {
     const node = this.#node;
     if (node == null) {
@@ -249,6 +263,61 @@ class InspectorData extends HTMLElement {
       `;
 
       this.#bindDataNodeFields();
+      return;
+    }
+
+    if (node.type === "transformer" || node.type === "view" || node.type === "action") {
+      const transformExpression = escapeHtml(textValue(node.data?.transformExpression ?? "identity"));
+      const outputTemplate = escapeHtml(textValue(node.data?.outputTemplate ?? "summary_card"));
+      const command = escapeHtml(textValue(node.data?.command ?? "noop"));
+      const inputSchema = escapeHtml(jsonToText(node.data?.inputSchema));
+      const outputSchema = escapeHtml(jsonToText(node.data?.outputSchema));
+
+      this.innerHTML = `
+        <section class="inspector-group">
+          <h4>Node Contract</h4>
+          ${
+            node.type === "transformer"
+              ? `<label class="inspector-field">
+                  <span>Transform Expression</span>
+                  <input type="text" data-field="transformExpression" value="${transformExpression}" />
+                </label>`
+              : ""
+          }
+          ${
+            node.type === "view"
+              ? `<label class="inspector-field">
+                  <span>Output Template</span>
+                  <input type="text" data-field="outputTemplate" value="${outputTemplate}" />
+                </label>`
+              : ""
+          }
+          ${
+            node.type === "action"
+              ? `<label class="inspector-field">
+                  <span>Command</span>
+                  <input type="text" data-field="command" value="${command}" />
+                </label>`
+              : ""
+          }
+          <label class="inspector-field">
+            <span>Input Schema (JSON)</span>
+            <textarea rows="5" data-field="inputSchema">${inputSchema}</textarea>
+          </label>
+          <label class="inspector-field">
+            <span>Output Schema (JSON)</span>
+            <textarea rows="5" data-field="outputSchema">${outputSchema}</textarea>
+          </label>
+        </section>
+      `;
+
+      this.querySelector('[data-field="inputSchema"]')?.addEventListener("change", (event) => {
+        this.#patchData({ inputSchema: textToJsonLike(event.target.value) });
+      });
+      this.querySelector('[data-field="outputSchema"]')?.addEventListener("change", (event) => {
+        this.#patchData({ outputSchema: textToJsonLike(event.target.value) });
+      });
+      this.#bindRunnableContractFields();
       return;
     }
 

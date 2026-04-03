@@ -7,6 +7,8 @@ import {
   WORLD_SIZE
 } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
+import { inferDefaultEdgeType } from "../core/graph-semantics.js";
+import { buildExecutionPlan } from "../runtime/execution-planner.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { uiStore } from "../store/ui-store.js";
@@ -494,7 +496,9 @@ class GraphCanvas extends HTMLElement {
 
     const targetNodeId = state.hoveredNodeId;
     if (targetNodeId && targetNodeId !== state.sourceNodeId) {
-      const edgeType = "depends_on";
+      const sourceNode = graphStore.getNode(state.sourceNodeId);
+      const targetNode = graphStore.getNode(targetNodeId);
+      const edgeType = inferDefaultEdgeType(sourceNode, targetNode);
       publish(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, {
         source: state.sourceNodeId,
         target: targetNodeId,
@@ -676,10 +680,18 @@ class GraphCanvas extends HTMLElement {
     const document = graphStore.getDocument();
     const nodes = document?.nodes ?? [];
     const edges = document?.edges ?? [];
+    const plan = buildExecutionPlan(document);
+    const plannedNodes = nodes.map((node) => ({
+      ...node,
+      metadata: {
+        ...(node.metadata ?? {}),
+        planning: plan.nodes?.[node.id] ?? null
+      }
+    }));
 
     renderNodes(
       this.#nodeLayerEl,
-      nodes,
+      plannedNodes,
       (event, node) => this.#onNodePointerDown(event, node),
       (event, node) => this.#onConnectHandlePointerDown(event, node)
     );

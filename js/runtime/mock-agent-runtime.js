@@ -1,44 +1,30 @@
 import { AgentRuntime } from "./agent-runtime.js";
+import { buildExecutionPlan } from "./execution-planner.js";
+import { dataConnectors } from "./data-connectors.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
-
 const toArray = (value) => (Array.isArray(value) ? value : []);
-
 const asErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
 const makeTaskId = () => `task_${Date.now()}_${Math.floor(Math.random() * 10_000)}`;
 const makeRunId = (nodeId) => `run_${nodeId}_${Date.now()}_${Math.floor(Math.random() * 1_000)}`;
 
 const friendlyNow = () => new Date().toLocaleTimeString();
+const isRunnableNode = (node) => ["agent", "transformer", "view", "action"].includes(node?.type);
 
-const isAgentNode = (node) => node?.type === "agent";
-
-const gatherSubtreeIds = (document, nodeId) => {
-  const queue = [nodeId];
-  const visited = new Set();
-  const result = [];
-  const edges = toArray(document?.edges);
-  const nodesById = new Map(toArray(document?.nodes).map((node) => [node.id, node]));
-
-  while (queue.length) {
-    const currentId = queue.shift();
-    if (!currentId || visited.has(currentId)) continue;
-
-    visited.add(currentId);
-    const currentNode = nodesById.get(currentId);
-    if (isAgentNode(currentNode)) result.push(currentId);
-
-    for (const edge of edges) {
-      if (edge.source !== currentId) continue;
-      if (edge.type !== "parent_of") continue;
-      if (visited.has(edge.target)) continue;
-      queue.push(edge.target);
-    }
+const firstValue = (value) => {
+  if (value == null) return "(none)";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.length ? firstValue(value[0]) : "(empty array)";
+  if (typeof value === "object") {
+    const firstKey = Object.keys(value)[0];
+    if (!firstKey) return "(empty object)";
+    return `${firstKey}: ${firstValue(value[firstKey])}`;
   }
-
-  return result;
+  return String(value);
 };
 
 export class MockAgentRuntime extends AgentRuntime {
@@ -70,19 +56,29 @@ export class MockAgentRuntime extends AgentRuntime {
       return { ok: false, nodeId, runId, error: message };
     }
 
-    if (!isAgentNode(node)) {
-      const message = `Run skipped: ${node.label} is not an agent node`;
+    if (!isRunnableNode(node)) {
+      const message = `Run skipped: ${node.label} is not runnable`;
       this.#appendActivity("warn", message, { nodeId, runId });
       this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, { nodeId, runId, reason: message, trigger });
-      this.publish(this.events.RUNTIME_ERROR_APPENDED, {
-        nodeId,
-        nodeLabel: node.label,
-        runId,
-        message,
-        source: "mock-agent-runtime",
-        at: new Date().toISOString()
-      });
       return { ok: false, nodeId, runId, error: message };
+    }
+
+    await this.#hydrateMissingDataProviders(nodeId);
+
+    const plan = buildExecutionPlan(this.store.getDocument());
+    const nodePlan = plan.nodes?.[nodeId];
+    if (!nodePlan) {
+      return { ok: false, nodeId, runId, error: "Planner did not return a node plan" };
+    }
+
+    if (!nodePlan.ready) {
+      const reason = nodePlan.blockedReasons?.[0] ?? "Node is blocked by planner constraints";
+      this.#markFailed(node, taskId, runId, reason, {
+        type: "planner_blocked",
+        reasons: nodePlan.blockedReasons,
+        generatedAt: new Date().toISOString()
+      });
+      return { ok: false, nodeId, runId, error: reason, blockedReasons: nodePlan.blockedReasons };
     }
 
     this.#setTask(taskId, {
@@ -102,45 +98,22 @@ export class MockAgentRuntime extends AgentRuntime {
     });
 
     this.publish(this.events.RUNTIME_AGENT_RUN_STARTED, { nodeId, runId, trigger, context });
-    this.#appendActivity("info", `Started run for ${node.label}`, {
-      nodeId,
-      runId,
-      trigger
-    });
+    this.#appendActivity("info", `Started run for ${node.label}`, { nodeId, runId, trigger });
     this.#appendNodeActivity(nodeId, {
       at: new Date().toISOString(),
       level: "info",
       message: `Started run ${runId}`
     });
 
-    const input = this.#buildInput(node);
-    const inputValidation = this.validateInput(node, input);
-
-    if (!inputValidation.valid) {
-      const output = {
-        type: "validation_error",
-        phase: "input",
-        errors: inputValidation.errors,
-        generatedAt: new Date().toISOString()
-      };
-
-      this.#markFailed(node, taskId, runId, "Input validation failed", output);
-      return { ok: false, nodeId, runId, error: "Input validation failed", output };
-    }
-
     try {
       for (const step of [
-        { progress: 0.3, label: "Collecting context" },
-        { progress: 0.65, label: "Generating summary" },
-        { progress: 0.9, label: "Preparing structured output" }
+        { progress: 0.2, label: "Planning" },
+        { progress: 0.45, label: "Collecting inputs" },
+        { progress: 0.75, label: "Computing output" },
+        { progress: 0.93, label: "Recording result" }
       ]) {
-        await sleep(260 + Math.floor(Math.random() * 420));
+        await sleep(180);
         this.#setTask(taskId, { progress: step.progress });
-        this.#appendActivity("info", `${node.label}: ${step.label} (${Math.round(step.progress * 100)}%)`, {
-          nodeId,
-          runId,
-          progress: step.progress
-        });
         this.#appendNodeActivity(nodeId, {
           at: new Date().toISOString(),
           level: "info",
@@ -148,14 +121,12 @@ export class MockAgentRuntime extends AgentRuntime {
         });
       }
 
-      const shouldFail = Math.random() < 0.12;
-      if (shouldFail) {
-        throw new Error("Mock runtime transient failure while drafting response");
-      }
+      const latestNode = this.store.getNode(nodeId);
+      const latestPlan = buildExecutionPlan(this.store.getDocument());
+      const inputContext = this.#buildInputContext(latestNode, latestPlan.nodes?.[nodeId], latestPlan);
+      const output = this.#executeNode(latestNode, inputContext);
 
-      const output = this.#buildOutput(node, input);
-      const outputValidation = this.validateOutput(node, output);
-
+      const outputValidation = this.validateOutput(latestNode, output);
       if (!outputValidation.valid) {
         const failureOutput = {
           type: "validation_error",
@@ -164,23 +135,24 @@ export class MockAgentRuntime extends AgentRuntime {
           generatedAt: new Date().toISOString(),
           output
         };
-        this.#markFailed(node, taskId, runId, "Output validation failed", failureOutput);
+        this.#markFailed(latestNode, taskId, runId, "Output validation failed", failureOutput);
         return { ok: false, nodeId, runId, error: "Output validation failed", output: failureOutput };
       }
 
-      const confidence = clamp01(0.64 + Math.random() * 0.32);
-      const latestNode = this.store.getNode(nodeId);
+      const confidence = this.#confidenceForType(latestNode.type);
+      const completedAt = new Date().toISOString();
       const runEntry = {
         runId,
         status: "completed",
         summary: output.summary,
         confidence,
-        at: new Date().toISOString()
+        at: completedAt
       };
 
       this.#patchNodeData(nodeId, {
         status: "completed",
         confidence,
+        lastRunAt: completedAt,
         lastRunSummary: output.summary,
         lastOutput: output,
         runHistory: [runEntry, ...toArray(latestNode?.data?.runHistory)].slice(0, 25),
@@ -197,7 +169,7 @@ export class MockAgentRuntime extends AgentRuntime {
       this.#setTask(taskId, {
         status: "completed",
         progress: 1,
-        completedAt: runEntry.at
+        completedAt
       });
 
       this.publish(this.events.RUNTIME_AGENT_RUN_COMPLETED, {
@@ -209,16 +181,16 @@ export class MockAgentRuntime extends AgentRuntime {
       });
       this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
         nodeId,
-        nodeLabel: node.label,
+        nodeLabel: latestNode.label,
         runId,
         status: "completed",
         summary: output.summary,
         confidence,
         output,
-        at: runEntry.at
+        at: completedAt
       });
 
-      this.#appendActivity("info", `Completed run for ${node.label} (confidence ${confidence.toFixed(2)})`, {
+      this.#appendActivity("info", `Completed run for ${latestNode.label} (${latestNode.type})`, {
         nodeId,
         runId,
         confidence
@@ -259,13 +231,31 @@ export class MockAgentRuntime extends AgentRuntime {
       return { ok: false, nodeIds: [], completed: 0, failed: 0 };
     }
 
-    const ids = gatherSubtreeIds(document, nodeId);
-    if (!ids.length) {
-      this.#appendActivity("warn", `No agent nodes found in subtree for ${root.label}`, { nodeId });
+    const plan = buildExecutionPlan(document, { rootNodeId: nodeId });
+    const runnableIds = plan.executionOrder.filter((id) => plan.scopeNodeIds.includes(id));
+
+    if (!runnableIds.length) {
+      this.#appendActivity("warn", `No runnable nodes found in subtree for ${root.label}`, { nodeId });
       return { ok: false, nodeIds: [], completed: 0, failed: 0 };
     }
 
-    this.#appendActivity("info", `Subtree run started for ${root.label} (${ids.length} node(s))`, { nodeId });
+    if (plan.cycles.length) {
+      this.#appendActivity("warn", `Subtree contains cycle(s): ${plan.cycles.map((cycle) => cycle.join(" -> ")).join(" | ")}`, {
+        nodeId
+      });
+    }
+
+    const runMode = context.partial === "stale" ? "stale" : "all";
+    const ids =
+      runMode === "stale"
+        ? runnableIds.filter((id) => {
+            const nodePlan = plan.nodes?.[id];
+            const node = this.store.getNode(id);
+            return nodePlan?.needsRerun || !(node?.data?.lastRunAt ?? "");
+          })
+        : runnableIds;
+
+    this.#appendActivity("info", `Subtree run started for ${root.label} (${ids.length} node(s), mode=${runMode})`, { nodeId });
 
     let completed = 0;
     let failed = 0;
@@ -286,19 +276,18 @@ export class MockAgentRuntime extends AgentRuntime {
   }
 
   async runAll(context = {}) {
-    const nodes = this.store
-      .getNodes()
-      .filter((node) => isAgentNode(node));
+    const plan = buildExecutionPlan(this.store.getDocument());
+    const nodeIds = plan.executionOrder.filter((id) => plan.nodes?.[id]?.runnable);
 
-    this.#appendActivity("info", `Run all started for ${nodes.length} agent node(s)`, {
+    this.#appendActivity("info", `Run all started for ${nodeIds.length} runnable node(s)`, {
       trigger: context.trigger ?? "manual_all"
     });
 
     let completed = 0;
     let failed = 0;
 
-    for (const node of nodes) {
-      const result = await this.runNode(node.id, { ...context, trigger: context.trigger ?? "manual_all" });
+    for (const nodeId of nodeIds) {
+      const result = await this.runNode(nodeId, { ...context, trigger: context.trigger ?? "manual_all" });
       if (result.ok) completed += 1;
       else failed += 1;
     }
@@ -308,46 +297,139 @@ export class MockAgentRuntime extends AgentRuntime {
       `Run all finished at ${friendlyNow()}: ${completed} completed, ${failed} failed`
     );
 
-    return { ok: failed === 0, total: nodes.length, completed, failed };
+    return { ok: failed === 0, total: nodeIds.length, completed, failed };
   }
 
-  #buildInput(node) {
+  async #hydrateMissingDataProviders(nodeId) {
+    const document = this.store.getDocument();
+    const plan = buildExecutionPlan(document);
+    const nodePlan = plan.nodes?.[nodeId];
+    if (!nodePlan) return;
+
+    const missing = (nodePlan.dataProviderIds ?? [])
+      .map((providerId) => this.store.getNode(providerId))
+      .filter((provider) => provider?.type === "data" && provider?.data?.cachedData == null);
+
+    for (const provider of missing) {
+      try {
+        await dataConnectors.refresh(provider.id, { reason: "runtime", force: false });
+      } catch {
+        // data connector already publishes detailed errors
+      }
+    }
+  }
+
+  #buildInputContext(node, nodePlan, plan) {
+    const providers = toArray(nodePlan?.dataProviderIds)
+      .map((providerId) => this.store.getNode(providerId))
+      .filter(Boolean)
+      .map((provider) => ({
+        id: provider.id,
+        label: provider.label,
+        type: provider.type,
+        payload: provider.type === "data" ? provider.data?.cachedData ?? null : provider.data?.lastOutput ?? null
+      }));
+
+    const dependencies = toArray(nodePlan?.upstreamDependencies)
+      .map((depId) => this.store.getNode(depId))
+      .filter(Boolean)
+      .map((depNode) => ({
+        id: depNode.id,
+        label: depNode.label,
+        status: depNode.data?.status ?? "idle",
+        output: depNode.data?.lastOutput ?? null
+      }));
+
     return {
+      requestedAt: new Date().toISOString(),
       nodeId: node.id,
       label: node.label,
-      role: node.data?.role ?? "Agent",
-      mode: node.data?.mode ?? "orchestrate",
-      objective: node.data?.objective ?? "",
-      allowedDataSources: toArray(node.data?.allowedDataSources),
-      requestedAt: new Date().toISOString()
+      nodeType: node.type,
+      providers,
+      dependencies,
+      planner: {
+        blocked: nodePlan?.blocked ?? false,
+        needsRerun: nodePlan?.needsRerun ?? false,
+        executionOrderIndex: nodePlan?.executionOrderIndex ?? -1,
+        cycleCount: toArray(plan?.cycles).length
+      }
     };
   }
 
-  #buildOutput(node, input) {
-    const sources = toArray(input.allowedDataSources);
-    const sourcePhrase = sources.length
-      ? `${sources.length} linked data source${sources.length === 1 ? "" : "s"}`
-      : "no linked data sources";
+  #executeNode(node, inputContext) {
+    if (node.type === "transformer") {
+      const fields = inputContext.providers
+        .map((provider) => firstValue(provider.payload))
+        .filter(Boolean)
+        .slice(0, 3);
+      const transformExpression = String(node.data?.transformExpression ?? "identity");
+
+      return {
+        type: "transformer_output",
+        summary: `${node.label} transformed ${inputContext.providers.length} provider payload(s) using ${transformExpression}.`,
+        fields,
+        providerIds: inputContext.providers.map((entry) => entry.id),
+        generatedAt: inputContext.requestedAt
+      };
+    }
+
+    if (node.type === "view") {
+      const lines = inputContext.providers.map((provider) => `${provider.label}: ${firstValue(provider.payload)}`).slice(0, 8);
+
+      return {
+        type: "view_output",
+        summary: `${node.label} rendered ${lines.length} line(s) from upstream context.`,
+        template: node.data?.outputTemplate ?? "summary_card",
+        lines,
+        generatedAt: inputContext.requestedAt
+      };
+    }
+
+    if (node.type === "action") {
+      const command = String(node.data?.command ?? "noop");
+      return {
+        type: "action_result",
+        summary: `${node.label} prepared action ${command} with ${inputContext.providers.length} input source(s).`,
+        command,
+        preparedPayload: {
+          providerCount: inputContext.providers.length,
+          dependencyCount: inputContext.dependencies.length
+        },
+        generatedAt: inputContext.requestedAt
+      };
+    }
+
+    const role = node.data?.role ?? "Agent";
+    const mode = node.data?.mode ?? "orchestrate";
+    const objective = node.data?.objective ?? "";
+    const sources = inputContext.providers;
 
     return {
-      summary: `${node.label} produced a ${input.mode} update using ${sourcePhrase}.`,
+      type: "agent_output",
+      summary: `${node.label} completed ${mode} mode using ${sources.length} provider source(s).`,
       highlights: [
-        `${node.data?.role ?? "Agent"} aligned to objective: ${input.objective || "(no objective set)"}`,
-        `Mode ${input.mode} completed without external provider calls`,
-        `Execution timestamp ${input.requestedAt}`
+        `${role} objective: ${objective || "(no objective set)"}`,
+        `Dependencies resolved: ${inputContext.dependencies.length}`,
+        `Planner index: ${inputContext.planner.executionOrderIndex}`
       ],
       nextActions: [
-        "Review output quality in the inspector",
-        "Adjust schemas if stricter structure is needed",
-        "Trigger follow-up subtree summary if required"
+        "Review structured output in inspector",
+        "Rerun stale downstream nodes if dependencies changed"
       ],
       metrics: {
         sourceCount: sources.length,
-        mode: input.mode,
+        mode,
         mockRuntime: true
       },
-      generatedAt: new Date().toISOString()
+      generatedAt: inputContext.requestedAt
     };
+  }
+
+  #confidenceForType(type) {
+    if (type === "transformer") return 0.92;
+    if (type === "action") return 0.8;
+    if (type === "view") return 0.86;
+    return 0.74;
   }
 
   #markFailed(node, taskId, runId, reason, output) {
@@ -360,6 +442,7 @@ export class MockAgentRuntime extends AgentRuntime {
       confidence,
       lastRunSummary: reason,
       lastOutput: output,
+      lastRunAt: failedAt,
       runHistory: [
         {
           runId,
@@ -444,7 +527,7 @@ export class MockAgentRuntime extends AgentRuntime {
 
   #appendNodeActivity(nodeId, entry) {
     const node = this.store.getNode(nodeId);
-    if (!node || !isAgentNode(node)) return;
+    if (!node || !isRunnableNode(node)) return;
 
     this.#patchNodeData(nodeId, {
       activityHistory: [entry, ...toArray(node.data?.activityHistory)].slice(0, 40)

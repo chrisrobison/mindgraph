@@ -2,146 +2,27 @@ import { createGraphDocument } from "./graph-document.js";
 import { EDGE_TYPES, NODE_TYPES } from "./types.js";
 
 export const seedDocument = createGraphDocument({
-  id: "graph_seed_product_launch",
-  title: "MindGraph AI - Product Launch Plan",
-  version: "0.2.0",
+  id: "graph_seed_campaign_workflow",
+  title: "MindGraph AI - Campaign Intelligence Workflow",
+  version: "0.3.0",
   nodes: [
     {
-      id: "agent_product_launch_plan",
-      type: NODE_TYPES.AGENT,
-      label: "Product Launch Plan",
-      description: "Coordinator orchestrating launch agents and deliverables.",
-      position: { x: 860, y: 180 },
+      id: "note_workflow_brief",
+      type: NODE_TYPES.NOTE,
+      label: "Workflow Brief",
+      description: "Goal: generate a launch-ready campaign brief and publish action payload.",
+      position: { x: 140, y: 140 },
       data: {
-        role: "Agent Coordinator",
-        mode: "orchestrate",
-        status: "active",
-        confidence: 0.58,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: [
-          "data_site_config",
-          "data_market_data",
-          "data_ads_api_mock",
-          "data_support_db"
-        ],
-        linkedDataCount: 4
-      }
-    },
-    {
-      id: "agent_website_builder",
-      type: NODE_TYPES.AGENT,
-      label: "Website Builder",
-      description: "Builds and ships launch pages from approved config.",
-      position: { x: 260, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "build",
-        status: "ready",
-        confidence: 0.51,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_site_config"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "agent_market_analyst",
-      type: NODE_TYPES.AGENT,
-      label: "Market Analyst",
-      description: "Monitors signals, trends, and competitive movement.",
-      position: { x: 690, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "analyze",
-        status: "active",
-        confidence: 0.57,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_market_data"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "agent_ad_campaign_bot",
-      type: NODE_TYPES.AGENT,
-      label: "Ad Campaign Bot",
-      description: "Optimizes campaign channels and spend targets.",
-      position: { x: 1120, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "optimize",
-        status: "idle",
-        confidence: 0.49,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_ads_api_mock"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "agent_support_agent",
-      type: NODE_TYPES.AGENT,
-      label: "Support Agent",
-      description: "Tracks user issues and launch readiness feedback.",
-      position: { x: 1550, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "assist",
-        status: "ready",
-        confidence: 0.54,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_support_db"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "data_site_config",
-      type: NODE_TYPES.DATA,
-      label: "site_config.json",
-      description: "Website structure and launch copy settings.",
-      position: { x: 220, y: 780 },
-      data: {
-        source: "json",
-        sourceType: "json",
-        sourcePath: "site_config.json",
-        sourceUrl: "",
-        jsonPath: "",
-        refreshMode: "onOpen",
-        refreshInterval: 60,
-        cachedData: null,
-        cachedSchema: null,
-        lastUpdated: "",
-        readonly: true
+        color: "#f4f9ff",
+        tags: ["context", "launch"]
       }
     },
     {
       id: "data_market_data",
       type: NODE_TYPES.DATA,
       label: "market_data.json",
-      description: "Market intelligence snapshots and trend extracts.",
-      position: { x: 650, y: 780 },
+      description: "Market signal snapshots and competitor movement.",
+      position: { x: 180, y: 470 },
       data: {
         source: "json",
         sourceType: "json",
@@ -157,139 +38,182 @@ export const seedDocument = createGraphDocument({
       }
     },
     {
-      id: "data_ads_api_mock",
+      id: "data_site_config",
       type: NODE_TYPES.DATA,
-      label: "ads_api_mock",
-      description: "Mock ad-platform metrics and conversion signals.",
-      position: { x: 1080, y: 780 },
-      data: {
-        source: "mock",
-        sourceType: "mock",
-        sourcePath: "ads_api_mock.json",
-        sourceUrl: "",
-        jsonPath: "",
-        refreshMode: "periodic",
-        refreshInterval: 30,
-        cachedData: null,
-        cachedSchema: null,
-        lastUpdated: "",
-        readonly: true
-      }
-    },
-    {
-      id: "data_support_db",
-      type: NODE_TYPES.DATA,
-      label: "support_db.json",
-      description: "Support backlog and issue category records.",
-      position: { x: 1510, y: 780 },
+      label: "site_config.json",
+      description: "Site copy and feature flags used by downstream planning.",
+      position: { x: 180, y: 740 },
       data: {
         source: "json",
         sourceType: "json",
-        sourcePath: "support_db.json",
+        sourcePath: "site_config.json",
         sourceUrl: "",
         jsonPath: "",
-        refreshMode: "manual",
+        refreshMode: "onOpen",
         refreshInterval: 60,
         cachedData: null,
         cachedSchema: null,
         lastUpdated: "",
         readonly: true
       }
+    },
+    {
+      id: "transformer_signal_normalizer",
+      type: NODE_TYPES.TRANSFORMER,
+      label: "Signal Normalizer",
+      description: "Normalizes raw market payloads into planner-ready fields.",
+      position: { x: 610, y: 520 },
+      data: {
+        transformExpression: "market_snapshot_to_signal_summary",
+        inputSchema: {},
+        outputSchema: {},
+        status: "idle",
+        lastOutput: null,
+        lastRunAt: "",
+        lastRunSummary: ""
+      }
+    },
+    {
+      id: "agent_strategy_synthesizer",
+      type: NODE_TYPES.AGENT,
+      label: "Strategy Synthesizer",
+      description: "Builds a campaign strategy from normalized signals and config context.",
+      position: { x: 1040, y: 500 },
+      data: {
+        role: "Campaign Strategist",
+        mode: "synthesize",
+        objective: "Produce a concise launch strategy with channel priorities.",
+        status: "idle",
+        confidence: 0.5,
+        lastRunSummary: "",
+        lastOutput: null,
+        lastRunAt: "",
+        inputSchema: {},
+        outputSchema: {},
+        runHistory: [],
+        activityHistory: [],
+        allowedDataSources: ["data_site_config"],
+        linkedDataCount: 1
+      }
+    },
+    {
+      id: "view_campaign_brief",
+      type: NODE_TYPES.VIEW,
+      label: "Campaign Brief View",
+      description: "Renders a reviewer-facing launch brief.",
+      position: { x: 1470, y: 490 },
+      data: {
+        outputTemplate: "campaign_brief",
+        status: "idle",
+        lastOutput: null,
+        lastRunAt: "",
+        lastRunSummary: ""
+      }
+    },
+    {
+      id: "action_publish_brief",
+      type: NODE_TYPES.ACTION,
+      label: "Publish Brief Payload",
+      description: "Prepares publish payload for downstream delivery system.",
+      position: { x: 1900, y: 490 },
+      data: {
+        command: "publish_campaign_brief",
+        config: {
+          channel: "launch_ops_queue"
+        },
+        status: "idle",
+        lastOutput: null,
+        lastRunAt: "",
+        lastRunSummary: ""
+      }
     }
   ],
   edges: [
     {
-      id: "edge_parent_website",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_website_builder",
-      label: "parent_of"
+      id: "edge_ref_note_strategy",
+      type: EDGE_TYPES.REFERENCES,
+      source: "note_workflow_brief",
+      target: "agent_strategy_synthesizer",
+      label: "references"
     },
     {
-      id: "edge_parent_market",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_market_analyst",
-      label: "parent_of"
+      id: "edge_data_to_transformer",
+      type: EDGE_TYPES.FEEDS_DATA,
+      source: "data_market_data",
+      target: "transformer_signal_normalizer",
+      label: "feeds_data"
     },
     {
-      id: "edge_parent_ads",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_ad_campaign_bot",
-      label: "parent_of"
+      id: "edge_transformer_to_agent_data",
+      type: EDGE_TYPES.FEEDS_DATA,
+      source: "transformer_signal_normalizer",
+      target: "agent_strategy_synthesizer",
+      label: "feeds_data"
     },
     {
-      id: "edge_parent_support",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_support_agent",
-      label: "parent_of"
-    },
-    {
-      id: "edge_report_website",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_website_builder",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_report_market",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_market_analyst",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_report_ads",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_ad_campaign_bot",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_report_support",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_support_agent",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_reads_site_config",
+      id: "edge_agent_reads_site_config",
       type: EDGE_TYPES.READS_FROM,
-      source: "agent_website_builder",
+      source: "agent_strategy_synthesizer",
       target: "data_site_config",
       label: "reads_from"
     },
     {
-      id: "edge_reads_market_data",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_market_analyst",
-      target: "data_market_data",
-      label: "reads_from"
+      id: "edge_exec_transformer_agent",
+      type: EDGE_TYPES.DEPENDS_ON,
+      source: "transformer_signal_normalizer",
+      target: "agent_strategy_synthesizer",
+      label: "depends_on"
     },
     {
-      id: "edge_reads_ads_api",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_ad_campaign_bot",
-      target: "data_ads_api_mock",
-      label: "reads_from"
+      id: "edge_exec_agent_view",
+      type: EDGE_TYPES.DEPENDS_ON,
+      source: "agent_strategy_synthesizer",
+      target: "view_campaign_brief",
+      label: "depends_on"
     },
     {
-      id: "edge_reads_support_db",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_support_agent",
-      target: "data_support_db",
-      label: "reads_from"
+      id: "edge_data_agent_view",
+      type: EDGE_TYPES.FEEDS_DATA,
+      source: "agent_strategy_synthesizer",
+      target: "view_campaign_brief",
+      label: "feeds_data"
+    },
+    {
+      id: "edge_exec_view_action",
+      type: EDGE_TYPES.DEPENDS_ON,
+      source: "view_campaign_brief",
+      target: "action_publish_brief",
+      label: "depends_on"
+    },
+    {
+      id: "edge_data_view_action",
+      type: EDGE_TYPES.FEEDS_DATA,
+      source: "view_campaign_brief",
+      target: "action_publish_brief",
+      label: "feeds_data"
+    },
+    {
+      id: "edge_hierarchy_strategy_view",
+      type: EDGE_TYPES.PARENT_OF,
+      source: "agent_strategy_synthesizer",
+      target: "view_campaign_brief",
+      label: "parent_of"
+    },
+    {
+      id: "edge_hierarchy_strategy_action",
+      type: EDGE_TYPES.PARENT_OF,
+      source: "agent_strategy_synthesizer",
+      target: "action_publish_brief",
+      label: "parent_of"
     }
   ],
   viewport: {
-    x: -120,
-    y: -100,
+    x: -70,
+    y: -120,
     zoom: 1
   },
   metadata: {
     createdBy: "mindgraph-seed",
-    description: "Product launch coordination graph demo"
+    description: "Pipeline seed graph with explicit semantics and planner-compatible execution edges"
   }
 });

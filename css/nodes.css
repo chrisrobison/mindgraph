@@ -180,6 +180,24 @@
   color: #42556f;
 }
 
+.node-compact-meta {
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  color: #3c5678;
+  font-weight: 700;
+}
+
+.node-planner-reason {
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+  color: #7b4a12;
+  border-top: 1px dashed #e2d3bf;
+  padding-top: 0.35rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mg-node.data {
   width: 260px;
   border-left: 4px solid #0f8a72;

@@ -68,17 +68,38 @@ export const NODE_TEMPLATES = Object.freeze({
   transformer: Object.freeze({
     label: "New Transformer",
     description: "Transform source inputs.",
-    data: Object.freeze({ inputSchema: {}, outputSchema: {} })
+    data: Object.freeze({
+      transformExpression: "identity",
+      inputSchema: {},
+      outputSchema: {},
+      status: "idle",
+      lastOutput: null,
+      lastRunAt: "",
+      lastRunSummary: ""
+    })
   }),
   view: Object.freeze({
     label: "New View",
     description: "Render output for review.",
-    data: Object.freeze({ outputTemplate: "summary_card" })
+    data: Object.freeze({
+      outputTemplate: "summary_card",
+      status: "idle",
+      lastOutput: null,
+      lastRunAt: "",
+      lastRunSummary: ""
+    })
   }),
   action: Object.freeze({
     label: "New Action",
     description: "Run an external action.",
-    data: Object.freeze({ command: "noop", config: {} })
+    data: Object.freeze({
+      command: "noop",
+      config: {},
+      status: "idle",
+      lastOutput: null,
+      lastRunAt: "",
+      lastRunSummary: ""
+    })
   })
 });
 

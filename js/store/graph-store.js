@@ -4,6 +4,11 @@ import * as graphDocument from "../core/graph-document.js";
 import { seedDocument } from "../core/seed-data.js";
 import { clone } from "../core/utils.js";
 import { publish, subscribe } from "../core/pan.js";
+import {
+  normalizeNodeDataWithContract,
+  validateEdgeSemantics,
+  validateNodeContract
+} from "../core/graph-semantics.js";
 
 const unique = (items) => [...new Set((Array.isArray(items) ? items : []).filter(Boolean))];
 const {
@@ -364,11 +369,21 @@ class GraphStore {
     if (!existing) return null;
 
     const normalizedPatch = { ...patch };
+    if (normalizedPatch.type && normalizedPatch.type !== existing.type) {
+      normalizedPatch.data = normalizeNodeDataWithContract(normalizedPatch.type, normalizedPatch.data ?? {});
+    }
     if (normalizedPatch.position) {
       normalizedPatch.position = {
         x: Number(normalizedPatch.position.x ?? existing.position?.x ?? 0),
         y: Number(normalizedPatch.position.y ?? existing.position?.y ?? 0)
       };
+    }
+    if (normalizedPatch.data) {
+      const nextType = normalizedPatch.type ?? existing.type;
+      normalizedPatch.data = normalizeNodeDataWithContract(nextType, {
+        ...(existing.data ?? {}),
+        ...(normalizedPatch.data ?? {})
+      });
     }
 
     this.#applyMutation(() => {
@@ -376,6 +391,14 @@ class GraphStore {
     });
 
     const node = this.getNode(nodeId);
+    const contractValidation = validateNodeContract(node);
+    if (!contractValidation.valid) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "warn",
+        message: `Node contract warnings for ${node?.label ?? nodeId}: ${contractValidation.errors.join("; ")}`,
+        origin: "graph-store"
+      });
+    }
 
     publish(EVENTS.GRAPH_NODE_UPDATED, {
       nodeId,
@@ -483,6 +506,17 @@ class GraphStore {
     const sourceExists = Boolean(findNodeById(this.#document, edge.source));
     const targetExists = Boolean(findNodeById(this.#document, edge.target));
     if (!sourceExists || !targetExists) return null;
+    const sourceNode = findNodeById(this.#document, edge.source);
+    const targetNode = findNodeById(this.#document, edge.target);
+    const semanticValidation = validateEdgeSemantics(edge, sourceNode, targetNode);
+    if (!semanticValidation.valid) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "warn",
+        message: `Edge rejected: ${semanticValidation.errors.join("; ")}`,
+        origin: "graph-store"
+      });
+      return null;
+    }
 
     const duplicate = (this.#document.edges ?? []).some(
       (entry) =>
@@ -519,6 +553,21 @@ class GraphStore {
     const normalizedPatch = { ...patch };
     if (normalizedPatch.type != null) normalizedPatch.type = String(normalizedPatch.type);
     if (normalizedPatch.label != null) normalizedPatch.label = String(normalizedPatch.label);
+    if (normalizedPatch.source != null) normalizedPatch.source = String(normalizedPatch.source);
+    if (normalizedPatch.target != null) normalizedPatch.target = String(normalizedPatch.target);
+
+    const nextEdge = { ...existing, ...normalizedPatch };
+    const sourceNode = findNodeById(this.#document, nextEdge.source);
+    const targetNode = findNodeById(this.#document, nextEdge.target);
+    const semanticValidation = validateEdgeSemantics(nextEdge, sourceNode, targetNode);
+    if (!semanticValidation.valid) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "warn",
+        message: `Edge update rejected: ${semanticValidation.errors.join("; ")}`,
+        origin: "graph-store"
+      });
+      return null;
+    }
 
     this.#applyMutation(() => {
       this.#document.edges = (this.#document.edges ?? []).map((edge) =>
