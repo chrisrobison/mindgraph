@@ -35,6 +35,13 @@ class AgentNode extends HTMLElement {
     const confidence = Number(node.data?.confidence ?? 0.5);
     const safeConfidence = Number.isFinite(confidence) ? confidence : 0.5;
     const lastRunSummary = node.data?.lastRunSummary ?? "No runs yet.";
+    const planning = node.metadata?.planning ?? null;
+    const planningStatus = planning?.runnable
+      ? planning.ready
+        ? "Ready"
+        : "Blocked"
+      : "Reference";
+    const planningReason = planning?.blockedReasons?.[0] ?? "";
 
     this.className = `mg-node agent agent-status-${toStatusClass(status)}`;
     this.innerHTML = `
@@ -49,8 +56,14 @@ class AgentNode extends HTMLElement {
         <span>Mode</span><strong>${mode}</strong>
         <span>Linked Data</span><strong>${linkedDataCount}</strong>
         <span>Confidence</span><strong>${Math.round(safeConfidence * 100)}%</strong>
+        <span>Planner</span><strong>${planningStatus}</strong>
       </div>
       <p class="node-runtime-summary">${lastRunSummary}</p>
+      ${
+        planningReason
+          ? `<p class="node-planner-reason" title="${planningReason}">${planningReason}</p>`
+          : ""
+      }
     `;
   }
 }

@@ -27,6 +27,7 @@ class DataNode extends HTMLElement {
     const lastUpdated = node.data?.lastUpdated
       ? new Date(node.data.lastUpdated).toLocaleTimeString()
       : "Never";
+    const payloadState = node.data?.cachedData == null ? "Empty" : "Loaded";
 
     this.className = "mg-node data";
     this.innerHTML = `
@@ -39,6 +40,7 @@ class DataNode extends HTMLElement {
       <div class="node-meta-grid">
         <span>Source</span><strong>${sourceType}</strong>
         <span>Updated</span><strong>${lastUpdated}</strong>
+        <span>Payload</span><strong>${payloadState}</strong>
       </div>
     `;
   }

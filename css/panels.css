@@ -714,6 +714,7 @@
 
 .graph-edge-parent_of {
   stroke: #2f6aaa;
+  stroke-dasharray: 3 2;
 }
 
 .graph-edge-reports_to {
@@ -723,6 +724,23 @@
 
 .graph-edge-reads_from {
   stroke: #28846f;
+}
+
+.graph-edge-feeds_data {
+  stroke: #1d8e78;
+}
+
+.graph-edge-depends_on,
+.graph-edge-triggers {
+  stroke: #7d5e20;
+}
+
+.graph-edge-informs,
+.graph-edge-critiques,
+.graph-edge-reports_to,
+.graph-edge-references {
+  stroke: #70849f;
+  stroke-dasharray: 6 4;
 }
 
 .graph-edge-arrow {
@@ -736,6 +754,26 @@
 .graph-edge-label-bg {
   fill: rgba(244, 249, 255, 0.92);
   stroke: #c7d9ee;
+}
+
+.graph-edge-label-group.graph-edge-category-execution .graph-edge-label-bg {
+  fill: rgba(255, 248, 232, 0.94);
+  stroke: #ead2a1;
+}
+
+.graph-edge-label-group.graph-edge-category-data .graph-edge-label-bg {
+  fill: rgba(234, 248, 244, 0.94);
+  stroke: #b8e0d4;
+}
+
+.graph-edge-label-group.graph-edge-category-hierarchy .graph-edge-label-bg {
+  fill: rgba(236, 243, 252, 0.94);
+  stroke: #c9dbf2;
+}
+
+.graph-edge-label-group.graph-edge-category-informational .graph-edge-label-bg {
+  fill: rgba(244, 246, 249, 0.94);
+  stroke: #d1d9e4;
 }
 
 .graph-edge-label {

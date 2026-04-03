@@ -1,19 +1,23 @@
 import { EDGE_TYPE_VALUES, NODE_TYPE_VALUES } from "./types.js";
 import { clone, uid } from "./utils.js";
+import { normalizeNodeDataWithContract, validateEdgeSemantics, validateNodeContract } from "./graph-semantics.js";
 
 export const createNode = (partial = {}) => ({
   id: partial.id ?? uid("node"),
-  type: partial.type ?? "note",
+  type: NODE_TYPE_VALUES.includes(partial.type) ? partial.type : "note",
   label: partial.label ?? "Untitled Node",
   description: partial.description ?? "",
   position: partial.position ?? { x: 0, y: 0 },
-  data: partial.data ?? {},
+  data: normalizeNodeDataWithContract(
+    NODE_TYPE_VALUES.includes(partial.type) ? partial.type : "note",
+    partial.data ?? {}
+  ),
   metadata: partial.metadata ?? {}
 });
 
 export const createEdge = (partial = {}) => ({
   id: partial.id ?? uid("edge"),
-  type: partial.type ?? "depends_on",
+  type: EDGE_TYPE_VALUES.includes(partial.type) ? partial.type : "depends_on",
   source: partial.source ?? "",
   target: partial.target ?? "",
   label: partial.label ?? "",
@@ -57,12 +61,27 @@ export const validateGraphDocument = (document) => {
   for (const node of document.nodes ?? []) {
     if (!NODE_TYPE_VALUES.includes(node.type)) {
       errors.push(`Invalid node type: ${node.type}`);
+      continue;
+    }
+
+    const contractValidation = validateNodeContract(node);
+    if (!contractValidation.valid) {
+      errors.push(...contractValidation.errors);
     }
   }
 
+  const nodeById = new Map((document.nodes ?? []).map((node) => [node.id, node]));
   for (const edge of document.edges ?? []) {
     if (!EDGE_TYPE_VALUES.includes(edge.type)) {
       errors.push(`Invalid edge type: ${edge.type}`);
+      continue;
+    }
+
+    const source = nodeById.get(edge.source);
+    const target = nodeById.get(edge.target);
+    const edgeValidation = validateEdgeSemantics(edge, source, target);
+    if (!edgeValidation.valid) {
+      errors.push(...edgeValidation.errors.map((message) => `${edge.id ?? "(new edge)"}: ${message}`));
     }
   }
 

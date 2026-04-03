@@ -5,6 +5,7 @@ import { mockAgentRuntime } from "../runtime/mock-agent-runtime.js";
 import { graphStore } from "../store/graph-store.js";
 import { persistenceStore } from "../store/persistence-store.js";
 import { uiStore } from "../store/ui-store.js";
+import { isExecutableNodeType } from "../core/graph-semantics.js";
 
 class TopToolbar extends HTMLElement {
   #dispose = [];
@@ -166,10 +167,10 @@ class TopToolbar extends HTMLElement {
     }
 
     const selectedNode = graphStore.getNode(selectedNodeId);
-    if (!selectedNode || selectedNode.type !== "agent") {
+    if (!selectedNode || !isExecutableNodeType(selectedNode.type)) {
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
         level: "warn",
-        message: "Subtree summary is available for agent nodes only"
+        message: "Subtree run is available for runnable nodes only"
       });
       return;
     }

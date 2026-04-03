@@ -3,6 +3,7 @@ import { EVENTS } from "../../core/event-constants.js";
 import { publish } from "../../core/pan.js";
 import { uiStore } from "../../store/ui-store.js";
 import { emitNodePatch, escapeHtml, numberValue, patchNodeData, textValue } from "./shared.js";
+import { isExecutableNodeType } from "../../core/graph-semantics.js";
 
 const toActivityEntries = (value) => (Array.isArray(value) ? value : []);
 
@@ -49,12 +50,12 @@ class InspectorActivity extends HTMLElement {
       return;
     }
 
-    if (node.type !== "agent") {
+    if (!isExecutableNodeType(node.type)) {
       this.innerHTML = `
         <section class="inspector-group">
           <h4>Activity</h4>
           <p class="inspector-help">
-            Agent nodes expose runtime status and events in this tab.
+            Runnable nodes expose runtime status and events in this tab.
           </p>
         </section>
       `;

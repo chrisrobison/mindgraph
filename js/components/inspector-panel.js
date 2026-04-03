@@ -3,6 +3,8 @@ import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { escapeHtml } from "./inspector/shared.js";
 import { EDGE_TYPE_VALUES } from "../core/types.js";
+import { getEdgeTypeSpec, validateEdgeSemantics } from "../core/graph-semantics.js";
+import { getNodePlan } from "../runtime/execution-planner.js";
 
 const tabs = [
   { key: "overview", label: "Overview", tag: "inspector-overview" },
@@ -107,6 +109,18 @@ class InspectorPanel extends HTMLElement {
       })
     );
 
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_DOCUMENT_CHANGED, () => {
+        if (this.#selectedNodeId) {
+          this.#selectedNode = graphStore.getNode(this.#selectedNodeId);
+        }
+        if (this.#selectedEdgeId) {
+          this.#selectedEdge = graphStore.getEdge(this.#selectedEdgeId);
+        }
+        this.render();
+      })
+    );
+
     this.render();
   }
 
@@ -167,6 +181,8 @@ class InspectorPanel extends HTMLElement {
       const edge = this.#selectedEdge;
       const sourceNode = graphStore.getNode(edge.source);
       const targetNode = graphStore.getNode(edge.target);
+      const semantic = getEdgeTypeSpec(edge.type);
+      const semanticValidation = validateEdgeSemantics(edge, sourceNode, targetNode);
       const sourceLabel = escapeHtml(sourceNode?.label ?? edge.source ?? "(unknown)");
       const targetLabel = escapeHtml(targetNode?.label ?? edge.target ?? "(unknown)");
       const label = escapeHtml(String(edge.label ?? ""));
@@ -205,6 +221,24 @@ class InspectorPanel extends HTMLElement {
                 <button type="button" data-action="delete-edge">Delete Edge</button>
               </div>
             </section>
+            <section class="inspector-group">
+              <h4>Edge Semantics</h4>
+              <p class="inspector-help">${escapeHtml(semantic?.description ?? "Unknown edge type semantics.")}</p>
+              <p class="inspector-help">
+                Category: <strong>${escapeHtml(semantic?.category ?? "unknown")}</strong> |
+                Execution: <strong>${semantic?.affectsExecution ? "yes" : "no"}</strong> |
+                Data: <strong>${semantic?.affectsDataFlow ? "yes" : "no"}</strong> |
+                Hierarchy: <strong>${semantic?.affectsHierarchy ? "yes" : "no"}</strong>
+              </p>
+              <p class="inspector-help">
+                Valid: <strong>${semanticValidation.valid ? "yes" : "no"}</strong>
+                ${
+                  semanticValidation.valid
+                    ? ""
+                    : `- ${escapeHtml((semanticValidation.errors ?? []).join("; "))}`
+                }
+              </p>
+            </section>
           </div>
         </aside>
       `;
@@ -215,6 +249,10 @@ class InspectorPanel extends HTMLElement {
     const node = this.#selectedNode;
     const selectedTitle = escapeHtml(node?.label ?? "No node selected");
     const selectedType = escapeHtml(node?.type ?? "none");
+    const nodePlan = node ? getNodePlan(graphStore.getDocument(), node.id) : null;
+    const plannerMeta = nodePlan?.runnable
+      ? `Planner: ${nodePlan.ready ? "Ready" : "Blocked"}`
+      : "Planner: Not Runnable";
 
     this.innerHTML = `
       <aside class="mg-panel mg-inspector-panel">
@@ -223,6 +261,12 @@ class InspectorPanel extends HTMLElement {
           <div class="inspector-summary">
             <p class="inspector-node-title">${selectedTitle}</p>
             <p class="inspector-node-meta">Type: ${selectedType}</p>
+            <p class="inspector-node-meta">${escapeHtml(plannerMeta)}</p>
+            ${
+              nodePlan?.blockedReasons?.length
+                ? `<p class="inspector-help">${escapeHtml(nodePlan.blockedReasons[0])}</p>`
+                : ""
+            }
           </div>
           <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
             ${tabs

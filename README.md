@@ -1,205 +1,138 @@
 # MindGraph AI
 
-MindGraph AI is a lightweight, framework-free visual graph workbench for modeling AI workflows in the browser.
+MindGraph AI is a browser-native, framework-free graph workbench for operational AI workflows.
 
-It keeps a browser-native stack:
+It intentionally keeps:
 - custom elements (Web Components)
 - plain ES modules
-- PAN event bus for app-wide coordination
-- centralized graph state in `graph-store`
+- PAN event bus
+- `graph-store` as the canonical graph document owner
+- `ui-store` for UI-only state
+- `persistence-store` for autosave/restore
 
 ## Run Locally
 
-Use any static HTTP server (do not open `index.html` with `file://`).
+Use any static HTTP server (do not open with `file://`).
 
 ```bash
 cd /Users/cdr/Projects/mindgraph
 python3 -m http.server 4173
 ```
 
-Open:
-- `http://127.0.0.1:4173`
+Open [http://127.0.0.1:4173](http://127.0.0.1:4173).
 
-## Core Architecture
+## Architecture
 
-### State Ownership Rules
+### Ownership and Mutation Discipline
 
-MindGraph now follows strict ownership rules:
-- `graph-store` is the single source of truth for graph document mutations.
-- PAN carries intent events (`*.requested`) and state/result events (`*.changed`, `*.created`, `*.updated`, etc).
-- UI components render from graph-store snapshots and store-driven events.
-- UI components keep only ephemeral interaction state (drag, pan, marquee, connect-mode context).
-
-### Responsibilities
-
-- `graph-store`
-  - owns nodes, edges, viewport, selection, undo/redo history
-  - consumes graph intent events and applies canonical mutations
-  - publishes state-change events + `graph.document.changed`
-- `ui-store`
-  - owns UI-only state (tool/tab/dev-console/runtime panels)
-  - emits graph intent events for selection/zoom actions
-- `persistence-store`
-  - listens to `graph.document.changed` and save/load events
-  - handles autosave/restore to `localStorage`
-- runtime modules (`mock-agent-runtime`, `data-connectors`)
-  - read graph data from `graph-store`
-  - request graph updates via `graph.node.update.requested`
-  - publish runtime lifecycle and activity events
-- components
-  - publish intent events
-  - subscribe to state/result events
-  - render based on store state
-
-## Event Model
-
-### Intent / Request Events
-
-Examples:
-- `graph.node.select.requested`
-- `graph.node.update.requested`
-- `graph.node.move.requested`
-- `graph.node.create.requested`
-- `graph.node.delete.requested`
-- `graph.edge.create.requested`
-- `graph.selection.clear.requested`
-- `graph.selection.set.requested`
-- `graph.viewport.update.requested`
-- `graph.document.load.requested`
-- `graph.document.save.requested`
-- `graph.document.undo.requested`
-- `graph.document.redo.requested`
-- `runtime.agent.run.requested`
-- `runtime.subtree.run.requested`
-- `runtime.all.run.requested`
-
-### State / Result Events
-
-Examples:
-- `graph.node.selected`
-- `graph.selection.set`
-- `graph.selection.cleared`
-- `graph.node.updated`
-- `graph.node.created`
-- `graph.node.deleted`
-- `graph.edge.created`
-- `graph.viewport.changed`
-- `graph.document.loaded`
-- `graph.document.saved`
-- `graph.document.changed`
-- `runtime.agent.run.started`
-- `runtime.agent.run.completed`
-- `runtime.agent.run.failed`
-
-## Graph Mutation Flow
-
-Canonical mutation flow:
-1. Component/runtime publishes `*.requested` intent.
-2. `graph-store` validates and applies mutation.
-3. `graph-store` emits specific result event (`graph.node.updated`, `graph.edge.created`, etc).
+1. Components/runtime publish `*.requested` intent events.
+2. `graph-store` validates and applies canonical mutations.
+3. `graph-store` emits typed result events (`graph.node.updated`, `graph.edge.created`, etc).
 4. `graph-store` emits `graph.document.changed` with reason metadata.
-5. UI re-renders from store snapshots; persistence/autosave reacts to changed document events.
+5. UI renders from store snapshots.
 
-## Canvas Architecture
+No component directly mutates shared graph state.
 
-`graph-canvas` has been decomposed into focused modules:
-- `js/components/graph-canvas/canvas-renderer.js`
-- `js/components/graph-canvas/canvas-edges.js`
-- `js/components/graph-canvas/canvas-viewport.js`
-- `js/components/graph-canvas/canvas-selection.js`
+### Primary Modules
 
-The custom element now owns only ephemeral interaction state:
-- active drag preview
-- pan gesture
-- marquee gesture
-- connect-mode source
-- edge-popover state
+- `js/store/graph-store.js`: canonical graph mutations + selection + undo/redo
+- `js/store/ui-store.js`: tool/tab/panel viewport intents
+- `js/store/persistence-store.js`: local autosave/restore
+- `js/core/graph-document.js`: normalize + validate graph docs
+- `js/core/graph-semantics.js`: node/edge contracts and semantic rules
+- `js/runtime/execution-planner.js`: runnable order, readiness, blocking, cycles
+- `js/runtime/mock-agent-runtime.js`: planner-driven execution mock runtime
 
-It no longer keeps a shadow graph document as a competing source of truth.
+## Graph Semantics (Implemented)
 
-## Core User Loop Improvements
+Full design note: [docs/graph-semantics.md](/Users/cdr/Projects/mindgraph/docs/graph-semantics.md)
 
-Implemented tightening of the core loop:
-- create/select/edit nodes through request/state event flow
-- connect edges with in-app popover (no `window.prompt`)
-- shift-click additive/toggle selection
-- marquee selection on empty-space drag in select tool
-- `Esc` behavior:
-  - close edge popover
-  - clear connect source
-  - reset tool to Select, or clear selection
-- delete supports multi-selection
+### Node roles
 
-## Component Overview
+- `note`: reference/context only
+- `data`: structured source (non-runnable)
+- `transformer`: runnable transform step
+- `agent`: runnable reasoning/orchestration step
+- `view`: runnable presentation step
+- `action`: runnable side-effect/publish step
 
-Top-level shell:
-- `app-shell` composes toolbar, palette, canvas, inspector, and bottom activity panel
+### Edge roles
 
-Core UI modules:
-- `top-toolbar` runtime actions, save/load, undo/redo, autosave toggle, zoom
-- `left-tool-palette` tool selection and keyboard shortcut guide
-- `graph-canvas` pan/zoom/drag/select/create/connect interactions
-- `inspector-panel` tabbed node editing views
-- `bottom-activity-panel` logs, task queue, run history, errors, PAN console
+- Execution: `depends_on`, `triggers`
+- Data/context: `feeds_data`, `reads_from`, `writes_to`, `transforms`
+- Hierarchy/scope: `parent_of`
+- Informational: `informs`, `critiques`, `reports_to`, `references`
 
-State + services:
-- `graph-store` graph document state + undo/redo + canonical mutations
-- `ui-store` UI tab/tool/runtime panel state
-- `persistence-store` localStorage autosave/restore
-- `mock-agent-runtime` mock agent execution and activity publishing
+### Semantics alignment delivered
 
-## Graph Document Model
+- Canvas connect flow now chooses default edge type from node semantics.
+- Graph-store validates edge semantics at create/update time.
+- Graph document validation checks node contracts + edge validity.
+- Runtime planner and runtime executor use the same semantic edge model.
+- Inspector shows edge semantic category/effects and validity.
 
-Graph documents are JSON objects with:
-- `id`, `title`, `version`
-- `nodes[]`
-- `edges[]`
-- `viewport` (`x`, `y`, `zoom`)
-- `metadata` (includes persisted selection)
+## Execution Planner
 
-Node shape:
-- `id`, `type`, `label`, `description`, `position`, `data`, `metadata`
+Planner computes:
+- runnable nodes
+- topological execution order
+- subtree scope by hierarchy edges
+- missing dependencies
+- missing input payloads
+- missing required contract fields
+- dependency cycles
+- `ready` vs `blocked`
+- stale upstream detection (`needsRerun`)
 
-Edge shape:
-- `id`, `type`, `source`, `target`, `label`, `metadata`
+Used by:
+- canvas/node readiness display
+- inspector planner status
+- runtime run-node/run-subtree/run-all
 
-Validation and normalization are handled in:
-- `js/core/graph-document.js`
+## Runtime Behavior
 
-## Persistence Behavior
+`mock-agent-runtime` now executes all runnable node types (`transformer`, `agent`, `view`, `action`) instead of only agents.
 
-- Manual export/import via toolbar (`Save JSON`, `Load JSON`)
-- Optional localStorage autosave toggle in toolbar
-- Last session restore on startup when autosave data exists
-- Autosave watches `graph.document.changed`
-- Viewport and selection are persisted in the graph document
+Execution flow:
+1. Planner readiness check
+2. Optional hydration of missing data-node providers
+3. Type-specific mock execution
+4. Node state update through graph-store requests (`status`, `lastOutput`, `lastRunAt`, run history)
 
-## Interaction Shortcuts
+Subtree execution:
+- scope by `parent_of`
+- order by execution edges
+- optional stale-only mode (`partial: "stale"`)
 
-- `Delete` / `Backspace`: delete selected node(s)
-- `Cmd/Ctrl + D`: duplicate selected node
-- `Cmd/Ctrl + Z`: undo
-- `Shift + Cmd/Ctrl + Z` or `Ctrl + Y`: redo
-- `Esc`: close connect popover / clear connect source / reset tool / clear selection
-- `Shift + Click`: additive/toggle node selection
+## End-to-End Seed Workflow
+
+Seed graph now demonstrates a concrete operational path:
+
+`data_market_data` -> `transformer_signal_normalizer` -> `agent_strategy_synthesizer` -> `view_campaign_brief` -> `action_publish_brief`
+
+Plus:
+- `reads_from` to site config
+- `parent_of` hierarchy for subtree targeting
+- `references` note for contextual linkage
+
+## UI Clarity Improvements
+
+- Edge labels/colors now reflect semantic category.
+- Edge inspector includes semantic description and effect flags.
+- Node cards show planner readiness/blocked hints.
+- Node inspector summary includes planner state and first blocking reason.
 
 ## Current Limitations
 
-- Marquee uses top-left node position hit testing (not full node-bounds overlap yet)
-- Undo/redo remains snapshot-based
-- No collaborative sync or server persistence
-- Mock runtime is intentionally local and simulated
+- Planner is in-memory and recalculated on render; no persisted plan snapshots yet.
+- Validation is schema-like and lightweight, not full JSON Schema enforcement.
+- Runtime remains mock execution (no external provider orchestration engine).
+- Edge creation still defaults semantically (no in-drag type picker yet).
 
-## Acceptance Checklist
+## Recommended Next Steps
 
-Current build supports:
-1. Seeded graph loads on startup (or autosaved last session)
-2. Pan/zoom/select works
-3. Node creation, editing, deletion, and duplication work
-4. In-app edge creation flow (type + label) works
-5. Save/load JSON graph documents
-6. Data node refresh behavior and inspector previews
-7. Agent runs through mock runtime
-8. Live activity panel updates
-9. Visible PAN event console with filtering/clear
-10. Lightweight framework-free browser app with disciplined store ownership
+1. Add explicit edge-type picker during connect drag with semantic presets.
+2. Add port-level input/output typing and edge-level payload contracts.
+3. Persist planner snapshots per run for traceability and debugging.
+4. Add retry/backoff policies and execution cancellation semantics.
+5. Introduce a non-mock runtime adapter behind the same planner interface.
