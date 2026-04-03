@@ -1,19 +1,22 @@
 import { HISTORY_LIMITS } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
-import {
-  createEdge,
-  createNode,
-  findEdgeById,
-  findNodeById,
-  normalizeGraphDocument,
-  updateNode as patchGraphNode,
-  validateGraphDocument
-} from "../core/graph-document.js";
+import * as graphDocument from "../core/graph-document.js";
 import { seedDocument } from "../core/seed-data.js";
 import { clone } from "../core/utils.js";
 import { publish, subscribe } from "../core/pan.js";
 
 const unique = (items) => [...new Set((Array.isArray(items) ? items : []).filter(Boolean))];
+const {
+  createEdge,
+  createNode,
+  findNodeById,
+  normalizeGraphDocument,
+  updateNode: patchGraphNode,
+  validateGraphDocument
+} = graphDocument;
+const findEdgeById =
+  graphDocument.findEdgeById ??
+  ((document, edgeId) => (document?.edges ?? []).find((edge) => edge.id === edgeId) ?? null);
 
 class GraphStore {
   #document = null;
