@@ -1,8 +1,0 @@
-{
-  "snapshot": "2026-03-31",
-  "segments": [
-    { "name": "SMB", "growth": 0.12 },
-    { "name": "MidMarket", "growth": 0.09 },
-    { "name": "Enterprise", "growth": 0.07 }
-  ]
-}

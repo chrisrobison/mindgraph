@@ -1,205 +1,146 @@
-# MindGraph AI
+# CAR Brain Simulator
 
-MindGraph AI is a lightweight, framework-free visual graph workbench for modeling AI workflows in the browser.
+A 3D neural memory workbench implementing the [Clustered Associative Recall (CAR) Protocol](docs/superpowers/specs/2026-04-03-car-brain-simulator-design.md) for multi-agent memory systems. Built as a reconstructed fork of [MindGraph AI](https://github.com/chrisrobison/mindgraph).
 
-It keeps a browser-native stack:
-- custom elements (Web Components)
-- plain ES modules
-- PAN event bus for app-wide coordination
-- centralized graph state in `graph-store`
+Watch your memories form as glowing neurons in 3D space. Add knowledge, ask questions, and observe the 13-step retrieval sequence animate across a galaxy of interconnected memory chunks.
 
 ## Run Locally
 
-Use any static HTTP server (do not open `index.html` with `file://`).
-
 ```bash
-cd /Users/cdr/Projects/mindgraph
-python3 -m http.server 4173
+node server.js
+# Open http://127.0.0.1:4173
 ```
 
-Open:
-- `http://127.0.0.1:4173`
+No build step. No npm install. Just Node.js and a browser with WebGL.
 
-## Core Architecture
+## What It Does
 
-### State Ownership Rules
+**Add memories** — type facts, decisions, events into the Memory input. Each becomes a Tier 1 chunk (glowing cyan sphere) with auto-generated questions and cross-links.
 
-MindGraph now follows strict ownership rules:
-- `graph-store` is the single source of truth for graph document mutations.
-- PAN carries intent events (`*.requested`) and state/result events (`*.changed`, `*.created`, `*.updated`, etc).
-- UI components render from graph-store snapshots and store-driven events.
-- UI components keep only ephemeral interaction state (drag, pan, marquee, connect-mode context).
+**Ask questions** — type a query and watch the brain think. The 13-step retrieval sequence fires: session priming, context construction, question decomposition, multi-query retrieval, cluster formation, interference checking, confidence grading, and synthesis. All visualized in real-time on the 3D canvas.
 
-### Responsibilities
+**Ingest projects** — point it at a directory and Claude processes every file through the CAR protocol, building a knowledge graph of your entire project.
 
-- `graph-store`
-  - owns nodes, edges, viewport, selection, undo/redo history
-  - consumes graph intent events and applies canonical mutations
-  - publishes state-change events + `graph.document.changed`
-- `ui-store`
-  - owns UI-only state (tool/tab/dev-console/runtime panels)
-  - emits graph intent events for selection/zoom actions
-- `persistence-store`
-  - listens to `graph.document.changed` and save/load events
-  - handles autosave/restore to `localStorage`
-- runtime modules (`mock-agent-runtime`, `data-connectors`)
-  - read graph data from `graph-store`
-  - request graph updates via `graph.node.update.requested`
-  - publish runtime lifecycle and activity events
-- components
-  - publish intent events
-  - subscribe to state/result events
-  - render based on store state
+## Architecture
 
-## Event Model
+Two-layer local application:
 
-### Intent / Request Events
+```
+Browser (localhost:4173)              Local Server (server.js)
++------------------------+           +---------------------------+
+| Three.js 3D Canvas     |           | Static file serving       |
+| Web Component panels   |<--REST--->| /api/brain  (persistence) |
+| PAN event bus          |           | /api/process (Claude CLI) |
+| graph-store (state)    |           | /api/config  (settings)   |
++------------------------+           +---------------------------+
+                                              |
+                                     Claude Code CLI (default)
+                                     or Anthropic API fallback
+```
 
-Examples:
-- `graph.node.select.requested`
-- `graph.node.update.requested`
-- `graph.node.move.requested`
-- `graph.node.create.requested`
-- `graph.node.delete.requested`
-- `graph.edge.create.requested`
-- `graph.selection.clear.requested`
-- `graph.selection.set.requested`
-- `graph.viewport.update.requested`
-- `graph.document.load.requested`
-- `graph.document.save.requested`
-- `graph.document.undo.requested`
-- `graph.document.redo.requested`
-- `runtime.agent.run.requested`
-- `runtime.subtree.run.requested`
-- `runtime.all.run.requested`
+**Frontend:** Vanilla JS, Web Components, Three.js via CDN. Zero build step.
+**Backend:** Single `server.js`, zero npm dependencies. Node.js `http` module only.
+**AI Runner:** Claude Code CLI (uses your Claude subscription). Falls back to template-based processing when Claude isn't available.
 
-### State / Result Events
+## The 3D Brain
 
-Examples:
-- `graph.node.selected`
-- `graph.selection.set`
-- `graph.selection.cleared`
-- `graph.node.updated`
-- `graph.node.created`
-- `graph.node.deleted`
-- `graph.edge.created`
-- `graph.viewport.changed`
-- `graph.document.loaded`
-- `graph.document.saved`
-- `graph.document.changed`
-- `runtime.agent.run.started`
-- `runtime.agent.run.completed`
-- `runtime.agent.run.failed`
+Nodes are 3D geometries rendered with Three.js:
 
-## Graph Mutation Flow
+| Node Type | Shape | Color | What It Represents |
+|-----------|-------|-------|-------------------|
+| Chunk (Tier 1) | Sphere | Cyan `#00f5ff` | Raw episodes, recent memories |
+| Chunk (Tier 2) | Icosahedron | Purple `#7b61ff` | Compressed summaries |
+| Chunk (Tier 3) | Octahedron | Pink `#ff2d78` | Permanent schemas/patterns |
+| Question | Tetrahedron | Gold `#ffd93d` | Retrieval keys (L1-L5) |
+| Trigger | Diamond | Amber `#ff9f1c` | Prospective memory triggers |
+| Cluster | Translucent shell | White 20% | Groups of related chunks |
 
-Canonical mutation flow:
-1. Component/runtime publishes `*.requested` intent.
-2. `graph-store` validates and applies mutation.
-3. `graph-store` emits specific result event (`graph.node.updated`, `graph.edge.created`, etc).
-4. `graph-store` emits `graph.document.changed` with reason metadata.
-5. UI re-renders from store snapshots; persistence/autosave reacts to changed document events.
+**Atmosphere:** 400 ambient particles, 800 background stars, 6 nebula gradient clouds, ambient light breathing. Post-processing bloom gives every node a radiating glow.
 
-## Canvas Architecture
+**Edges** connect memories with semantic relationships: `linked_to`, `amends`, `contradicts` (red pulse), `promotes_to`, `answers` (gold), `decomposes_to`, `clusters_with`, `preceded_by`, `triggers`.
 
-`graph-canvas` has been decomposed into focused modules:
-- `js/components/graph-canvas/canvas-renderer.js`
-- `js/components/graph-canvas/canvas-edges.js`
-- `js/components/graph-canvas/canvas-viewport.js`
-- `js/components/graph-canvas/canvas-selection.js`
+## The 13-Step Retrieval Sequence
 
-The custom element now owns only ephemeral interaction state:
-- active drag preview
-- pan gesture
-- marquee gesture
-- connect-mode source
-- edge-popover state
+When you ask a question, the CAR engine runs the full retrieval pipeline:
 
-It no longer keeps a shadow graph document as a competing source of truth.
+1. **Session Primer** — check recent context, scan triggers
+2. **Context Construction** — build a picture of why the question exists
+3. **Question Decomposition** — split into 3-5 sub-questions
+4. **Metamemory Check** — what do I know? what are my gaps?
+5. **Multi-Query Retrieval R1** — score all chunks, top-3 per sub-query
+6. **Cluster Formation** — group retrieved chunks
+7. **Cluster Expansion R2** — pull in neighbors
+8. **Tiered Retrieval** — search across all three memory tiers
+9. **Interference Check** — detect contradictions
+10. **Confidence Grading** — grade each sub-question
+11. **Thinking Profile** — detect session mode
+12. **Synthesis + Response** — reconstruct answer from fragments
+13. **Post-Retrieval Update** — re-index, strengthen retrieval paths
 
-## Core User Loop Improvements
+Two modes: **Play** (auto-runs ~8.5 seconds) and **Step** (advance manually).
 
-Implemented tightening of the core loop:
-- create/select/edit nodes through request/state event flow
-- connect edges with in-app popover (no `window.prompt`)
-- shift-click additive/toggle selection
-- marquee selection on empty-space drag in select tool
-- `Esc` behavior:
-  - close edge popover
-  - clear connect source
-  - reset tool to Select, or clear selection
-- delete supports multi-selection
+## CAR Protocol
 
-## Component Overview
+Based on the Clustered Associative Recall Protocol (v1.0, March 2026) — a cognitive science-informed implementation guide for human-like memory recall in multi-agent systems.
 
-Top-level shell:
-- `app-shell` composes toolbar, palette, canvas, inspector, and bottom activity panel
+Core principles:
+- Memory is reconstruction from fragments, not file retrieval
+- Never suppress or delete memory — build better retrieval cues instead
+- Never present confident answers without grading confidence
+- Questions are retrieval-ready keys; statements are passive data
+- Every retrieval modifies the memory (read-write, not read-only)
+- Forgetting is functional — relevance decay keeps the system fast
 
-Core UI modules:
-- `top-toolbar` runtime actions, save/load, undo/redo, autosave toggle, zoom
-- `left-tool-palette` tool selection and keyboard shortcut guide
-- `graph-canvas` pan/zoom/drag/select/create/connect interactions
-- `inspector-panel` tabbed node editing views
-- `bottom-activity-panel` logs, task queue, run history, errors, PAN console
+Relevance scoring uses Ebbinghaus decay curves, access frequency, emotional weight, consequence weight, connection density, and the Zeigarnik effect (open threads get a 1.5x retrieval bonus).
 
-State + services:
-- `graph-store` graph document state + undo/redo + canonical mutations
-- `ui-store` UI tab/tool/runtime panel state
-- `persistence-store` localStorage autosave/restore
-- `mock-agent-runtime` mock agent execution and activity publishing
+## Project Ingestion
 
-## Graph Document Model
+The `CAR_INGESTION_PROTOCOL.md` describes how to feed any project into the brain:
 
-Graph documents are JSON objects with:
-- `id`, `title`, `version`
-- `nodes[]`
-- `edges[]`
-- `viewport` (`x`, `y`, `zoom`)
-- `metadata` (includes persisted selection)
+1. SCAN — read all source material
+2. CHUNK — break into atomic memory units
+3. CLASSIFY — assign tier, tags, entities
+4. QUESTION — generate questions at 5 levels per chunk
+5. LINK — identify cross-links, contradictions, temporal sequences
+6. SCORE — set initial relevance weights
+7. CLUSTER — group related chunks
+8. EXPORT — output as JSON for import
 
-Node shape:
-- `id`, `type`, `label`, `description`, `position`, `data`, `metadata`
+## Persistence
 
-Edge shape:
-- `id`, `type`, `source`, `target`, `label`, `metadata`
+Brain data persists to `~/.car-brain/brains/` on disk (via the server API) with localStorage as a fallback for instant reload. Export/Import JSON from the toolbar for manual backup.
 
-Validation and normalization are handled in:
-- `js/core/graph-document.js`
+## Tech Stack
 
-## Persistence Behavior
+- **3D rendering:** Three.js v0.170.0 (CDN, ES modules)
+- **UI framework:** None. Vanilla Web Components.
+- **State management:** Custom PAN event bus (publish/subscribe on EventTarget)
+- **Persistence:** Node.js server → disk JSON + browser localStorage
+- **AI integration:** Claude Code CLI (subscription auth)
+- **Build step:** None. Serve static files.
+- **Dependencies:** Zero npm packages. Three.js from CDN only.
 
-- Manual export/import via toolbar (`Save JSON`, `Load JSON`)
-- Optional localStorage autosave toggle in toolbar
-- Last session restore on startup when autosave data exists
-- Autosave watches `graph.document.changed`
-- Viewport and selection are persisted in the graph document
+## Keyboard Shortcuts
 
-## Interaction Shortcuts
+| Key | Action |
+|-----|--------|
+| `V` | Select tool |
+| `H` | Pan/Orbit tool |
+| `C` | Add Chunk tool |
+| `L` | Add Link tool |
+| `Q` | Add Question tool |
+| `T` | Add Trigger tool |
+| `M` | Focus memory input |
+| `Space` | Play/pause retrieval |
+| `Right Arrow` | Step forward in retrieval |
+| `Esc` | Cancel / clear selection |
+| `Cmd+Z` | Undo |
+| `1/2/3/0` | Filter by tier / show all |
 
-- `Delete` / `Backspace`: delete selected node(s)
-- `Cmd/Ctrl + D`: duplicate selected node
-- `Cmd/Ctrl + Z`: undo
-- `Shift + Cmd/Ctrl + Z` or `Ctrl + Y`: redo
-- `Esc`: close connect popover / clear connect source / reset tool / clear selection
-- `Shift + Click`: additive/toggle node selection
+## Origins
 
-## Current Limitations
+Reconstructed from [chrisrobison/mindgraph](https://github.com/chrisrobison/mindgraph), a framework-free graph workbench. The original 2D agent-workflow editor was rebuilt into a 3D brain simulator with the CAR protocol as its cognitive engine.
 
-- Marquee uses top-left node position hit testing (not full node-bounds overlap yet)
-- Undo/redo remains snapshot-based
-- No collaborative sync or server persistence
-- Mock runtime is intentionally local and simulated
+## License
 
-## Acceptance Checklist
-
-Current build supports:
-1. Seeded graph loads on startup (or autosaved last session)
-2. Pan/zoom/select works
-3. Node creation, editing, deletion, and duplication work
-4. In-app edge creation flow (type + label) works
-5. Save/load JSON graph documents
-6. Data node refresh behavior and inspector previews
-7. Agent runs through mock runtime
-8. Live activity panel updates
-9. Visible PAN event console with filtering/clear
-10. Lightweight framework-free browser app with disciplined store ownership
+See upstream repository for license terms.

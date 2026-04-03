@@ -1,3 +1,6 @@
+/* ── CAR Brain Simulator — Application Bootstrap ── */
+
+/* Components */
 import "./components/app-shell.js";
 import "./components/top-toolbar.js";
 import "./components/left-tool-palette.js";
@@ -5,57 +8,56 @@ import "./components/graph-canvas.js";
 import "./components/inspector-panel.js";
 import "./components/bottom-activity-panel.js";
 import "./components/pan-event-console.js";
-import "./components/bottom-panel/messages-view.js";
-import "./components/bottom-panel/activity-log-view.js";
-import "./components/bottom-panel/task-queue-view.js";
-import "./components/bottom-panel/run-history-view.js";
-import "./components/bottom-panel/error-view.js";
 
-import "./components/nodes/note-node.js";
-import "./components/nodes/agent-node.js";
-import "./components/nodes/data-node.js";
-import "./components/nodes/transformer-node.js";
-import "./components/nodes/view-node.js";
-import "./components/nodes/action-node.js";
-
-import "./components/inspector/inspector-overview.js";
-import "./components/inspector/inspector-prompt.js";
-import "./components/inspector/inspector-data.js";
-import "./components/inspector/inspector-tools.js";
-import "./components/inspector/inspector-activity.js";
-import "./components/inspector/inspector-output.js";
-import "./components/inspector/inspector-automation.js";
-import "./components/inspector/inspector-permissions.js";
-import "./runtime/data-connectors.js";
-import "./runtime/mock-agent-runtime.js";
-
+/* Core */
 import { EVENTS } from "./core/event-constants.js";
-import { publish } from "./core/pan.js";
+import { publish, subscribe } from "./core/pan.js";
+/* Runtime */
+import { carEngine } from "./runtime/car-engine.js";
+import { retrievalAnimator } from "./runtime/retrieval-animator.js";
 import { graphStore } from "./store/graph-store.js";
 import { persistenceStore } from "./store/persistence-store.js";
 import { uiStore } from "./store/ui-store.js";
 
-const bootstrap = () => {
-  persistenceStore.initialize();
+const bootstrap = async () => {
+	persistenceStore.initialize();
+	retrievalAnimator.initialize();
 
-  const restored = persistenceStore.restoreLastSession();
-  if (!restored) {
-    graphStore.loadSeededGraph();
-  }
+	const restored = await persistenceStore.restoreLastSession();
+	if (!restored) {
+		graphStore.loadSeededGraph();
+	}
 
-  uiStore.setTool("select");
-  uiStore.setInspectorTab("overview");
-  uiStore.setBottomTab("messages");
-  uiStore.setDevConsoleVisible(true);
+	uiStore.setTool("select");
+	uiStore.setInspectorTab("overview");
+	uiStore.setBottomTab("retrieval-log");
+	uiStore.setDevConsoleVisible(false);
 
-  publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-    level: "info",
-    message: restored ? "MindGraph AI restored from last session" : "MindGraph AI initialized"
-  });
+	/* ── Wire CAR events to engine ── */
+
+	subscribe(EVENTS.CAR_MEMORY_SUBMIT_REQUESTED, ({ payload }) => {
+		const content = payload?.content;
+		if (!content) return;
+		carEngine.ingestMemory(content);
+	});
+
+	subscribe(EVENTS.CAR_QUERY_SUBMIT_REQUESTED, ({ payload }) => {
+		const query = payload?.query;
+		if (!query) return;
+		const mode = payload?.mode ?? "play";
+		carEngine.runRetrieval(query, { mode });
+	});
+
+	publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+		level: "info",
+		message: restored
+			? "CAR Brain restored from last session"
+			: "CAR Brain initialized with Spain margins demo",
+	});
 };
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", bootstrap);
+	document.addEventListener("DOMContentLoaded", bootstrap);
 } else {
-  bootstrap();
+	bootstrap();
 }

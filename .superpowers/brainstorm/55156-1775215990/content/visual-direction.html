@@ -1,0 +1,131 @@
+<h2>Visual Direction for the Brain Simulator</h2>
+<p class="subtitle">Which aesthetic feels right for a CAR Protocol memory system?</p>
+
+<div class="cards">
+  <div class="card" data-choice="neural-dark" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0e1a; padding: 2rem; border-radius: 8px 8px 0 0;">
+      <div style="position: relative; height: 200px; overflow: hidden;">
+        <!-- Neural network aesthetic -->
+        <svg width="100%" height="100%" viewBox="0 0 400 200">
+          <!-- Glowing connections -->
+          <defs>
+            <filter id="glow1">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <linearGradient id="pulse1" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#00f5ff" stop-opacity="0.1"/>
+              <stop offset="0.5" stop-color="#00f5ff" stop-opacity="0.8"/>
+              <stop offset="1" stop-color="#00f5ff" stop-opacity="0.1"/>
+            </linearGradient>
+          </defs>
+          <!-- Edges -->
+          <path d="M80,60 C140,60 160,100 200,100" fill="none" stroke="#00f5ff" stroke-width="1.5" opacity="0.6" filter="url(#glow1)"/>
+          <path d="M80,140 C140,140 160,100 200,100" fill="none" stroke="#7b61ff" stroke-width="1.5" opacity="0.6" filter="url(#glow1)"/>
+          <path d="M200,100 C240,100 260,50 320,50" fill="none" stroke="#00f5ff" stroke-width="1.5" opacity="0.4" filter="url(#glow1)"/>
+          <path d="M200,100 C240,100 260,150 320,150" fill="none" stroke="#ff6b9d" stroke-width="1.5" opacity="0.5" filter="url(#glow1)"/>
+          <!-- Nodes -->
+          <circle cx="80" cy="60" r="18" fill="#0d1b2a" stroke="#00f5ff" stroke-width="2" filter="url(#glow1)"/>
+          <text x="80" y="64" text-anchor="middle" fill="#00f5ff" font-size="8" font-family="monospace">T1</text>
+          <circle cx="80" cy="140" r="18" fill="#0d1b2a" stroke="#7b61ff" stroke-width="2" filter="url(#glow1)"/>
+          <text x="80" y="144" text-anchor="middle" fill="#7b61ff" font-size="8" font-family="monospace">T1</text>
+          <circle cx="200" cy="100" r="24" fill="#0d1b2a" stroke="#00f5ff" stroke-width="2.5" filter="url(#glow1)"/>
+          <text x="200" y="96" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">CLUSTER</text>
+          <text x="200" y="108" text-anchor="middle" fill="#00f5ff" font-size="7">relevance: 0.87</text>
+          <circle cx="320" cy="50" r="16" fill="#0d1b2a" stroke="#ff6b9d" stroke-width="1.5" filter="url(#glow1)"/>
+          <text x="320" y="54" text-anchor="middle" fill="#ff6b9d" font-size="8" font-family="monospace">T3</text>
+          <circle cx="320" cy="150" r="16" fill="#0d1b2a" stroke="#ffd93d" stroke-width="1.5" filter="url(#glow1)"/>
+          <text x="320" y="154" text-anchor="middle" fill="#ffd93d" font-size="7">Q</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Neural Dark</h3>
+      <p>Deep dark background with glowing neon connections. Nodes pulse when activated. Edges glow cyan/purple during retrieval. Brain-scan aesthetic — feels like watching synapses fire.</p>
+      <p style="color: #888; font-size: 0.85em;">Tier 1: cyan | Tier 2: purple | Tier 3: pink | Questions: gold | Clusters: white glow</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="organic-brain" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); padding: 2rem; border-radius: 8px 8px 0 0;">
+      <div style="position: relative; height: 200px; overflow: hidden;">
+        <svg width="100%" height="100%" viewBox="0 0 400 200">
+          <defs>
+            <filter id="glow2">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <radialGradient id="neuron1" cx="50%" cy="50%" r="50%">
+              <stop offset="0" stop-color="#e94560" stop-opacity="0.8"/>
+              <stop offset="1" stop-color="#e94560" stop-opacity="0.1"/>
+            </radialGradient>
+            <radialGradient id="neuron2" cx="50%" cy="50%" r="50%">
+              <stop offset="0" stop-color="#533483" stop-opacity="0.8"/>
+              <stop offset="1" stop-color="#533483" stop-opacity="0.1"/>
+            </radialGradient>
+          </defs>
+          <!-- Organic blob connections -->
+          <path d="M90,70 Q130,40 170,80 Q200,100 230,90" fill="none" stroke="#e94560" stroke-width="3" opacity="0.4" stroke-linecap="round"/>
+          <path d="M90,130 Q140,160 190,120 Q210,100 230,90" fill="none" stroke="#533483" stroke-width="3" opacity="0.4" stroke-linecap="round"/>
+          <path d="M230,90 Q280,70 330,60" fill="none" stroke="#0f3460" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
+          <path d="M230,90 Q280,130 330,140" fill="none" stroke="#e94560" stroke-width="2" opacity="0.3" stroke-linecap="round"/>
+          <!-- Organic nodes with glow -->
+          <circle cx="90" cy="70" r="22" fill="url(#neuron1)" filter="url(#glow2)"/>
+          <circle cx="90" cy="70" r="12" fill="#1a1a2e" stroke="#e94560" stroke-width="1.5"/>
+          <text x="90" y="74" text-anchor="middle" fill="#e94560" font-size="9">raw</text>
+          <circle cx="90" cy="130" r="20" fill="url(#neuron2)" filter="url(#glow2)"/>
+          <circle cx="90" cy="130" r="11" fill="#1a1a2e" stroke="#533483" stroke-width="1.5"/>
+          <text x="90" y="134" text-anchor="middle" fill="#533483" font-size="9">raw</text>
+          <circle cx="230" cy="90" r="30" fill="url(#neuron1)" filter="url(#glow2)" opacity="0.5"/>
+          <circle cx="230" cy="90" r="18" fill="#1a1a2e" stroke="#e94560" stroke-width="2"/>
+          <text x="230" y="86" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">cluster</text>
+          <text x="230" y="98" text-anchor="middle" fill="#e94560" font-size="7">0.87</text>
+          <circle cx="330" cy="60" r="16" fill="#1a1a2e" stroke="#0f3460" stroke-width="2"/>
+          <text x="330" y="64" text-anchor="middle" fill="#aab" font-size="8">schema</text>
+          <circle cx="330" cy="140" r="14" fill="#1a1a2e" stroke="#533483" stroke-width="1.5"/>
+          <text x="330" y="144" text-anchor="middle" fill="#533483" font-size="7">Q?</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Organic Brain</h3>
+      <p>Deep blue-to-purple gradients with soft radiating glows around nodes. Connections feel organic, like dendrites. Warm reds for hot memories, cool purples for cold. Feels biological.</p>
+      <p style="color: #888; font-size: 0.85em;">Hot memory: warm red | Cold memory: deep purple | Schemas: muted blue | Questions: violet</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="clean-clinical" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #f8f9fc; padding: 2rem; border-radius: 8px 8px 0 0;">
+      <div style="position: relative; height: 200px; overflow: hidden;">
+        <svg width="100%" height="100%" viewBox="0 0 400 200">
+          <!-- Clean lines -->
+          <path d="M80,70 C140,70 160,100 200,100" fill="none" stroke="#4361ee" stroke-width="2" opacity="0.5"/>
+          <path d="M80,130 C140,130 160,100 200,100" fill="none" stroke="#4361ee" stroke-width="2" opacity="0.3"/>
+          <path d="M200,100 C240,100 260,55 320,55" fill="none" stroke="#7209b7" stroke-width="1.5" opacity="0.4"/>
+          <path d="M200,100 C240,100 260,145 320,145" fill="none" stroke="#f72585" stroke-width="1.5" opacity="0.4"/>
+          <!-- Clean bordered nodes -->
+          <rect x="55" y="50" width="50" height="40" rx="8" fill="white" stroke="#4361ee" stroke-width="2"/>
+          <text x="80" y="66" text-anchor="middle" fill="#4361ee" font-size="8" font-weight="600">Tier 1</text>
+          <text x="80" y="78" text-anchor="middle" fill="#999" font-size="7">episode</text>
+          <rect x="55" y="110" width="50" height="40" rx="8" fill="white" stroke="#4361ee" stroke-width="2"/>
+          <text x="80" y="126" text-anchor="middle" fill="#4361ee" font-size="8" font-weight="600">Tier 1</text>
+          <text x="80" y="138" text-anchor="middle" fill="#999" font-size="7">episode</text>
+          <rect x="170" y="75" width="60" height="50" rx="10" fill="white" stroke="#7209b7" stroke-width="2.5"/>
+          <text x="200" y="96" text-anchor="middle" fill="#7209b7" font-size="9" font-weight="700">Cluster</text>
+          <text x="200" y="110" text-anchor="middle" fill="#999" font-size="7">score: 0.87</text>
+          <rect x="295" y="35" width="50" height="40" rx="8" fill="white" stroke="#f72585" stroke-width="1.5"/>
+          <text x="320" y="51" text-anchor="middle" fill="#f72585" font-size="8" font-weight="600">Tier 3</text>
+          <text x="320" y="63" text-anchor="middle" fill="#999" font-size="7">schema</text>
+          <rect x="295" y="125" width="50" height="40" rx="8" fill="#fff7e6" stroke="#f59e0b" stroke-width="1.5"/>
+          <text x="320" y="141" text-anchor="middle" fill="#f59e0b" font-size="8" font-weight="600">Q?</text>
+          <text x="320" y="153" text-anchor="middle" fill="#999" font-size="7">L3</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Clean Clinical</h3>
+      <p>Light background, crisp borders, clear typography. Like a medical/scientific visualization tool. Professional, data-dense, highly readable. Focus on information density over atmosphere.</p>
+      <p style="color: #888; font-size: 0.85em;">Blue: episodes | Purple: clusters | Pink: schemas | Amber: questions</p>
+    </div>
+  </div>
+</div>

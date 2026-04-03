@@ -1,22 +1,35 @@
 export const NODE_TYPES = Object.freeze({
-  NOTE: "note",
-  AGENT: "agent",
-  DATA: "data",
-  TRANSFORMER: "transformer",
-  VIEW: "view",
-  ACTION: "action"
+	CHUNK: "chunk",
+	CLUSTER: "cluster",
+	QUESTION: "question",
+	PATTERN: "pattern",
+	TRIGGER: "trigger",
 });
 
 export const EDGE_TYPES = Object.freeze({
-  PARENT_OF: "parent_of",
-  DEPENDS_ON: "depends_on",
-  INFORMS: "informs",
-  READS_FROM: "reads_from",
-  WRITES_TO: "writes_to",
-  TRANSFORMS: "transforms",
-  CRITIQUES: "critiques",
-  REPORTS_TO: "reports_to",
-  TRIGGERS: "triggers"
+	LINKED_TO: "linked_to",
+	AMENDS: "amends",
+	CONTRADICTS: "contradicts",
+	PROMOTES_TO: "promotes_to",
+	ANSWERS: "answers",
+	DECOMPOSES_TO: "decomposes_to",
+	CLUSTERS_WITH: "clusters_with",
+	PRECEDED_BY: "preceded_by",
+	TRIGGERS: "triggers",
+});
+
+export const CHUNK_TIERS = Object.freeze({
+	T1: 1,
+	T2: 2,
+	T3: 3,
+});
+
+export const QUESTION_LEVELS = Object.freeze({
+	L1_BARE_FACT: 1,
+	L2_EXPLANATION: 2,
+	L3_IMPLICATION: 3,
+	L4_COUNTERFACTUAL: 4,
+	L5_CONDITIONAL: 5,
 });
 
 export const NODE_TYPE_VALUES = Object.freeze(Object.values(NODE_TYPES));
