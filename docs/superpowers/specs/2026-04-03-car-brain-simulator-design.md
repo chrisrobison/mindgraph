@@ -14,40 +14,122 @@ brain process them through the full 13-step retrieval sequence.
 ### What it is
 
 - A CAR Protocol workbench + living memory system
-- Domain-agnostic: ingests any knowledge (code, business, research)
-- Three input modes: text memory input, query panel, JSON file import
+- **Standalone product** that also slides into existing projects/file systems
+- **Runs locally** on your machine, never phones home (except to the AI runner)
+- Domain-agnostic: ingests any knowledge (code, business, research, conversations)
+- Four input modes: text memory input, query panel, JSON file import, **project directory scan**
 - Ships with a Claude instruction manual for full project ingestion
 - Visual: Neural dark 3D aesthetic using Three.js for the graph canvas
+- **AI-powered:** Claude Code (Anthropic API) runs the CAR engine. Swappable to local models later.
 
 ### What it is NOT
 
-- Not a static visualization or educational demo
-- Not a backend service — runs entirely in the browser
-- Not a chat interface — it's a graph workbench with memory processing
+- Not a static visualization or demo. The brain is powered by real AI.
+- Not a cloud service. Everything runs on your machine.
+- Not a chat interface. It's a graph workbench with memory processing.
+- Not locked to one AI provider. Claude Code is the default, local models are planned.
 
 ## Architecture
 
-### Approach: Hybrid (Three.js Canvas + DOM Panels)
+### Two-Layer Architecture
 
-Three.js renders the 3D brain visualization canvas. All other UI (toolbar, inspector,
-input panels, activity log) stays as vanilla Web Components. The PAN event bus bridges
-both worlds.
+**Layer 1: Local Server** (`server.js` or `server.py`)
+A lightweight local server that:
+- Serves the static frontend (HTML/CSS/JS)
+- Proxies AI requests to the Anthropic API (keeps API key server-side, never in browser)
+- Reads the local file system for project ingestion (scans directories, reads files)
+- Persists brain data to disk as JSON (not just localStorage)
+- Exposes a simple REST API for the frontend
 
-**What stays:**
+**Layer 2: Browser Frontend** (Three.js + Web Components)
+The 3D brain visualization and all panel UI. Talks only to the local server.
+
+```
+  Browser (localhost:4173)          Local Server (localhost:4174)
+  ┌──────────────────────┐          ┌──────────────────────────┐
+  │  Three.js 3D Canvas  │          │  Static file serving     │
+  │  Web Component panels│◄────────►│  /api/ingest   (fs scan) │
+  │  PAN event bus       │  REST    │  /api/process  (AI call) │
+  │  graph-store (state) │          │  /api/brain    (persist) │
+  └──────────────────────┘          │  /api/config   (settings)│
+                                    └─────────┬────────────────┘
+                                              │
+                                    ┌─────────▼────────────────┐
+                                    │  AI Runner (pluggable)   │
+                                    │  ├─ Claude (Anthropic API)│ ← default
+                                    │  ├─ Ollama (local)       │ ← future
+                                    │  └─ OpenAI (fallback)    │ ← future
+                                    └──────────────────────────┘
+```
+
+### Running Modes
+
+**Standalone mode** (default):
+```bash
+cd carmindgraph
+node server.js
+# or: python3 server.py
+# Opens http://localhost:4173
+```
+Empty brain. Add memories manually, query, import JSON.
+
+**Project mode** (slide into an existing project):
+```bash
+cd ~/Projects/my-app
+car-brain --project .
+# or: car-brain --project /path/to/project
+```
+The server scans the project directory, ingests files through Claude, and builds
+the initial brain graph. You see your project's knowledge materialize as neurons.
+
+### AI Runner Interface
+
+The runner is pluggable. Every CAR operation goes through a simple interface:
+
+```javascript
+// runner API (server-side)
+runner.generateQuestions(chunk)     // → Question[] at 5 levels
+runner.decompose(query)            // → sub-questions for retrieval
+runner.consolidate(chunks)         // → Tier 2 summaries
+runner.detectPatterns(summaries)   // → Tier 3 schemas
+runner.gradeConfidence(subAnswers) // → overall confidence + gaps
+runner.synthesize(fragments, query)// → reconstructed answer
+runner.detectContradictions(a, b)  // → contradiction analysis
+runner.buildRetrievalCues(chunk)   // → retrieval cues
+```
+
+**Default runner: Claude Code (Claude subscription)**
+The default user has a Claude subscription (Pro/Team/Enterprise), not a raw API key.
+The server integrates via Claude Code CLI (`claude` command), which handles auth
+through the user's existing subscription. No separate API key needed.
+
+- Routine operations (questions, cues, consolidation): uses Claude Code with default model
+- Heavy operations (synthesis, pattern detection, contradictions): uses Claude Code with `--model opus` flag
+- Prompts follow the CAR protocol sections exactly
+- Falls back to Anthropic API (`ANTHROPIC_API_KEY`) if Claude Code CLI is not installed
+
+**Future runners:**
+- Ollama (local models, no API key needed, fully offline)
+- OpenAI (GPT-4o fallback)
+- Raw Anthropic API (for users with API keys instead of subscriptions)
+- Custom (user implements the runner interface)
+
+### What stays from existing codebase
 - PAN event bus (`js/core/pan.js`)
 - Store architecture (graph-store, ui-store, persistence-store)
 - Web Components for all panels
-- localStorage persistence with autosave
 - Undo/redo (snapshot-based)
 
-**What changes:**
+### What changes
 - `graph-canvas` → Three.js WebGL scene (replaces DOM/SVG rendering)
 - Node types → CAR protocol entities (chunk, cluster, question, pattern, trigger)
 - Edge types → CAR relationships (linked_to, amends, contradicts, promotes_to, etc.)
 - Inspector tabs → CAR metadata views
 - Bottom panel tabs → Retrieval log, Consolidation, Contradictions, Questions, Metamemory
-- Runtime → CAR engine (retrieval, scoring, consolidation) replaces mock-agent-runtime
+- Runtime → real AI-powered CAR engine replaces mock-agent-runtime
+- Persistence → disk-based JSON files (alongside localStorage for session state)
 - Seed data → Spain margins demo from the protocol
+- New: lightweight local server for API proxying and file system access
 - New dependency: Three.js via CDN (`<script>` tag, ~150KB)
 
 ### App Layout (4-panel, preserved)
@@ -602,10 +684,40 @@ The graph is already there. The prompt says nothing. The user is home.
 | 9 | Imports a file | Power | Cascade animation, cluster auto-formation |
 | 10 | Returns next day | Belonging | Instant load, graph as they left it, no friction |
 
-## Claude Instruction Manual
+## Project Ingestion
 
-Ships as `CAR_INGESTION_PROTOCOL.md` in the repo root. Tells Claude (or any LLM)
-how to ingest an entire project into the CAR memory graph:
+### Project Mode
+
+When launched with `car-brain --project /path/to/project`, the server:
+
+1. **Scans** the project directory (respects .gitignore, skips node_modules/dist/build)
+2. **Sends** file contents to Claude Code in batches for chunking
+3. **Claude processes** each batch through the CAR protocol:
+   - Breaks content into atomic memory chunks
+   - Classifies each chunk (tier, tags, entities)
+   - Generates questions at 5 levels per chunk
+   - Identifies cross-links and contradictions
+   - Scores initial relevance
+4. **Materializes** the brain graph with cascade animation as chunks arrive
+5. **Runs** initial consolidation (cluster formation, Tier 2 summary generation)
+
+Progress shown in bottom panel: "Ingesting project... 23/47 files processed"
+
+### Supported File Types for Ingestion
+
+Code: `.js`, `.ts`, `.py`, `.go`, `.rs`, `.java`, `.rb`, `.php`, `.css`, `.html`
+Docs: `.md`, `.txt`, `.rst`, `.adoc`
+Config: `.json`, `.yaml`, `.yml`, `.toml`, `.env.example`
+Other: any text file under 100KB
+
+Binary files, images, and files over 100KB are skipped with a log entry.
+
+### Claude Instruction Manual
+
+Ships as `CAR_INGESTION_PROTOCOL.md` in the repo root. This document serves two purposes:
+1. Tells the server how to prompt Claude for each ingestion step
+2. Can be used standalone — a user can run Claude Code manually with this protocol to
+   generate a brain JSON file, then import it
 
 ```
 1. SCAN    — Read all source material (any domain)
@@ -618,7 +730,37 @@ how to ingest an entire project into the CAR memory graph:
 8. EXPORT  — Output as JSON matching the graph document schema
 ```
 
-The output JSON imports directly via the app's File Import.
+## Persistence
+
+### Disk-Based Storage (primary)
+
+Brain data lives on disk, not just localStorage. The server manages persistence.
+
+**Standalone mode:** data stored in `~/.car-brain/brains/<brain-id>/`
+**Project mode:** data stored in `<project>/.car-brain/` (gitignored)
+
+Directory structure:
+```
+.car-brain/
+├── brain.json           # Full graph document (nodes, edges, clusters, viewport)
+├── config.json          # Runner config, project path, preferences
+├── sessions/            # Session history (for session priming)
+│   └── 2026-04-03.json
+└── exports/             # Manual export snapshots
+```
+
+### localStorage (secondary, session state only)
+
+Browser localStorage caches the current session for instant reload:
+- Current viewport position
+- UI state (selected tool, open tabs, dev console visibility)
+- Unsaved edits (flushed to disk on autosave)
+
+### Autosave
+
+Every graph change triggers a debounced save (450ms) to the local server,
+which writes to disk. The browser also caches to localStorage for instant
+reload on refresh.
 
 ## Graph Document Schema (for persistence and import/export)
 
@@ -627,15 +769,20 @@ The output JSON imports directly via the app's File Import.
   id: string,
   title: string,
   version: "1.0.0",
-  nodes: Node[],          // chunks, questions, patterns, triggers
+  project: string | null,    // path to project directory (if project mode)
+  runner: "claude-code" | "anthropic-api" | "ollama" | "custom",
+  nodes: Node[],              // chunks, questions, patterns, triggers
   edges: Edge[],
-  clusters: Cluster[],    // cluster definitions with member IDs
+  clusters: Cluster[],        // cluster definitions with member IDs
   viewport: { x, y, z, zoom, rotationX, rotationY },
   metadata: {
     createdBy: string,
     description: string,
     selection: string[],
-    metamemory: MetamemoryIndex
+    metamemory: MetamemoryIndex,
+    lastSession: ISO8601,
+    totalChunks: number,
+    totalQueries: number
   }
 }
 ```
@@ -722,23 +869,27 @@ These keep the app from drifting into generic AI-generated aesthetics:
 | 3D library | Three.js via CDN | Single dependency, well-documented, handles WebGL, post-processing |
 | Panel UI | Vanilla Web Components (preserved) | Working infrastructure, no rebuild needed |
 | State management | PAN event bus + stores (preserved) | Clean separation, proven pattern |
-| Persistence | localStorage (preserved) | Simple, no server needed |
+| Local server | Node.js (single `server.js`) | Lightest option for API proxying + file system access. No framework. |
+| AI runner | Claude Code CLI (subscription) | User's existing auth, no API key setup. Falls back to raw API. |
+| Persistence | Disk JSON + localStorage cache | Disk for durability, localStorage for instant reload |
 | Build step | None (preserved) | Static file serving, ES modules |
 | Fonts | IBM Plex Sans + IBM Plex Mono | Sharp, technical, monospace for data |
 
-## Current Limitations (inherited, accepted)
+## Current Limitations (accepted for v1)
 
-- No server persistence or collaborative sync
-- Undo/redo is snapshot-based
-- No real LLM integration (consolidation/question generation is rule-based simulation)
+- Undo/redo is snapshot-based (not operation-based)
 - Three.js adds ~150KB CDN dependency
+- Claude Code CLI must be installed for AI features (falls back to ANTHROPIC_API_KEY)
+- No collaborative/multi-user mode
+- Project ingestion is serial (one file at a time to Claude)
 
 ## Security Notes
 
-- Public repository — no secrets
-- CLAUDE.md in .gitignore
-- All data is client-side (localStorage)
-- No external API calls except Three.js CDN
+- Public repository, no secrets in codebase
+- CLAUDE.md and `.car-brain/` in .gitignore
+- API key never in browser (server-side only, or Claude Code handles auth)
+- All brain data stored locally on disk
+- Server binds to localhost only (not network-accessible)
 
 ## Accessibility (desktop-only scope)
 
@@ -779,8 +930,10 @@ Respect `prefers-reduced-motion: reduce`:
 
 ## Not In Scope (deferred)
 
-- Real LLM-powered consolidation (future: connect to Claude API)
-- Server-side persistence / multi-user
-- Mobile/tablet responsive (desktop-first for this phase)
+- Local model runners (Ollama, llama.cpp) — architecture supports it, not v1
+- Mobile/tablet responsive (desktop-first)
 - WebXR / VR mode
 - Audio/haptic feedback on retrieval events
+- Multi-user / collaborative brain editing
+- Real-time file watching (re-ingest on file change)
+- OpenAI / other provider runners

@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.*
+.env.local
+.env.production
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Claude Code
+CLAUDE.md
+.claude/
+
+# CAR Brain local data
+.car-brain/
+
+# IDE & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+build/
+out/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+tmp/
+.tmp/
+*.bak
+*.orig
