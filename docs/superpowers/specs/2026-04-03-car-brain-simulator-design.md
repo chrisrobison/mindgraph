@@ -225,6 +225,44 @@ Three.js via CDN. Post-processing: UnrealBloomPass for glow, optional SSAO.
 | Cluster | Custom shell mesh | MeshBasicMaterial transparent | Encloses member nodes |
 | Trigger | Two ConeGeometry back-to-back | MeshStandardMaterial + emissive | 0.6x, sharp flash on match |
 
+### Node Placement
+
+New chunks placed using force-directed layout within their depth plane:
+- **Tier 1 chunks** land at z=-200, positioned near related chunks (by shared tags/entities). If no relations, placed at a random position within a 200-unit radius of center.
+- **Tier 2 summaries** at z=-400, centered on the cluster they summarize.
+- **Tier 3 schemas** at z=-600, evenly distributed across the deep plane.
+- **Questions** float at z=-100 (between front and mid planes), near their parent chunk.
+- **Force simulation** runs for 50 iterations on layout change (repulsion between same-plane nodes, attraction along edges). Uses lightweight force-directed algorithm, not a physics engine.
+
+### Cluster Shell Shape
+
+Cluster shells use a **bounding sphere** (not convex hull, too expensive for real-time):
+- Compute center of mass of member nodes
+- Radius = max distance to any member + 20% padding
+- Material: `MeshBasicMaterial({ color: cluster_color, transparent: true, opacity: 0.08 })`
+- Wireframe sphere overlay at opacity 0.03 for structure
+- Shell repositions every frame to track member drift during force layout
+
+### Performance Boundary
+
+- Target: 60fps with up to 200 nodes and 400 edges
+- At 200+ nodes: disable ambient particle field, reduce bloom radius
+- At 500+ nodes: switch to instanced rendering (InstancedMesh), disable per-node glow, use LOD (far nodes become points)
+- WebGL context loss: show DOM fallback message, offer JSON export of current state
+
+### Tooltip Design
+
+On hover (300ms delay), show a floating DOM tooltip anchored above the 3D node (CSS2DRenderer):
+
+```
++--[tooltip]------------------+
+| Spain margins dropped...    |  ← content (first 60 chars, ellipsis)
+| T1 · 0.92 · 3 accesses    |  ← tier · relevance · access count
++-----------------------------+
+```
+
+Background: `#161b22` at 95% opacity. Border: 1px `var(--bg-border)`. Font: `var(--font-mono)` at `var(--font-size-sm)`. Max width: 240px. Positioned via `CSS2DObject` so it tracks the node in 3D space.
+
 ### Node Brightness
 
 `emissiveIntensity = relevance_score * (isSelected ? 2.0 : 1.0)`
@@ -250,15 +288,35 @@ Contradiction edges: color `#ff3333`, opacity oscillates 0.3-0.8.
 ### Camera
 
 - Default: orbital view (OrbitControls)
-- Scroll: zoom in/out
-- Click-drag empty space: orbit
-- Auto-focus: when a node is selected, camera smoothly lerps to face it
-- Retrieval mode: camera follows the active retrieval path
+- Home position: camera at (0, 80, 350), looking at (0, 0, -200). Slightly elevated, showing depth layers front-to-back. On first load, camera starts at (0, 200, 600) and slowly swoops down to home over 2 seconds (the "brain waking up" moment).
+- Scroll: zoom in/out (dolly toward/away from look-at target)
+- Click-drag empty space: orbit around look-at target
+- Auto-focus: when a node is selected, camera smoothly lerps to face it (duration 0.6s, easeInOutCubic)
+- Retrieval mode: camera follows the active retrieval path, pulling back for tiered retrieval (step 8), zooming in for synthesis (step 12)
+- Double-tap `H`: return to home position (smooth lerp)
 
 ### Post-Processing
 
 - UnrealBloomPass: threshold 0.8, strength 0.6, radius 0.4
-- Optional fog: `scene.fog = new THREE.FogExp2(0x080c14, 0.0015)` for depth fade
+- Fog: `scene.fog = new THREE.FogExp2(0x080c14, 0.0015)` for depth fade (required, not optional)
+
+### Atmospheric Layer (the "galaxy" feel)
+
+This is what separates a Three.js demo from a living brain-galaxy:
+
+- **Ambient particle field:** ~200 tiny points (`THREE.Points`, size 0.3-0.8, opacity 0.05-0.15) drifting slowly across the scene. Random velocity vectors, no interaction with nodes. Creates the feeling of floating in a living space.
+- **Nebula clouds:** 3-5 large sprite planes (opacity 0.03-0.06) with soft radial gradient textures in `#00f5ff`, `#7b61ff`, `#ff2d78`. Positioned behind clusters at z=-800 to z=-1200. They give dense memory regions a "glow cloud" backdrop.
+- **Star field:** ~500 static points at z=-1500 to z=-2500 (far background). Tiny, white, varying opacity 0.1-0.4. Parallax naturally as the camera orbits, giving depth scale.
+- **Ambient light pulse:** Subtle sine-wave modulation (period ~8s, amplitude 0.05) on the scene ambient light intensity. The whole scene "breathes."
+
+### Canvas Visual Hierarchy (eye tracking order)
+
+1. **Active retrieval path** (when running): particle trail overrides all other focus
+2. **Brightest cluster** (highest aggregate relevance): positioned near camera center on first load
+3. **Hot individual chunks** (recently accessed, high relevance): glow through cluster shells
+4. **Gold question nodes** create secondary focal points, scattered at mid-depth
+5. **Cold chunks and deep-plane schemas** fade into background like distant stars
+6. **Atmospheric particles and nebula clouds** provide spatial context without competing
 
 ## Interaction Design
 
@@ -321,6 +379,34 @@ Contradiction edges: color `#ff3333`, opacity oscillates 0.3-0.8.
 | `Shift+Cmd+Z` | Redo |
 | `1` / `2` / `3` | Filter: show only Tier 1/2/3 |
 | `0` | Show all tiers |
+
+## Micro-Interactions
+
+These are the details that make every touch feel alive.
+
+### Node Birth
+New chunk: scale 0 → 1.0 over 0.4s (easeOutBack with slight overshoot). Emissive ramps from 0 → full over 0.6s. Connected edges draw in with a 0.2s delay each.
+
+### Node Selection
+Selected node: emissive doubles (x2.0). White ring appears around it (torus geometry, 0.1 thickness). All connected edges brighten to full opacity. Unrelated nodes dim to 40% opacity over 0.3s.
+
+### Node Hover
+Hover (300ms threshold): node scale 1.0 → 1.1 over 0.15s. Tooltip appears. Subtle white outline (0.5px).
+
+### Node Deletion (Amendment)
+Node doesn't vanish. It shrinks to 0.3x scale, drops to 10% opacity, and drifts to the back plane (z=-800) over 0.8s. An amendment edge traces from the new correction chunk to the old one. The old node stays, just dim. Never truly deleted. (CAR Principle 2)
+
+### Edge Creation
+New edge: line draws from source to target over 0.3s (dashOffset animation). Then particle burst at the connection point (10 particles, fan out and fade over 0.4s).
+
+### Retrieval Hit
+When a chunk is "found" during retrieval: brief scale pulse (1.0 → 1.3 → 1.0 over 0.2s). Particle burst (same as edge creation). Emissive spikes to 3x then settles to 2x.
+
+### Cluster Formation
+Chunks drift toward cluster center over 0.5s (spring physics). Shell fades in from 0% → 8% opacity over 0.3s. Gentle "whomp" visual (shell scale 0.8 → 1.0, ease out).
+
+### Contradiction Detection
+Both conflicting nodes flash red twice (0.1s on, 0.1s off). Red dashed edge materializes between them over 0.3s. Edge then pulses continuously (opacity 0.3 → 0.8 at 1.5s period).
 
 ## 13-Step Retrieval Sequence
 
@@ -395,16 +481,126 @@ Plus a minimap showing all nodes as colored dots.
 | Questions | Unanswered questions from self-questioning engine (S4.5). Badge count. |
 | Metamemory | Knowledge inventory: topic coverage, known gaps, confidence per domain |
 
-## First-Time Experience
+## Interaction States
 
-No saved session → load demo brain using Spain margins example from the protocol:
+Every feature has five states. If we don't spec them, the implementer ships "no items found."
 
+### Canvas States
+
+| State | What the user sees |
+|-------|-------------------|
+| **Loading (first load)** | Dark canvas with ambient particles drifting. Faint "neurons connecting..." text centered, pulsing at 0.5Hz. Star field visible. After 1-2s the seed graph fades in node-by-node. |
+| **Empty (no chunks)** | Full atmospheric layer active (particles, nebula clouds, star field). Centered text: "This brain is empty. Add a memory to begin." Gentle glow ring at center where the first node will appear. Memory input field pulses softly. |
+| **Active (normal use)** | Full 3D graph with all atmospheric effects. Nodes, edges, clusters rendered per spec. |
+| **Retrieval running** | 13-step sequence animating. Step overlay visible. Non-participating nodes dim to 20% opacity. Active path glows bright. Bottom panel streams step logs in real-time. |
+| **Error (WebGL failure)** | Fallback message: "Your browser doesn't support WebGL. Try Chrome or Firefox." Rendered as DOM overlay, not canvas. |
+
+### Memory Input States
+
+| State | What the user sees |
+|-------|-------------------|
+| **Empty** | Placeholder: "Add a new memory chunk..." in #484f58 |
+| **Typing** | Border glows cyan (#00f5ff at 30% opacity). Character count not shown (no limit). |
+| **Processing** | Input disabled briefly, small spinner icon replaces the submit arrow. New chunk node's birth animation plays. |
+| **Success** | Input clears. Brief green flash on the border (0.3s). Inspector opens on new chunk. Activity log appends "Chunk created: [first 30 chars]..." |
+
+### Query Input States
+
+| State | What the user sees |
+|-------|-------------------|
+| **Empty** | Placeholder: "Ask the brain a question..." in #484f58 |
+| **Typing** | Border glows gold (#ffd93d at 30% opacity). |
+| **Retrieval running** | Input disabled. 13-step progress dots animate. Step overlay appears on canvas. |
+| **Result ready** | Input stays with the query text (not cleared). Bottom panel Retrieval Log tab auto-activates. Response shows with confidence score and source citations. |
+| **Low confidence** | Same as result, but confidence badge is red. Response includes: "Confidence: LOW. Gaps: [specific missing info]." |
+| **No matches** | Response: "No relevant memories found. Try adding more context, or rephrase." The brain does a brief "search sweep" animation (particle wave radiates outward and fades). |
+
+### File Import States
+
+| State | What the user sees |
+|-------|-------------------|
+| **Idle** | Import button in toolbar, subtle. |
+| **Drag hover** | Full-canvas overlay: dark with cyan border and text "Drop JSON to import memories". |
+| **Importing** | Progress bar at top of canvas: "Importing 47 chunks..." Nodes appear one-by-one with cascade animation. |
+| **Success** | Progress bar fills, turns green, fades. Activity log: "Imported 47 chunks, 12 edges, 3 clusters." |
+| **Error (invalid JSON)** | Toast notification at top-right: "Import failed: invalid JSON at line 23." Red border, auto-dismiss after 8s. |
+| **Error (schema mismatch)** | Toast: "Import failed: missing required field 'content' in chunk 4." |
+
+### Inspector States
+
+| State | What the user sees |
+|-------|-------------------|
+| **Nothing selected** | "Select a memory chunk to inspect its metadata, or ask a question to watch the brain think." Plus minimap of all nodes as colored dots by tier. |
+| **Chunk selected** | Full metadata view with tabs. Relevance score gauge animated. |
+| **Multiple selected** | Header: "3 chunks selected". Shows shared tags, aggregate relevance, option to bulk-link or bulk-tag. |
+| **Editing field** | Inline edit with save/cancel. Field border glows cyan during edit. Esc cancels. |
+
+### Bottom Panel States
+
+| Tab | Empty State |
+|-----|------------|
+| **Retrieval Log** | "No queries yet. Ask the brain a question to see the retrieval process." |
+| **Consolidation** | "No consolidation activity. Add more memories to trigger tier promotion." |
+| **Contradictions** | "No contradictions detected. Conflicting memories will appear here." |
+| **Questions** | "No unanswered questions. The self-questioning engine activates as memories accumulate." |
+| **Metamemory** | "Knowledge inventory empty. The brain builds its self-model as you add memories." |
+
+## First-Time Experience & Emotional Arc
+
+### The First 5 Seconds (visceral)
+
+The user opens the app. The screen is almost black. Ambient particles drift slowly.
+A single faint glow appears at center. Then another. Then edges begin to trace between
+them, like synapses wiring themselves. Over 2 seconds, the seed graph materializes
+node-by-node, clusters forming, edges threading, the camera slowly swooping from high
+above down into the brain. Bloom intensifies as the graph "wakes up."
+
+The user's first feeling should be: "whoa."
+
+### The First 5 Minutes (behavioral)
+
+The seed graph is loaded: the Spain margins example from the CAR protocol.
+
+Contents:
 - ~15 chunks across all 3 tiers
 - Pre-formed clusters (Spain account, logistics)
 - Questions at multiple levels
-- One active contradiction (margin data: 22% vs 18%)
+- One active contradiction (margin data: 22% vs 18%, red pulsing edge)
 - One prospective trigger ("raise pricing issue when Idan mentioned")
-- Guided prompt at top: "Type a question to watch the brain recall, or add a new memory."
+
+A subtle prompt fades in at the top of the canvas (not a modal, not a banner, just
+text that belongs in the space): "Ask something. Try: What happened with Spain margins?"
+
+The user types a query. The 13-step retrieval fires. This is the "aha" moment. They
+watch particles stream from the query node into the graph, chunks light up, clusters
+form, contradictions flash red, and a graded response appears below. They understand
+what this thing does.
+
+### The First Session (reflective)
+
+After the demo query, the prompt shifts: "Now add your own memory. Anything you know."
+The user types a fact. They watch a new neuron appear, birth animation, questions
+branch out, links form to existing chunks. They get it: this thing learns.
+
+### Returning User
+
+If autosave data exists, the camera starts at the home position (no swoop animation).
+The graph is already there. The prompt says nothing. The user is home.
+
+### User Journey Storyboard
+
+| Step | User does | User feels | Design supports it with |
+|------|----------|------------|------------------------|
+| 1 | Opens app | Curiosity | Dark screen, slow materialization, camera swoop |
+| 2 | Sees the seed graph | Awe | 3D depth, glowing nodes, ambient particles, nebula clouds |
+| 3 | Reads the prompt | Invitation | Non-intrusive text, not a modal wall |
+| 4 | Types first query | Anticipation | Gold border glow, query node appears |
+| 5 | Watches retrieval | Wonder | 13-step animation, particles flowing, chunks lighting up |
+| 6 | Reads the response | Understanding | Confidence grade, source citations, camera following path |
+| 7 | Adds first memory | Ownership | Birth animation, questions branching, links forming |
+| 8 | Explores the graph | Mastery | Orbit camera, hover tooltips, click to inspect |
+| 9 | Imports a file | Power | Cascade animation, cluster auto-formation |
+| 10 | Returns next day | Belonging | Instant load, graph as they left it, no friction |
 
 ## Claude Instruction Manual
 
@@ -444,6 +640,81 @@ The output JSON imports directly via the app's File Import.
 }
 ```
 
+## Design Tokens (CSS Variables)
+
+All visual values go through CSS custom properties. No magic numbers in component CSS.
+
+```css
+:root {
+  /* Background */
+  --bg-canvas: #080c14;
+  --bg-panel: #0d1117;
+  --bg-input: #161b22;
+  --bg-border: #21262d;
+  --bg-hover: #161b22;
+
+  /* Data colors (tier-mapped, never decorative) */
+  --color-t1: #00f5ff;      /* Tier 1 episodes, cyan */
+  --color-t2: #7b61ff;      /* Tier 2 summaries, purple */
+  --color-t3: #ff2d78;      /* Tier 3 schemas, pink */
+  --color-question: #ffd93d; /* Questions, gold */
+  --color-trigger: #ff9f1c;  /* Triggers, amber */
+  --color-contradiction: #ff3333; /* Conflicts, red */
+  --color-cluster: rgba(255, 255, 255, 0.2); /* Cluster shells */
+
+  /* Text */
+  --text-primary: #e6edf3;
+  --text-secondary: #c9d1d9;
+  --text-muted: #484f58;
+  --text-accent: #ffffff;
+
+  /* Typography */
+  --font-sans: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radii */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.6s ease-in-out;
+
+  /* Layout */
+  --toolbar-height: 44px;
+  --palette-width: 56px;
+  --inspector-width: 300px;
+  --bottom-panel-height: 180px;
+}
+```
+
+## Anti-Slop Rules
+
+These keep the app from drifting into generic AI-generated aesthetics:
+
+1. **Colors are data, not decoration.** Cyan = Tier 1. Purple = Tier 2. Pink = Tier 3. Gold = Questions. Never use these as background gradients, decorative accents, or branding.
+2. **Tabs are text-only.** Underline-active style, `IBM Plex Mono` 10px uppercase, `#484f58` inactive / `#00f5ff` active with 2px bottom border. No pills, no background fills, no rounded containers.
+3. **No card grids.** Inspector sections use stacked key-value rows, not cards. Bottom panel uses log-style rows, not cards.
+4. **No decorative elements.** Every visual element maps to data. The atmospheric particles represent ambient "neural activity," not decoration. If it doesn't mean something, cut it.
+5. **Monospace for data, sans-serif for labels.** `IBM Plex Mono` for all values, scores, IDs, timestamps. `IBM Plex Sans` for section headers and labels only.
+6. **No border-radius > 6px.** Buttons: 4px. Panels: 0px (sharp edges). Input fields: 4px. Nodes are 3D geometry, not CSS.
+7. **No colored left-borders on anything.** Tags use 1px borders in the data color at 40% opacity.
+
 ## Technical Decisions
 
 | Decision | Choice | Rationale |
@@ -468,6 +739,43 @@ The output JSON imports directly via the app's File Import.
 - CLAUDE.md in .gitignore
 - All data is client-side (localStorage)
 - No external API calls except Three.js CDN
+
+## Accessibility (desktop-only scope)
+
+No mobile/tablet. But desktop a11y is not optional.
+
+### Keyboard Navigation
+
+- **Tab order:** Toolbar inputs → Palette tools → Inspector tabs → Bottom panel tabs
+- **Canvas shortcuts:** All tool shortcuts (V, H, C, L, Q, T) work without focusing the canvas
+- **Arrow keys:** When canvas is focused, arrow keys orbit camera (5 degrees per press)
+- **Enter on node:** Selects node, opens inspector (equivalent to click)
+- **Tab through nodes:** Tab/Shift+Tab cycles through visible nodes in relevance order
+- **Esc:** Progressive escape: close popover → clear selection → deselect tool → return to Select
+
+### Screen Reader Strategy
+
+The 3D canvas is inherently non-accessible to screen readers. Mitigation:
+- Canvas element gets `role="img"` with `aria-label` describing current state: "Brain graph with 15 memory chunks, 3 clusters, 1 active contradiction"
+- All panel content (inspector, bottom panel, toolbar) is standard DOM with proper ARIA landmarks
+- Inspector serves as the screen reader's "view" of the selected node
+- Bottom panel retrieval log is a live region (`aria-live="polite"`) that announces step progress
+
+### Color Contrast
+
+Neon-on-dark is hard for contrast. Minimum requirements:
+- Panel text (#c9d1d9 on #0d1117): ratio 9.5:1 (passes AAA)
+- Muted text (#484f58 on #0d1117): ratio 3.1:1 (passes AA for large text only, used for labels)
+- Active tab (#00f5ff on #0d1117): ratio 8.7:1 (passes AAA)
+- Tag text (data colors on #161b22): all pass AA minimum
+
+### Reduced Motion
+
+Respect `prefers-reduced-motion: reduce`:
+- Skip the first-load camera swoop (instant position)
+- Disable ambient particle drift
+- Retrieval sequence: show state changes without animation (instant step transitions)
+- Bloom post-processing stays (it's not motion, it's a visual filter)
 
 ## Not In Scope (deferred)
 
