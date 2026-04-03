@@ -11,6 +11,10 @@
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
+.mg-node-instance {
+  position: absolute;
+}
+
 .mg-node:hover {
   border-color: #a7bfdc;
   box-shadow: 0 18px 34px -24px rgba(24, 50, 84, 0.56);
@@ -25,6 +29,11 @@
 .mg-node-instance.is-connect-source .mg-node {
   border-color: #a56518;
   box-shadow: 0 0 0 2px rgba(165, 101, 24, 0.18), 0 20px 34px -26px rgba(95, 58, 13, 0.52);
+}
+
+.mg-node-instance.is-connect-target .mg-node {
+  border-color: #2f6ba8;
+  box-shadow: 0 0 0 2px rgba(47, 107, 168, 0.2), 0 20px 34px -26px rgba(24, 56, 98, 0.56);
 }
 
 .mg-node h4 {
@@ -45,6 +54,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.6rem;
+  padding-right: 1rem;
 }
 
 .node-meta-grid {
@@ -191,4 +201,29 @@
 
 .mg-node.action {
   border-left: 4px solid #b23f43;
+}
+
+.node-connect-handle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid #7f98b8;
+  background: #345f8f;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  cursor: crosshair;
+  padding: 0;
+  z-index: 2;
+}
+
+.node-connect-handle:hover {
+  background: #1f4a7b;
+  border-color: #567da8;
+}
+
+.node-connect-handle:focus-visible {
+  outline: 2px solid #7fa6d3;
+  outline-offset: 1px;
 }

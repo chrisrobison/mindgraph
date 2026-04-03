@@ -3,6 +3,7 @@ import { EVENTS } from "../core/event-constants.js";
 import {
   createEdge,
   createNode,
+  findEdgeById,
   findNodeById,
   normalizeGraphDocument,
   updateNode as patchGraphNode,
@@ -17,6 +18,7 @@ const unique = (items) => [...new Set((Array.isArray(items) ? items : []).filter
 class GraphStore {
   #document = null;
   #selectedNodeIds = [];
+  #selectedEdgeId = null;
   #undoStack = [];
   #redoStack = [];
 
@@ -77,7 +79,25 @@ class GraphStore {
 
     subscribe(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, ({ payload }) => {
       if (!payload) return;
-      this.addEdge(payload.edge ?? payload);
+      this.addEdge(payload.edge ?? payload, { selectAfterCreate: Boolean(payload?.selectAfterCreate) });
+    });
+
+    subscribe(EVENTS.GRAPH_EDGE_SELECT_REQUESTED, ({ payload }) => {
+      this.setSelectedEdge(payload?.edgeId ?? null);
+    });
+
+    subscribe(EVENTS.GRAPH_EDGE_SELECTION_CLEAR_REQUESTED, () => {
+      this.clearSelectedEdge();
+    });
+
+    subscribe(EVENTS.GRAPH_EDGE_UPDATE_REQUESTED, ({ payload }) => {
+      if (!payload?.edgeId || !payload?.patch) return;
+      this.updateEdge(payload.edgeId, payload.patch);
+    });
+
+    subscribe(EVENTS.GRAPH_EDGE_DELETE_REQUESTED, ({ payload }) => {
+      if (!payload?.edgeId) return;
+      this.removeEdge(payload.edgeId);
     });
 
     subscribe(EVENTS.GRAPH_VIEWPORT_UPDATE_REQUESTED, ({ payload }) => {
@@ -219,6 +239,16 @@ class GraphStore {
     return node ? clone(node) : null;
   }
 
+  getEdge(edgeId) {
+    if (!this.#document) return null;
+    const edge = findEdgeById(this.#document, edgeId);
+    return edge ? clone(edge) : null;
+  }
+
+  getSelectedEdgeId() {
+    return this.#selectedEdgeId;
+  }
+
   getSelectedNodeIds() {
     return [...this.#selectedNodeIds];
   }
@@ -251,6 +281,7 @@ class GraphStore {
   }
 
   clearSelection() {
+    this.clearSelectedEdge({ emitChange: false });
     if (!this.#selectedNodeIds.length) {
       publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-store" });
       publish(EVENTS.GRAPH_SELECTION_SET, { nodeIds: [], nodeId: null, origin: "graph-store" });
@@ -267,6 +298,7 @@ class GraphStore {
   setSelection(nodeIds = []) {
     if (!this.#document) return;
 
+    this.clearSelectedEdge({ emitChange: false });
     const validIds = unique(nodeIds).filter((nodeId) => Boolean(findNodeById(this.#document, nodeId)));
     this.#selectedNodeIds = validIds;
     this.#persistSelectionToDocument();
@@ -389,6 +421,10 @@ class GraphStore {
       );
     });
 
+    if (this.#selectedEdgeId && !findEdgeById(this.#document, this.#selectedEdgeId)) {
+      this.clearSelectedEdge({ emitChange: false });
+    }
+
     if (this.#selectedNodeIds.includes(nodeId)) {
       this.#selectedNodeIds = this.#selectedNodeIds.filter((id) => id !== nodeId);
       this.#persistSelectionToDocument();
@@ -405,7 +441,39 @@ class GraphStore {
     return clone(node);
   }
 
-  addEdge(edgeLike = {}) {
+  setSelectedEdge(edgeId) {
+    if (!this.#document || !edgeId) {
+      this.clearSelectedEdge();
+      return null;
+    }
+
+    const edge = this.getEdge(edgeId);
+    if (!edge) return null;
+
+    this.#selectedEdgeId = edge.id;
+    this.#selectedNodeIds = [];
+    this.#persistSelectionToDocument();
+    publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-store" });
+    publish(EVENTS.GRAPH_SELECTION_SET, { nodeIds: [], nodeId: null, origin: "graph-store" });
+    publish(EVENTS.GRAPH_EDGE_SELECTED, {
+      edgeId: edge.id,
+      edge,
+      origin: "graph-store"
+    });
+    this.#emitDocumentChanged("edge_selection");
+    return edge;
+  }
+
+  clearSelectedEdge({ emitChange = true } = {}) {
+    if (!this.#selectedEdgeId) return;
+
+    this.#selectedEdgeId = null;
+    this.#persistSelectionToDocument();
+    publish(EVENTS.GRAPH_EDGE_SELECTION_CLEARED, { origin: "graph-store" });
+    if (emitChange) this.#emitDocumentChanged("edge_selection_cleared");
+  }
+
+  addEdge(edgeLike = {}, { selectAfterCreate = false } = {}) {
     if (!this.#document) return null;
 
     const edge = createEdge(edgeLike);
@@ -432,7 +500,69 @@ class GraphStore {
       origin: "graph-store"
     });
 
+    if (selectAfterCreate) {
+      this.setSelectedEdge(edge.id);
+    }
+
     this.#emitDocumentChanged("edge_created", { edgeId: edge.id });
+    return clone(edge);
+  }
+
+  updateEdge(edgeId, patch) {
+    if (!this.#document || !edgeId || !patch) return null;
+    const existing = findEdgeById(this.#document, edgeId);
+    if (!existing) return null;
+
+    const normalizedPatch = { ...patch };
+    if (normalizedPatch.type != null) normalizedPatch.type = String(normalizedPatch.type);
+    if (normalizedPatch.label != null) normalizedPatch.label = String(normalizedPatch.label);
+
+    this.#applyMutation(() => {
+      this.#document.edges = (this.#document.edges ?? []).map((edge) =>
+        edge.id === edgeId ? { ...edge, ...normalizedPatch } : edge
+      );
+    });
+
+    const edge = this.getEdge(edgeId);
+    publish(EVENTS.GRAPH_EDGE_UPDATED, {
+      edgeId,
+      patch: normalizedPatch,
+      edge,
+      origin: "graph-store"
+    });
+
+    if (this.#selectedEdgeId === edgeId && edge) {
+      publish(EVENTS.GRAPH_EDGE_SELECTED, {
+        edgeId,
+        edge,
+        origin: "graph-store"
+      });
+    }
+
+    this.#emitDocumentChanged("edge_updated", { edgeId });
+    return edge;
+  }
+
+  removeEdge(edgeId) {
+    if (!this.#document || !edgeId) return null;
+    const edge = findEdgeById(this.#document, edgeId);
+    if (!edge) return null;
+
+    this.#applyMutation(() => {
+      this.#document.edges = (this.#document.edges ?? []).filter((entry) => entry.id !== edgeId);
+    });
+
+    if (this.#selectedEdgeId === edgeId) {
+      this.clearSelectedEdge({ emitChange: false });
+    }
+
+    publish(EVENTS.GRAPH_EDGE_DELETED, {
+      edgeId,
+      edge: clone(edge),
+      origin: "graph-store"
+    });
+
+    this.#emitDocumentChanged("edge_deleted", { edgeId });
     return clone(edge);
   }
 
@@ -460,6 +590,18 @@ class GraphStore {
   }
 
   #emitSelectionState() {
+    if (this.#selectedEdgeId) {
+      const edge = this.getEdge(this.#selectedEdgeId);
+      if (edge) {
+        publish(EVENTS.GRAPH_EDGE_SELECTED, {
+          edgeId: edge.id,
+          edge,
+          origin: "graph-store"
+        });
+        return;
+      }
+    }
+
     if (!this.#selectedNodeIds.length) {
       publish(EVENTS.GRAPH_SELECTION_CLEARED, { origin: "graph-store" });
       publish(EVENTS.GRAPH_SELECTION_SET, { nodeIds: [], nodeId: null, origin: "graph-store" });
@@ -490,18 +632,23 @@ class GraphStore {
   #syncSelectionFromDocument() {
     const selected = this.#document?.metadata?.selection;
 
-    if (Array.isArray(selected)) {
+    if (Array.isArray(selected) && selected.length) {
       this.#selectedNodeIds = unique(selected).filter((nodeId) => Boolean(findNodeById(this.#document, nodeId)));
+      this.#selectedEdgeId = null;
       return;
     }
 
     const fallbackNodeId = this.#document?.metadata?.selectedNodeId;
     if (fallbackNodeId && findNodeById(this.#document, fallbackNodeId)) {
       this.#selectedNodeIds = [fallbackNodeId];
+      this.#selectedEdgeId = null;
       return;
     }
 
     this.#selectedNodeIds = [];
+    const selectedEdgeId = this.#document?.metadata?.selectedEdgeId;
+    this.#selectedEdgeId =
+      selectedEdgeId && findEdgeById(this.#document, selectedEdgeId) ? selectedEdgeId : null;
   }
 
   #persistSelectionToDocument() {
@@ -509,7 +656,8 @@ class GraphStore {
     this.#document.metadata = {
       ...(this.#document.metadata ?? {}),
       selectedNodeId: this.#selectedNodeIds[0] ?? null,
-      selection: [...this.#selectedNodeIds]
+      selection: [...this.#selectedNodeIds],
+      selectedEdgeId: this.#selectedEdgeId ?? null
     };
   }
 }

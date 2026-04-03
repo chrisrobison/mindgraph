@@ -2,11 +2,11 @@ import {
   clampGraphPoint,
   clampZoom,
   formatEdgeLabel,
+  NODE_SIZE_BY_TYPE,
   NODE_TEMPLATES,
   WORLD_SIZE
 } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
-import { EDGE_TYPE_VALUES } from "../core/types.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { uiStore } from "../store/ui-store.js";
@@ -22,22 +22,21 @@ const isRedoShortcut = (event) =>
 
 class GraphCanvas extends HTMLElement {
   #selectedNodeIds = [];
+  #selectedEdgeId = null;
   #activeTool = "select";
   #connectState = { sourceNodeId: null };
+  #connectDragState = null;
   #dispose = [];
   #viewport = { x: 0, y: 0, zoom: 1 };
   #workspaceEl = null;
   #sceneEl = null;
   #nodeLayerEl = null;
   #edgeLayerEl = null;
+  #edgeDraftEl = null;
   #marqueeEl = null;
-  #edgePopoverEl = null;
-  #edgeTypeField = null;
-  #edgeLabelField = null;
   #panState = null;
   #dragState = null;
   #marqueeState = null;
-  #edgePopoverState = null;
 
   connectedCallback() {
     this.#renderShell();
@@ -80,10 +79,6 @@ class GraphCanvas extends HTMLElement {
     this.#dispose.push(
       subscribe(EVENTS.TOOLBAR_TOOL_CHANGED, ({ payload }) => {
         this.#activeTool = payload?.tool ?? "select";
-        if (this.#activeTool !== "connect") {
-          this.#connectState.sourceNodeId = null;
-          this.#closeEdgePopover();
-        }
         this.#syncInteractionMode();
         this.#highlightSelection();
       })
@@ -101,6 +96,20 @@ class GraphCanvas extends HTMLElement {
     );
 
     this.#dispose.push(
+      subscribe(EVENTS.GRAPH_EDGE_SELECTED, ({ payload }) => {
+        this.#selectedEdgeId = payload?.edgeId ?? null;
+        this.#renderGraph();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_EDGE_SELECTION_CLEARED, () => {
+        this.#selectedEdgeId = null;
+        this.#renderGraph();
+      })
+    );
+
+    this.#dispose.push(
       subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
         this.#selectedNodeIds = [];
         this.#highlightSelection();
@@ -109,6 +118,7 @@ class GraphCanvas extends HTMLElement {
 
     this.#syncInteractionMode();
     this.#selectedNodeIds = graphStore.getSelectedNodeIds();
+    this.#selectedEdgeId = graphStore.getSelectedEdgeId();
     this.#renderGraph();
   }
 
@@ -128,22 +138,6 @@ class GraphCanvas extends HTMLElement {
               <div class="graph-node-layer" data-role="nodes"></div>
             </div>
             <div class="graph-marquee" data-role="marquee" hidden></div>
-            <div class="graph-edge-popover" data-role="edge-popover" hidden>
-              <label>
-                Edge Type
-                <select data-role="edge-type" name="edge-type">
-                  ${EDGE_TYPE_VALUES.map((type) => `<option value="${type}">${type}</option>`).join("")}
-                </select>
-              </label>
-              <label>
-                Label
-                <input data-role="edge-label" name="edge-label" type="text" placeholder="Optional label" />
-              </label>
-              <div class="graph-edge-popover-actions">
-                <button type="button" data-action="edge-cancel">Cancel</button>
-                <button type="button" data-action="edge-create">Create Edge</button>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -154,12 +148,8 @@ class GraphCanvas extends HTMLElement {
     this.#nodeLayerEl = this.querySelector('[data-role="nodes"]');
     this.#edgeLayerEl = this.querySelector('[data-role="edges"]');
     this.#marqueeEl = this.querySelector('[data-role="marquee"]');
-    this.#edgePopoverEl = this.querySelector('[data-role="edge-popover"]');
-    this.#edgeTypeField = this.querySelector('[data-role="edge-type"]');
-    this.#edgeLabelField = this.querySelector('[data-role="edge-label"]');
 
     this.#bindInteractionEvents();
-    this.#bindEdgePopoverEvents();
     this.#applyViewportTransform();
   }
 
@@ -178,32 +168,6 @@ class GraphCanvas extends HTMLElement {
       },
       { passive: false }
     );
-  }
-
-  #bindEdgePopoverEvents() {
-    this.querySelector('[data-action="edge-cancel"]')?.addEventListener("click", () => {
-      this.#closeEdgePopover();
-      this.#connectState.sourceNodeId = null;
-      this.#highlightSelection();
-    });
-
-    this.querySelector('[data-action="edge-create"]')?.addEventListener("click", () => {
-      this.#commitEdgeFromPopover();
-    });
-
-    this.#edgeTypeField?.addEventListener("change", () => {
-      if (!this.#edgePopoverState) return;
-
-      this.#edgePopoverState.edgeType = this.#edgeTypeField.value;
-      if (!this.#edgePopoverState.labelTouched) {
-        this.#edgeLabelField.value = formatEdgeLabel(this.#edgePopoverState.edgeType);
-      }
-    });
-
-    this.#edgeLabelField?.addEventListener("input", () => {
-      if (!this.#edgePopoverState) return;
-      this.#edgePopoverState.labelTouched = true;
-    });
   }
 
   #onWorkspacePointerDown(event) {
@@ -253,6 +217,17 @@ class GraphCanvas extends HTMLElement {
   }
 
   #onWorkspacePointerMove(event) {
+    if (this.#connectDragState && event.pointerId === this.#connectDragState.pointerId) {
+      const worldPoint = this.#screenToWorld(event.clientX, event.clientY);
+      this.#connectDragState.pointerWorld = worldPoint;
+      const hoveredNodeId = this.#findNodeIdAtClientPoint(event.clientX, event.clientY);
+      this.#connectDragState.hoveredNodeId =
+        hoveredNodeId && hoveredNodeId !== this.#connectDragState.sourceNodeId ? hoveredNodeId : null;
+      this.#renderConnectDraft();
+      this.#highlightSelection();
+      return;
+    }
+
     if (this.#dragState && event.pointerId === this.#dragState.pointerId) {
       const worldPoint = this.#screenToWorld(event.clientX, event.clientY);
       const nextX = Math.round(worldPoint.x - this.#dragState.offsetX);
@@ -288,6 +263,12 @@ class GraphCanvas extends HTMLElement {
   }
 
   #onWorkspacePointerUp(event) {
+    if (this.#connectDragState && event.pointerId === this.#connectDragState.pointerId) {
+      this.#workspaceEl.releasePointerCapture(event.pointerId);
+      this.#commitConnectDrag();
+      return;
+    }
+
     if (this.#dragState && event.pointerId === this.#dragState.pointerId) {
       this.#workspaceEl.releasePointerCapture(event.pointerId);
       this.#workspaceEl.classList.remove("is-dragging-node");
@@ -372,15 +353,8 @@ class GraphCanvas extends HTMLElement {
   #onWorkspaceKeyDown(event) {
     if (event.key === "Escape") {
       event.preventDefault();
-      if (this.#edgePopoverState) {
-        this.#closeEdgePopover();
-        this.#connectState.sourceNodeId = null;
-        this.#highlightSelection();
-        return;
-      }
-
-      if (this.#connectState.sourceNodeId) {
-        this.#connectState.sourceNodeId = null;
+      if (this.#connectDragState) {
+        this.#cancelConnectDrag();
         this.#highlightSelection();
         return;
       }
@@ -436,11 +410,6 @@ class GraphCanvas extends HTMLElement {
     this.#workspaceEl.focus();
     event.stopPropagation();
 
-    if (this.#activeTool === "connect") {
-      this.#handleConnectClick(node);
-      return;
-    }
-
     publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, {
       nodeId: node.id,
       additive: event.shiftKey,
@@ -465,93 +434,6 @@ class GraphCanvas extends HTMLElement {
     };
   }
 
-  #handleConnectClick(node) {
-    if (!this.#connectState.sourceNodeId) {
-      this.#connectState.sourceNodeId = node.id;
-      publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, { nodeId: node.id, origin: "graph-canvas" });
-      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-        level: "info",
-        message: `Connect mode: source set to ${node.label}`
-      });
-      this.#highlightSelection();
-      return;
-    }
-
-    const sourceNodeId = this.#connectState.sourceNodeId;
-    const targetNodeId = node.id;
-    if (sourceNodeId === targetNodeId) return;
-
-    this.#openEdgePopover(sourceNodeId, targetNodeId);
-  }
-
-  #openEdgePopover(sourceNodeId, targetNodeId) {
-    const document = graphStore.getDocument();
-    const source = (document?.nodes ?? []).find((node) => node.id === sourceNodeId);
-    const target = (document?.nodes ?? []).find((node) => node.id === targetNodeId);
-    if (!source || !target || !this.#edgePopoverEl) return;
-
-    const edgeType = "depends_on";
-    const label = formatEdgeLabel(edgeType);
-
-    this.#edgePopoverState = {
-      sourceNodeId,
-      targetNodeId,
-      edgeType,
-      labelTouched: false
-    };
-
-    this.#edgeTypeField.value = edgeType;
-    this.#edgeLabelField.value = label;
-
-    const worldX = ((source.position?.x ?? 0) + (target.position?.x ?? 0)) / 2;
-    const worldY = ((source.position?.y ?? 0) + (target.position?.y ?? 0)) / 2;
-    const screenX = worldX * this.#viewport.zoom + this.#viewport.x;
-    const screenY = worldY * this.#viewport.zoom + this.#viewport.y;
-
-    this.#edgePopoverEl.hidden = false;
-    this.#edgePopoverEl.style.left = `${screenX}px`;
-    this.#edgePopoverEl.style.top = `${screenY}px`;
-    this.#edgeLabelField.focus();
-  }
-
-  #commitEdgeFromPopover() {
-    if (!this.#edgePopoverState) return;
-
-    const edgeType = EDGE_TYPE_VALUES.includes(this.#edgeTypeField.value)
-      ? this.#edgeTypeField.value
-      : "depends_on";
-    const rawLabel = String(this.#edgeLabelField.value ?? "").trim();
-
-    publish(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, {
-      source: this.#edgePopoverState.sourceNodeId,
-      target: this.#edgePopoverState.targetNodeId,
-      type: edgeType,
-      label: rawLabel || formatEdgeLabel(edgeType),
-      origin: "graph-canvas"
-    });
-
-    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-      level: "info",
-      message: `Created edge ${edgeType}`
-    });
-
-    publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, {
-      nodeId: this.#edgePopoverState.targetNodeId,
-      origin: "graph-canvas"
-    });
-
-    this.#closeEdgePopover();
-    this.#connectState.sourceNodeId = null;
-    this.#highlightSelection();
-  }
-
-  #closeEdgePopover() {
-    this.#edgePopoverState = null;
-    if (this.#edgePopoverEl) {
-      this.#edgePopoverEl.hidden = true;
-    }
-  }
-
   #applyDragPreview() {
     if (!this.#dragState) return;
 
@@ -571,7 +453,105 @@ class GraphCanvas extends HTMLElement {
         : node
     );
 
-    renderEdges(this.#edgeLayerEl, previewNodes, document?.edges ?? []);
+    renderEdges(this.#edgeLayerEl, previewNodes, document?.edges ?? [], this.#selectedEdgeId);
+    this.#bindEdgePointerEvents();
+    this.#renderConnectDraft();
+  }
+
+  #onConnectHandlePointerDown(event, node) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.#workspaceEl.focus();
+
+    const sourcePoint = this.#connectionPointForNode(node);
+    const pointerWorld = this.#screenToWorld(event.clientX, event.clientY);
+    this.#connectState.sourceNodeId = node.id;
+    this.#connectDragState = {
+      pointerId: event.pointerId,
+      sourceNodeId: node.id,
+      sourcePoint,
+      pointerWorld,
+      hoveredNodeId: null
+    };
+
+    this.#workspaceEl.setPointerCapture(event.pointerId);
+    publish(EVENTS.GRAPH_EDGE_SELECTION_CLEAR_REQUESTED, { origin: "graph-canvas" });
+    this.#renderConnectDraft();
+    this.#highlightSelection();
+  }
+
+  #cancelConnectDrag() {
+    this.#connectDragState = null;
+    this.#connectState.sourceNodeId = null;
+    this.#hideConnectDraft();
+  }
+
+  #commitConnectDrag() {
+    const state = this.#connectDragState;
+    if (!state) return;
+
+    const targetNodeId = state.hoveredNodeId;
+    if (targetNodeId && targetNodeId !== state.sourceNodeId) {
+      const edgeType = "depends_on";
+      publish(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, {
+        source: state.sourceNodeId,
+        target: targetNodeId,
+        type: edgeType,
+        label: formatEdgeLabel(edgeType),
+        selectAfterCreate: true,
+        origin: "graph-canvas"
+      });
+    }
+
+    this.#cancelConnectDrag();
+    this.#highlightSelection();
+  }
+
+  #findNodeIdAtClientPoint(clientX, clientY) {
+    const target = document.elementFromPoint(clientX, clientY);
+    const nodeEl = target?.closest("[data-node-id]");
+    return nodeEl?.dataset?.nodeId ?? null;
+  }
+
+  #connectionPointForNode(node) {
+    const size = NODE_SIZE_BY_TYPE[node.type] ?? NODE_SIZE_BY_TYPE.note;
+    const x = Number(node.position?.x ?? 0) + size.width - 10;
+    const y = Number(node.position?.y ?? 0) + 16;
+    return { x, y };
+  }
+
+  #renderConnectDraft() {
+    if (!this.#edgeDraftEl) return;
+    if (!this.#connectDragState) {
+      this.#hideConnectDraft();
+      return;
+    }
+
+    const { sourcePoint, pointerWorld } = this.#connectDragState;
+    this.#edgeDraftEl.hidden = false;
+    this.#edgeDraftEl.setAttribute("d", `M ${sourcePoint.x} ${sourcePoint.y} L ${pointerWorld.x} ${pointerWorld.y}`);
+  }
+
+  #hideConnectDraft() {
+    if (!this.#edgeDraftEl) return;
+    this.#edgeDraftEl.hidden = true;
+    this.#edgeDraftEl.setAttribute("d", "");
+  }
+
+  #bindEdgePointerEvents() {
+    this.#edgeLayerEl?.querySelectorAll("[data-edge-id]").forEach((edgeEl) => {
+      edgeEl.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.#workspaceEl.focus();
+        publish(EVENTS.GRAPH_EDGE_SELECT_REQUESTED, {
+          edgeId: edgeEl.dataset.edgeId,
+          origin: "graph-canvas"
+        });
+      });
+    });
   }
 
   #updateMarquee() {
@@ -696,14 +676,27 @@ class GraphCanvas extends HTMLElement {
     const nodes = document?.nodes ?? [];
     const edges = document?.edges ?? [];
 
-    renderNodes(this.#nodeLayerEl, nodes, (event, node) => this.#onNodePointerDown(event, node));
-    renderEdges(this.#edgeLayerEl, nodes, edges);
+    renderNodes(
+      this.#nodeLayerEl,
+      nodes,
+      (event, node) => this.#onNodePointerDown(event, node),
+      (event, node) => this.#onConnectHandlePointerDown(event, node)
+    );
+    renderEdges(this.#edgeLayerEl, nodes, edges, this.#selectedEdgeId);
+    this.#edgeDraftEl = this.#edgeLayerEl.querySelector('[data-role="edge-draft"]');
+    this.#bindEdgePointerEvents();
+    this.#renderConnectDraft();
     this.#highlightSelection();
     this.#applyViewportTransform();
   }
 
   #highlightSelection() {
-    highlightSelection(this.#nodeLayerEl, this.#selectedNodeIds, this.#connectState.sourceNodeId);
+    highlightSelection(
+      this.#nodeLayerEl,
+      this.#selectedNodeIds,
+      this.#connectState.sourceNodeId,
+      this.#connectDragState?.hoveredNodeId ?? null
+    );
   }
 }
 

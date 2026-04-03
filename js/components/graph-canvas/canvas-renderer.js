@@ -9,7 +9,7 @@ const nodeTagByType = {
   action: "action-node"
 };
 
-export const renderNodes = (nodeLayerEl, nodes, onNodePointerDown) => {
+export const renderNodes = (nodeLayerEl, nodes, onNodePointerDown, onConnectHandlePointerDown) => {
   if (!nodeLayerEl) return;
 
   nodeLayerEl.innerHTML = "";
@@ -24,15 +24,23 @@ export const renderNodes = (nodeLayerEl, nodes, onNodePointerDown) => {
     nodeEl.style.top = `${node.position?.y ?? 0}px`;
     nodeEl.node = node;
     nodeEl.addEventListener("pointerdown", (event) => onNodePointerDown(event, node));
+    nodeEl
+      .querySelector('[data-action="connect-handle"]')
+      ?.addEventListener("pointerdown", (event) => onConnectHandlePointerDown(event, node));
     nodeLayerEl.append(nodeEl);
   }
 };
 
-export const renderEdges = (edgeLayerEl, nodes, edges) => {
-  renderEdgesSvg(edgeLayerEl, nodes, edges);
+export const renderEdges = (edgeLayerEl, nodes, edges, selectedEdgeId = null) => {
+  renderEdgesSvg(edgeLayerEl, nodes, edges, selectedEdgeId);
 };
 
-export const highlightSelection = (nodeLayerEl, selectedNodeIds = [], connectSourceNodeId = null) => {
+export const highlightSelection = (
+  nodeLayerEl,
+  selectedNodeIds = [],
+  connectSourceNodeId = null,
+  connectTargetNodeId = null
+) => {
   if (!nodeLayerEl) return;
 
   const selectedSet = new Set(selectedNodeIds);
@@ -41,5 +49,6 @@ export const highlightSelection = (nodeLayerEl, selectedNodeIds = [], connectSou
     const isSelected = selectedSet.has(nodeEl.dataset.nodeId);
     nodeEl.classList.toggle("is-selected", isSelected);
     nodeEl.classList.toggle("is-connect-source", nodeEl.dataset.nodeId === connectSourceNodeId);
+    nodeEl.classList.toggle("is-connect-target", nodeEl.dataset.nodeId === connectTargetNodeId);
   });
 };

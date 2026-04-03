@@ -73,7 +73,7 @@ const bezierPoint = (curve, t) => {
   };
 };
 
-export const renderEdgesSvg = (edgeLayerEl, nodes = [], edges = []) => {
+export const renderEdgesSvg = (edgeLayerEl, nodes = [], edges = [], selectedEdgeId = null) => {
   if (!edgeLayerEl) return;
 
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -101,7 +101,8 @@ export const renderEdgesSvg = (edgeLayerEl, nodes = [], edges = []) => {
       const labelWidth = clamp(labelValue.length * 6.2 + 18, 44, 170);
 
       return `
-        <path class="graph-edge-path graph-edge-${edge.type}" d="${curve.path}" marker-end="url(#mg-arrow)"></path>
+        <path class="graph-edge-hit-area" data-edge-id="${edge.id}" d="${curve.path}"></path>
+        <path class="graph-edge-path graph-edge-${edge.type} ${edge.id === selectedEdgeId ? "is-selected" : ""}" data-edge-visual-id="${edge.id}" d="${curve.path}" marker-end="url(#mg-arrow)"></path>
         <g class="graph-edge-label-group" transform="translate(${mid.x}, ${mid.y - 8})">
           <rect class="graph-edge-label-bg" x="${-labelWidth / 2}" y="-9" width="${labelWidth}" height="18" rx="9" ry="9"></rect>
           <text class="graph-edge-label" x="0" y="4">${label}</text>
@@ -110,5 +111,5 @@ export const renderEdgesSvg = (edgeLayerEl, nodes = [], edges = []) => {
     })
     .join("");
 
-  edgeLayerEl.innerHTML = `${defs}${edgeMarkup}`;
+  edgeLayerEl.innerHTML = `${defs}${edgeMarkup}<path class="graph-edge-draft" data-role="edge-draft" hidden></path>`;
 };

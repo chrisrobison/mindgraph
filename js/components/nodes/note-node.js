@@ -26,6 +26,7 @@ class NoteNode extends HTMLElement {
     this.className = "mg-node note";
     this.innerHTML = `
       <h4>${label}</h4>
+      <button class="node-connect-handle" type="button" data-action="connect-handle" title="Connect from this node" aria-label="Connect from this node"></button>
       <p>${description}</p>
     `;
   }

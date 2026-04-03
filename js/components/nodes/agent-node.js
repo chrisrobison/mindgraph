@@ -41,6 +41,7 @@ class AgentNode extends HTMLElement {
       <div class="node-title-row">
         <h4>${label}</h4>
         <span class="status-badge status-${toStatusClass(status)}">${status}</span>
+        <button class="node-connect-handle" type="button" data-action="connect-handle" title="Connect from this node" aria-label="Connect from this node"></button>
       </div>
       <p>${description}</p>
       <div class="node-meta-grid">

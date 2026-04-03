@@ -77,3 +77,6 @@ export const updateNode = (document, nodeId, patch) => {
 
 export const findNodeById = (document, nodeId) =>
   (document.nodes ?? []).find((node) => node.id === nodeId) ?? null;
+
+export const findEdgeById = (document, edgeId) =>
+  (document.edges ?? []).find((edge) => edge.id === edgeId) ?? null;

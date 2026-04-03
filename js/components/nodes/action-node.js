@@ -26,6 +26,7 @@ class ActionNode extends HTMLElement {
     this.className = "mg-node action compact";
     this.innerHTML = `
       <div class="compact-title">Action</div>
+      <button class="node-connect-handle" type="button" data-action="connect-handle" title="Connect from this node" aria-label="Connect from this node"></button>
       <h4>${label}</h4>
       <p>${description}</p>
     `;
