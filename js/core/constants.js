@@ -57,14 +57,14 @@ export const CAMERA = Object.freeze({
 });
 
 export const BLOOM = Object.freeze({
-	THRESHOLD: 0.8,
-	STRENGTH: 0.6,
-	RADIUS: 0.4,
+	THRESHOLD: 0.4,
+	STRENGTH: 1.5,
+	RADIUS: 0.6,
 });
 
 export const FOG = Object.freeze({
 	COLOR: 0x080c14,
-	DENSITY: 0.0015,
+	DENSITY: 0.0008,
 });
 
 export const ATMOSPHERE = Object.freeze({
@@ -76,12 +76,12 @@ export const ATMOSPHERE = Object.freeze({
 });
 
 export const NODE_GEOMETRY = Object.freeze({
-	CHUNK_T1: Object.freeze({ type: "sphere", radius: 1, segments: 32 }),
-	CHUNK_T2: Object.freeze({ type: "icosahedron", radius: 1.5, detail: 1 }),
-	CHUNK_T3: Object.freeze({ type: "octahedron", radius: 2.0 }),
-	QUESTION: Object.freeze({ type: "tetrahedron", radius: 0.8 }),
-	TRIGGER: Object.freeze({ type: "diamond", radius: 0.6 }),
-	CLUSTER: Object.freeze({ type: "shell", padding: 1.2 }),
+	CHUNK_T1: Object.freeze({ type: "sphere", radius: 5, segments: 32 }),
+	CHUNK_T2: Object.freeze({ type: "icosahedron", radius: 7, detail: 1 }),
+	CHUNK_T3: Object.freeze({ type: "octahedron", radius: 9 }),
+	QUESTION: Object.freeze({ type: "tetrahedron", radius: 4 }),
+	TRIGGER: Object.freeze({ type: "diamond", radius: 3.5 }),
+	CLUSTER: Object.freeze({ type: "shell", padding: 15 }),
 });
 
 export const RETRIEVAL_STEPS = Object.freeze([

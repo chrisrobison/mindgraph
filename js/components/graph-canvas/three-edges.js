@@ -32,17 +32,17 @@ export const createEdgeLine = (edge, sourcePos, targetPos) => {
 		material = new THREE.LineDashedMaterial({
 			color,
 			transparent: true,
-			opacity: edge.type === "contradicts" ? 0.7 : 0.5,
-			dashSize: 1.5,
-			gapSize: 1.0,
-			linewidth: 1,
+			opacity: edge.type === "contradicts" ? 0.9 : 0.6,
+			dashSize: 3,
+			gapSize: 2,
+			linewidth: 2,
 		});
 	} else {
 		material = new THREE.LineBasicMaterial({
 			color,
 			transparent: true,
-			opacity: edge.type === "preceded_by" ? 0.2 : 0.4,
-			linewidth: 1,
+			opacity: edge.type === "preceded_by" ? 0.3 : 0.7,
+			linewidth: 2,
 		});
 	}
 

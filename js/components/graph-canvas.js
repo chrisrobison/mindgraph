@@ -131,7 +131,7 @@ class GraphCanvas extends HTMLElement {
 		this.#camera.lookAt(...CAMERA.HOME_LOOK_AT);
 
 		// Lights
-		this.#ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+		this.#ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 		this.#scene.add(this.#ambientLight);
 
 		const directional = new THREE.DirectionalLight(0xffffff, 0.4);

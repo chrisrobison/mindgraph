@@ -155,11 +155,11 @@ export const createNodeMesh = (node) => {
 	const material = new THREE.MeshStandardMaterial({
 		color,
 		emissive: color,
-		emissiveIntensity: 0.6,
-		roughness: 0.3,
-		metalness: 0.1,
+		emissiveIntensity: 1.8,
+		roughness: 0.2,
+		metalness: 0.3,
 		transparent: true,
-		opacity: 0.9,
+		opacity: 0.95,
 	});
 
 	const mesh = new THREE.Mesh(geometry, material);
@@ -176,7 +176,7 @@ export const createNodeMesh = (node) => {
 /* ── Cluster shell ── */
 
 const createClusterShell = (node) => {
-	const radius = 10;
+	const radius = 40;
 	const geometry = new THREE.SphereGeometry(radius, 24, 24);
 	const material = new THREE.MeshBasicMaterial({
 		color: 0xffffff,

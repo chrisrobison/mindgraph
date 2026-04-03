@@ -27,9 +27,9 @@ export const createAmbientParticles = () => {
 
 	const material = new THREE.PointsMaterial({
 		color: 0xffffff,
-		size: 0.5,
+		size: 1.5,
 		transparent: true,
-		opacity: 0.1,
+		opacity: 0.2,
 		sizeAttenuation: true,
 		blending: THREE.AdditiveBlending,
 		depthWrite: false,
@@ -91,10 +91,11 @@ export const createStarField = () => {
 
 	const material = new THREE.PointsMaterial({
 		color: 0xffffff,
-		size: 0.3,
+		size: 1.0,
 		transparent: true,
-		opacity: 0.25,
+		opacity: 0.4,
 		sizeAttenuation: true,
+		blending: THREE.AdditiveBlending,
 		depthWrite: false,
 	});
 
@@ -137,7 +138,7 @@ export const createNebulaClouds = () => {
 		});
 
 		const sprite = new THREE.Sprite(material);
-		sprite.scale.set(200, 200, 1);
+		sprite.scale.set(400, 400, 1);
 		sprite.position.set(
 			(Math.random() - 0.5) * 400,
 			(Math.random() - 0.5) * 200,
@@ -156,7 +157,7 @@ export const createNebulaClouds = () => {
 
 export const updateAmbientBreathing = (ambientLight, elapsedTime) => {
 	if (!ambientLight) return;
-	const base = 0.3;
+	const base = 0.5;
 	const amplitude = ATMOSPHERE.BREATHING_AMPLITUDE;
 	const period = ATMOSPHERE.BREATHING_PERIOD;
 	ambientLight.intensity =
