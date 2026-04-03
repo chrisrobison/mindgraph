@@ -2,6 +2,18 @@ import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
 import { uiStore } from "../store/ui-store.js";
 
+const ICON_BY_TOOL = {
+  select: "assets/toolbar/select.svg",
+  pan: "assets/toolbar/pan.svg",
+  "create:note": "assets/toolbar/note2.svg",
+  "create:agent": "assets/toolbar/agent.svg",
+  "create:data": "assets/toolbar/data.svg",
+  "create:transformer": "assets/toolbar/transform.svg",
+  "create:view": "assets/toolbar/view.svg",
+  "create:action": "assets/toolbar/action.svg",
+  connect: "assets/toolbar/connect.svg"
+};
+
 const TOOL_GROUPS = [
   {
     title: "Pointer",
@@ -75,8 +87,8 @@ class LeftToolPalette extends HTMLElement {
       const buttons = group.tools
         .map(
           (tool) => `
-            <button class="palette-tool-btn" type="button" data-tool="${tool.id}" aria-pressed="false">
-              ${tool.label}
+            <button class="palette-tool-btn" type="button" data-tool="${tool.id}" aria-pressed="false" title="${tool.label}" aria-label="${tool.label}">
+              <img class="palette-tool-icon" src="${ICON_BY_TOOL[tool.id] ?? ""}" alt="" aria-hidden="true" />
             </button>
           `
         )

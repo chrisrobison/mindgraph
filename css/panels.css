@@ -176,19 +176,20 @@
 .palette-group .palette-tools {
   display: grid;
   gap: 0.38rem;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
 }
 
 .palette-tool-btn {
   width: 100%;
-  text-align: left;
+  height: 40px;
   border: 1px solid #cfdded;
   background: #ffffff;
   color: #1e334d;
   border-radius: 9px;
-  padding: 0.42rem 0.52rem;
-  font-size: 0.78rem;
-  font-weight: 600;
+  padding: 0;
   cursor: pointer;
+  display: grid;
+  place-items: center;
 }
 
 .palette-tool-btn:hover {
@@ -200,6 +201,13 @@
   border-color: #8fb2da;
   background: #e8f2ff;
   color: #174f86;
+}
+
+.palette-tool-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .palette-shortcuts {
