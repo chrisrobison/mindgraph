@@ -1,295 +1,514 @@
 import { createGraphDocument } from "./graph-document.js";
 import { EDGE_TYPES, NODE_TYPES } from "./types.js";
 
+/**
+ * Spain margins demo — the CAR Protocol seed example.
+ * ~15 chunks across all 3 tiers, pre-formed clusters, questions,
+ * one active contradiction (22% vs 18%), one prospective trigger.
+ */
 export const seedDocument = createGraphDocument({
-  id: "graph_seed_product_launch",
-  title: "MindGraph AI - Product Launch Plan",
-  version: "0.2.0",
-  nodes: [
-    {
-      id: "agent_product_launch_plan",
-      type: NODE_TYPES.AGENT,
-      label: "Product Launch Plan",
-      description: "Coordinator orchestrating launch agents and deliverables.",
-      position: { x: 860, y: 180 },
-      data: {
-        role: "Agent Coordinator",
-        mode: "orchestrate",
-        status: "active",
-        confidence: 0.58,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: [
-          "data_site_config",
-          "data_market_data",
-          "data_ads_api_mock",
-          "data_support_db"
-        ],
-        linkedDataCount: 4
-      }
-    },
-    {
-      id: "agent_website_builder",
-      type: NODE_TYPES.AGENT,
-      label: "Website Builder",
-      description: "Builds and ships launch pages from approved config.",
-      position: { x: 260, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "build",
-        status: "ready",
-        confidence: 0.51,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_site_config"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "agent_market_analyst",
-      type: NODE_TYPES.AGENT,
-      label: "Market Analyst",
-      description: "Monitors signals, trends, and competitive movement.",
-      position: { x: 690, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "analyze",
-        status: "active",
-        confidence: 0.57,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_market_data"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "agent_ad_campaign_bot",
-      type: NODE_TYPES.AGENT,
-      label: "Ad Campaign Bot",
-      description: "Optimizes campaign channels and spend targets.",
-      position: { x: 1120, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "optimize",
-        status: "idle",
-        confidence: 0.49,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_ads_api_mock"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "agent_support_agent",
-      type: NODE_TYPES.AGENT,
-      label: "Support Agent",
-      description: "Tracks user issues and launch readiness feedback.",
-      position: { x: 1550, y: 470 },
-      data: {
-        role: "Agent",
-        mode: "assist",
-        status: "ready",
-        confidence: 0.54,
-        lastRunSummary: "",
-        lastOutput: null,
-        inputSchema: {},
-        outputSchema: {},
-        runHistory: [],
-        activityHistory: [],
-        allowedDataSources: ["data_support_db"],
-        linkedDataCount: 1
-      }
-    },
-    {
-      id: "data_site_config",
-      type: NODE_TYPES.DATA,
-      label: "site_config.json",
-      description: "Website structure and launch copy settings.",
-      position: { x: 220, y: 780 },
-      data: {
-        source: "json",
-        sourceType: "json",
-        sourcePath: "site_config.json",
-        sourceUrl: "",
-        jsonPath: "",
-        refreshMode: "onOpen",
-        refreshInterval: 60,
-        cachedData: null,
-        cachedSchema: null,
-        lastUpdated: "",
-        readonly: true
-      }
-    },
-    {
-      id: "data_market_data",
-      type: NODE_TYPES.DATA,
-      label: "market_data.json",
-      description: "Market intelligence snapshots and trend extracts.",
-      position: { x: 650, y: 780 },
-      data: {
-        source: "json",
-        sourceType: "json",
-        sourcePath: "market_data.json",
-        sourceUrl: "",
-        jsonPath: "",
-        refreshMode: "periodic",
-        refreshInterval: 45,
-        cachedData: null,
-        cachedSchema: null,
-        lastUpdated: "",
-        readonly: true
-      }
-    },
-    {
-      id: "data_ads_api_mock",
-      type: NODE_TYPES.DATA,
-      label: "ads_api_mock",
-      description: "Mock ad-platform metrics and conversion signals.",
-      position: { x: 1080, y: 780 },
-      data: {
-        source: "mock",
-        sourceType: "mock",
-        sourcePath: "ads_api_mock.json",
-        sourceUrl: "",
-        jsonPath: "",
-        refreshMode: "periodic",
-        refreshInterval: 30,
-        cachedData: null,
-        cachedSchema: null,
-        lastUpdated: "",
-        readonly: true
-      }
-    },
-    {
-      id: "data_support_db",
-      type: NODE_TYPES.DATA,
-      label: "support_db.json",
-      description: "Support backlog and issue category records.",
-      position: { x: 1510, y: 780 },
-      data: {
-        source: "json",
-        sourceType: "json",
-        sourcePath: "support_db.json",
-        sourceUrl: "",
-        jsonPath: "",
-        refreshMode: "manual",
-        refreshInterval: 60,
-        cachedData: null,
-        cachedSchema: null,
-        lastUpdated: "",
-        readonly: true
-      }
-    }
-  ],
-  edges: [
-    {
-      id: "edge_parent_website",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_website_builder",
-      label: "parent_of"
-    },
-    {
-      id: "edge_parent_market",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_market_analyst",
-      label: "parent_of"
-    },
-    {
-      id: "edge_parent_ads",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_ad_campaign_bot",
-      label: "parent_of"
-    },
-    {
-      id: "edge_parent_support",
-      type: EDGE_TYPES.PARENT_OF,
-      source: "agent_product_launch_plan",
-      target: "agent_support_agent",
-      label: "parent_of"
-    },
-    {
-      id: "edge_report_website",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_website_builder",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_report_market",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_market_analyst",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_report_ads",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_ad_campaign_bot",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_report_support",
-      type: EDGE_TYPES.REPORTS_TO,
-      source: "agent_support_agent",
-      target: "agent_product_launch_plan",
-      label: "reports_to"
-    },
-    {
-      id: "edge_reads_site_config",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_website_builder",
-      target: "data_site_config",
-      label: "reads_from"
-    },
-    {
-      id: "edge_reads_market_data",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_market_analyst",
-      target: "data_market_data",
-      label: "reads_from"
-    },
-    {
-      id: "edge_reads_ads_api",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_ad_campaign_bot",
-      target: "data_ads_api_mock",
-      label: "reads_from"
-    },
-    {
-      id: "edge_reads_support_db",
-      type: EDGE_TYPES.READS_FROM,
-      source: "agent_support_agent",
-      target: "data_support_db",
-      label: "reads_from"
-    }
-  ],
-  viewport: {
-    x: -120,
-    y: -100,
-    zoom: 1
-  },
-  metadata: {
-    createdBy: "mindgraph-seed",
-    description: "Product launch coordination graph demo"
-  }
+	id: "brain_spain_margins_demo",
+	title: "CAR Brain — Spain Margins Demo",
+	version: "1.0.0",
+	project: null,
+	runner: "claude-code",
+	nodes: [
+		/* ── Tier 1: Raw episodes ── */
+		{
+			id: "chunk_spain_margin_drop",
+			type: NODE_TYPES.CHUNK,
+			label: "Spain margins dropped to 22%",
+			description: "Spain margins dropped from 28% to 22% in Q3",
+			position: { x: -60, y: 20, z: -200 },
+			data: {
+				content:
+					"Spain margins dropped from 28% to 22% in Q3. Logistics costs increased by 15% due to new EU regulations. Idan flagged this as critical during the weekly sync.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "high",
+				participants: ["Idan", "Amit"],
+				emotional_tone: "concerned",
+				emotional_intensity: 0.7,
+				stakes_level: "high",
+				topic_tags: ["spain", "margins", "logistics"],
+				entity_tags: ["Spain", "Idan"],
+				decision_made: false,
+				action_items: [
+					"Investigate logistics cost increase",
+					"Review Spain pricing",
+				],
+				status: "open",
+				access_count: 5,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["margin drop", "spain account", "logistics costs"],
+				amendments: [],
+				linked_chunks: ["chunk_logistics_cost", "chunk_spain_pricing"],
+				generated_questions: [],
+			},
+		},
+		{
+			id: "chunk_logistics_cost",
+			type: NODE_TYPES.CHUNK,
+			label: "EU logistics costs up 15%",
+			description: "New EU cross-border regulations increased shipping costs",
+			position: { x: 80, y: -30, z: -200 },
+			data: {
+				content:
+					"New EU cross-border shipping regulations effective July 1 added 15% to logistics costs for Southern European accounts. Affects Spain, Portugal, and Italy.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "high",
+				participants: [],
+				emotional_tone: "factual",
+				emotional_intensity: 0.3,
+				stakes_level: "medium",
+				topic_tags: ["logistics", "EU", "regulations", "costs"],
+				entity_tags: ["EU", "Spain", "Portugal", "Italy"],
+				decision_made: false,
+				action_items: [],
+				status: "open",
+				access_count: 3,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["shipping costs", "EU regulations", "southern europe"],
+				amendments: [],
+				linked_chunks: ["chunk_spain_margin_drop"],
+				generated_questions: [],
+			},
+		},
+		{
+			id: "chunk_spain_pricing",
+			type: NODE_TYPES.CHUNK,
+			label: "Spain pricing review scheduled",
+			description: "Pricing review for Spain account set for next quarter",
+			position: { x: -120, y: 80, z: -200 },
+			data: {
+				content:
+					"Pricing review for the Spain account is scheduled for Q4. Idan wants to raise prices by 8% to recover margin loss. Client relationship is strong.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "high",
+				participants: ["Idan"],
+				emotional_tone: "hopeful",
+				emotional_intensity: 0.4,
+				stakes_level: "high",
+				topic_tags: ["spain", "pricing", "margins"],
+				entity_tags: ["Spain", "Idan"],
+				decision_made: false,
+				action_items: ["Prepare pricing proposal"],
+				status: "open",
+				access_count: 2,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["pricing review", "price increase", "Q4"],
+				amendments: [],
+				linked_chunks: ["chunk_spain_margin_drop"],
+				generated_questions: [],
+			},
+		},
+		{
+			id: "chunk_contradiction_18",
+			type: NODE_TYPES.CHUNK,
+			label: "Spain margins actually 18%",
+			description: "Updated report shows margins are 18%, not 22%",
+			position: { x: -30, y: -80, z: -200 },
+			data: {
+				content:
+					"Updated financial report from accounting shows Spain margins are actually 18%, not 22% as previously reported. The original figure didn't account for returned shipments.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "high",
+				participants: [],
+				emotional_tone: "alarmed",
+				emotional_intensity: 0.8,
+				stakes_level: "high",
+				topic_tags: ["spain", "margins", "accounting"],
+				entity_tags: ["Spain"],
+				decision_made: false,
+				action_items: ["Reconcile margin data"],
+				status: "open",
+				access_count: 4,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["margin correction", "18%", "returned shipments"],
+				amendments: [],
+				linked_chunks: ["chunk_spain_margin_drop"],
+				generated_questions: [],
+			},
+		},
+		{
+			id: "chunk_client_meeting",
+			type: NODE_TYPES.CHUNK,
+			label: "Client meeting went well",
+			description: "Spain client expressed satisfaction with service quality",
+			position: { x: 120, y: 60, z: -200 },
+			data: {
+				content:
+					"Had a great meeting with the Spain client. They're happy with service quality and open to discussing pricing adjustments. Key contact: Maria from procurement.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "high",
+				participants: ["Maria"],
+				emotional_tone: "positive",
+				emotional_intensity: 0.5,
+				stakes_level: "medium",
+				topic_tags: ["spain", "client", "relationship"],
+				entity_tags: ["Spain", "Maria"],
+				decision_made: false,
+				action_items: [],
+				status: "resolved",
+				access_count: 2,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["client meeting", "service quality", "Maria"],
+				amendments: [],
+				linked_chunks: [],
+				generated_questions: [],
+			},
+		},
+		{
+			id: "chunk_italy_similar",
+			type: NODE_TYPES.CHUNK,
+			label: "Italy showing similar margin pressure",
+			description: "Italy account also seeing margin compression from EU regs",
+			position: { x: 180, y: -60, z: -200 },
+			data: {
+				content:
+					"Italy account is experiencing similar margin pressure. Down from 25% to 20%. Same EU logistics cost driver. Could be a regional pattern.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "medium",
+				participants: [],
+				emotional_tone: "analytical",
+				emotional_intensity: 0.3,
+				stakes_level: "medium",
+				topic_tags: ["italy", "margins", "logistics", "EU"],
+				entity_tags: ["Italy", "EU"],
+				decision_made: false,
+				action_items: [],
+				status: "open",
+				access_count: 1,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["italy margins", "regional pattern"],
+				amendments: [],
+				linked_chunks: ["chunk_logistics_cost"],
+				generated_questions: [],
+			},
+		},
+		{
+			id: "chunk_portugal_ok",
+			type: NODE_TYPES.CHUNK,
+			label: "Portugal margins stable",
+			description: "Portugal account unaffected due to direct shipping route",
+			position: { x: 200, y: 40, z: -200 },
+			data: {
+				content:
+					"Portugal account margins remain stable at 26%. They use a direct shipping route that bypasses the new EU checkpoint regulations.",
+				tier: 1,
+				source: "user_stated",
+				source_reliability: "high",
+				participants: [],
+				emotional_tone: "neutral",
+				emotional_intensity: 0.1,
+				stakes_level: "low",
+				topic_tags: ["portugal", "margins", "logistics", "shipping"],
+				entity_tags: ["Portugal"],
+				decision_made: false,
+				action_items: [],
+				status: "resolved",
+				access_count: 1,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: ["portugal stable", "direct route"],
+				amendments: [],
+				linked_chunks: [],
+				generated_questions: [],
+			},
+		},
+
+		/* ── Tier 2: Consolidated summaries ── */
+		{
+			id: "chunk_t2_eu_margin_pressure",
+			type: NODE_TYPES.CHUNK,
+			label: "EU margin pressure summary",
+			description:
+				"Southern European accounts facing margin compression from EU regulations",
+			position: { x: 40, y: 0, z: -400 },
+			data: {
+				content:
+					"Summary: Southern European accounts (Spain, Italy) are experiencing margin compression due to new EU cross-border logistics regulations. Spain down to 18-22%, Italy down to 20%. Portugal unaffected due to direct routing. Pattern: regulatory cost pass-through affecting all indirect-route accounts.",
+				tier: 2,
+				source: "agent_generated",
+				source_reliability: "high",
+				participants: ["Idan"],
+				emotional_tone: "analytical",
+				emotional_intensity: 0.4,
+				stakes_level: "high",
+				topic_tags: [
+					"EU",
+					"margins",
+					"logistics",
+					"regulations",
+					"spain",
+					"italy",
+				],
+				entity_tags: ["EU", "Spain", "Italy", "Portugal", "Idan"],
+				decision_made: false,
+				action_items: ["Regional pricing strategy needed"],
+				status: "open",
+				access_count: 3,
+				last_accessed: new Date().toISOString(),
+				retrieval_cues: [
+					"EU margin pressure",
+					"southern europe",
+					"regulatory costs",
+				],
+				amendments: [],
+				linked_chunks: [
+					"chunk_spain_margin_drop",
+					"chunk_logistics_cost",
+					"chunk_italy_similar",
+					"chunk_portugal_ok",
+				],
+				generated_questions: [],
+			},
+			metadata: {
+				createdAt: new Date().toISOString(),
+				consolidatedFrom: [
+					"chunk_spain_margin_drop",
+					"chunk_logistics_cost",
+					"chunk_italy_similar",
+					"chunk_portugal_ok",
+				],
+			},
+		},
+
+		/* ── Tier 3: Schema / Pattern ── */
+		{
+			id: "pattern_regulatory_cost",
+			type: NODE_TYPES.PATTERN,
+			label: "Regulatory cost pass-through pattern",
+			description:
+				"Cross-domain pattern: regulatory changes → logistics costs → margin compression",
+			position: { x: 0, y: 0, z: -600 },
+			data: {
+				pattern:
+					"When new regulations increase logistics costs, margins compress for accounts using indirect shipping routes. Direct-route accounts are unaffected.",
+				evidence: [
+					"chunk_t2_eu_margin_pressure",
+					"chunk_logistics_cost",
+					"chunk_portugal_ok",
+				],
+				confidence: 0.75,
+				implication:
+					"Future regulatory changes should trigger immediate pricing review for indirect-route accounts",
+				pattern_type: "causal_recurring",
+				exceptions: ["Direct shipping routes bypass regulatory checkpoints"],
+			},
+		},
+
+		/* ── Questions ── */
+		{
+			id: "q_margin_recovery",
+			type: NODE_TYPES.QUESTION,
+			label: "L3: Will pricing adjustment recover margins?",
+			description: "What are the implications of raising Spain prices by 8%?",
+			position: { x: -80, y: 60, z: -100 },
+			data: {
+				level: 3,
+				question_text:
+					"What are the implications of raising Spain prices by 8%?",
+				answer_text: null,
+				answered: false,
+				parent_question_id: null,
+				linked_chunk_ids: ["chunk_spain_pricing", "chunk_spain_margin_drop"],
+				confidence: null,
+			},
+		},
+		{
+			id: "q_italy_action",
+			type: NODE_TYPES.QUESTION,
+			label: "L2: Why hasn't Italy pricing been reviewed?",
+			description: "Why has Italy not been included in the pricing review?",
+			position: { x: 140, y: -30, z: -100 },
+			data: {
+				level: 2,
+				question_text:
+					"Why has Italy not been included in the pricing review if it shows similar margin pressure?",
+				answer_text: null,
+				answered: false,
+				parent_question_id: null,
+				linked_chunk_ids: ["chunk_italy_similar"],
+				confidence: null,
+			},
+		},
+		{
+			id: "q_true_margin",
+			type: NODE_TYPES.QUESTION,
+			label: "L1: What is Spain's actual margin?",
+			description: "Is Spain margin 22% or 18%?",
+			position: { x: -50, y: -50, z: -100 },
+			data: {
+				level: 1,
+				question_text: "What is Spain's actual current margin — 22% or 18%?",
+				answer_text: null,
+				answered: false,
+				parent_question_id: null,
+				linked_chunk_ids: ["chunk_spain_margin_drop", "chunk_contradiction_18"],
+				confidence: null,
+			},
+		},
+
+		/* ── Trigger ── */
+		{
+			id: "trigger_idan_pricing",
+			type: NODE_TYPES.TRIGGER,
+			label: "Raise pricing when Idan mentioned",
+			description:
+				"Prospective memory: bring up pricing issue when Idan is discussed",
+			position: { x: -150, y: -40, z: -200 },
+			data: {
+				content:
+					"When Idan is mentioned in conversation, surface the Spain pricing review and margin discrepancy",
+				trigger_conditions: ["Idan", "Spain pricing", "margin review"],
+				expires: null,
+				fired: false,
+				fire_count: 0,
+			},
+		},
+	],
+	edges: [
+		/* ── Linked ── */
+		{
+			id: "e_spain_logistics",
+			type: EDGE_TYPES.LINKED_TO,
+			source: "chunk_spain_margin_drop",
+			target: "chunk_logistics_cost",
+			label: "linked_to",
+		},
+		{
+			id: "e_spain_pricing",
+			type: EDGE_TYPES.LINKED_TO,
+			source: "chunk_spain_margin_drop",
+			target: "chunk_spain_pricing",
+			label: "linked_to",
+		},
+		{
+			id: "e_logistics_italy",
+			type: EDGE_TYPES.LINKED_TO,
+			source: "chunk_logistics_cost",
+			target: "chunk_italy_similar",
+			label: "linked_to",
+		},
+		{
+			id: "e_client_pricing",
+			type: EDGE_TYPES.LINKED_TO,
+			source: "chunk_client_meeting",
+			target: "chunk_spain_pricing",
+			label: "linked_to",
+		},
+
+		/* ── Contradiction ── */
+		{
+			id: "e_margin_contradiction",
+			type: EDGE_TYPES.CONTRADICTS,
+			source: "chunk_spain_margin_drop",
+			target: "chunk_contradiction_18",
+			label: "contradicts",
+		},
+
+		/* ── Promotes to ── */
+		{
+			id: "e_promote_summary",
+			type: EDGE_TYPES.PROMOTES_TO,
+			source: "chunk_spain_margin_drop",
+			target: "chunk_t2_eu_margin_pressure",
+			label: "promotes_to",
+		},
+		{
+			id: "e_promote_logistics",
+			type: EDGE_TYPES.PROMOTES_TO,
+			source: "chunk_logistics_cost",
+			target: "chunk_t2_eu_margin_pressure",
+			label: "promotes_to",
+		},
+		{
+			id: "e_promote_italy",
+			type: EDGE_TYPES.PROMOTES_TO,
+			source: "chunk_italy_similar",
+			target: "chunk_t2_eu_margin_pressure",
+			label: "promotes_to",
+		},
+
+		/* ── Answers ── */
+		{
+			id: "e_q_margin_recovery",
+			type: EDGE_TYPES.ANSWERS,
+			source: "q_margin_recovery",
+			target: "chunk_spain_pricing",
+			label: "answers",
+		},
+		{
+			id: "e_q_italy",
+			type: EDGE_TYPES.ANSWERS,
+			source: "q_italy_action",
+			target: "chunk_italy_similar",
+			label: "answers",
+		},
+		{
+			id: "e_q_true_margin",
+			type: EDGE_TYPES.ANSWERS,
+			source: "q_true_margin",
+			target: "chunk_spain_margin_drop",
+			label: "answers",
+		},
+
+		/* ── Preceded by ── */
+		{
+			id: "e_preceded_pricing",
+			type: EDGE_TYPES.PRECEDED_BY,
+			source: "chunk_spain_pricing",
+			target: "chunk_spain_margin_drop",
+			label: "preceded_by",
+		},
+
+		/* ── Triggers ── */
+		{
+			id: "e_trigger_idan",
+			type: EDGE_TYPES.TRIGGERS,
+			source: "trigger_idan_pricing",
+			target: "chunk_spain_pricing",
+			label: "triggers",
+		},
+	],
+	clusters: [
+		{
+			id: "cluster_spain_account",
+			label: "Cluster: Spain Account",
+			member_ids: [
+				"chunk_spain_margin_drop",
+				"chunk_spain_pricing",
+				"chunk_contradiction_18",
+				"chunk_client_meeting",
+			],
+			shared_tags: ["spain"],
+			shared_entities: ["Spain"],
+			cluster_strength: 0.8,
+			color: 0xffffff,
+		},
+		{
+			id: "cluster_logistics",
+			label: "Cluster: Logistics & EU",
+			member_ids: [
+				"chunk_logistics_cost",
+				"chunk_italy_similar",
+				"chunk_portugal_ok",
+			],
+			shared_tags: ["logistics"],
+			shared_entities: ["EU"],
+			cluster_strength: 0.6,
+			color: 0xffffff,
+		},
+	],
+	viewport: { x: 0, y: 0, z: 0, zoom: 1, rotationX: 0, rotationY: 0 },
+	metadata: {
+		createdBy: "car-brain-seed",
+		description:
+			"Spain margins demo — CAR Protocol showcase with contradiction and trigger",
+	},
 });
