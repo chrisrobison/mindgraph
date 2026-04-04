@@ -1,0 +1,37 @@
+{
+  "name": "missing-provider-payloads",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "empty_data",
+        "type": "data",
+        "data": {}
+      },
+      {
+        "id": "consumer_agent",
+        "type": "agent",
+        "data": {
+          "role": "Consumer",
+          "mode": "orchestrate"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_empty_data_to_agent",
+        "type": "feeds_data",
+        "source": "empty_data",
+        "target": "consumer_agent",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      }
+    ]
+  }
+}

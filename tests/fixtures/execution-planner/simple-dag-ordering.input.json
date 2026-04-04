@@ -1,0 +1,96 @@
+{
+  "name": "simple-dag-ordering",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "data_source",
+        "type": "data",
+        "data": {
+          "cachedData": { "rows": [1, 2, 3] }
+        }
+      },
+      {
+        "id": "transform_normalize",
+        "type": "transformer",
+        "data": {
+          "transformExpression": "identity",
+          "lastOutput": { "normalized": true }
+        }
+      },
+      {
+        "id": "agent_synth",
+        "type": "agent",
+        "data": {
+          "role": "Synthesizer",
+          "mode": "orchestrate",
+          "lastOutput": { "summary": "ok" }
+        }
+      },
+      {
+        "id": "view_brief",
+        "type": "view",
+        "data": {
+          "outputTemplate": "brief_card",
+          "lastOutput": { "rendered": true }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_data_to_transform",
+        "type": "feeds_data",
+        "source": "data_source",
+        "target": "transform_normalize",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "input",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_transform_to_agent",
+        "type": "feeds_data",
+        "source": "transform_normalize",
+        "target": "agent_synth",
+        "metadata": {
+          "contract": {
+            "sourcePort": "output",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_agent_to_view",
+        "type": "feeds_data",
+        "source": "agent_synth",
+        "target": "view_brief",
+        "metadata": {
+          "contract": {
+            "sourcePort": "response",
+            "targetPort": "model",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_transform_depends",
+        "type": "depends_on",
+        "source": "transform_normalize",
+        "target": "agent_synth"
+      },
+      {
+        "id": "e_agent_depends",
+        "type": "depends_on",
+        "source": "agent_synth",
+        "target": "view_brief"
+      }
+    ]
+  }
+}

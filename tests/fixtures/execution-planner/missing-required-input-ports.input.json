@@ -1,0 +1,60 @@
+{
+  "name": "missing-required-input-ports",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "data_primary",
+        "type": "data",
+        "data": {
+          "cachedData": { "value": 1 }
+        }
+      },
+      {
+        "id": "multi_input_transform",
+        "type": "transformer",
+        "data": {
+          "transformExpression": "identity",
+          "inputPorts": [
+            {
+              "id": "primary",
+              "label": "Primary",
+              "payloadType": "object",
+              "required": true
+            },
+            {
+              "id": "secondary",
+              "label": "Secondary",
+              "payloadType": "object",
+              "required": true
+            }
+          ],
+          "outputPorts": [
+            {
+              "id": "output",
+              "label": "Output",
+              "payloadType": "object",
+              "required": true
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_data_to_primary_port",
+        "type": "feeds_data",
+        "source": "data_primary",
+        "target": "multi_input_transform",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "primary",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      }
+    ]
+  }
+}

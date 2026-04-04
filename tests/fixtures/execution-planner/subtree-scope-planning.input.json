@@ -1,0 +1,128 @@
+{
+  "name": "subtree-scope-planning",
+  "options": {
+    "rootNodeId": "root_note"
+  },
+  "document": {
+    "nodes": [
+      {
+        "id": "root_note",
+        "type": "note",
+        "data": {}
+      },
+      {
+        "id": "in_scope_data",
+        "type": "data",
+        "data": {
+          "cachedData": { "value": 1 }
+        }
+      },
+      {
+        "id": "in_scope_agent",
+        "type": "agent",
+        "data": {
+          "role": "Scoped",
+          "mode": "orchestrate",
+          "lastOutput": { "ok": true }
+        }
+      },
+      {
+        "id": "nested_view",
+        "type": "view",
+        "data": {
+          "outputTemplate": "nested_card",
+          "lastOutput": { "ok": true }
+        }
+      },
+      {
+        "id": "out_of_scope_data",
+        "type": "data",
+        "data": {
+          "cachedData": { "value": 99 }
+        }
+      },
+      {
+        "id": "out_of_scope_action",
+        "type": "action",
+        "data": {
+          "command": "noop",
+          "lastOutput": { "ok": true }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_root_data",
+        "type": "parent_of",
+        "source": "root_note",
+        "target": "in_scope_data"
+      },
+      {
+        "id": "e_root_agent",
+        "type": "parent_of",
+        "source": "root_note",
+        "target": "in_scope_agent"
+      },
+      {
+        "id": "e_agent_view",
+        "type": "parent_of",
+        "source": "in_scope_agent",
+        "target": "nested_view"
+      },
+      {
+        "id": "e_data_to_agent",
+        "type": "feeds_data",
+        "source": "in_scope_data",
+        "target": "in_scope_agent",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_agent_to_view",
+        "type": "feeds_data",
+        "source": "in_scope_agent",
+        "target": "nested_view",
+        "metadata": {
+          "contract": {
+            "sourcePort": "response",
+            "targetPort": "model",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_agent_depends_view",
+        "type": "depends_on",
+        "source": "in_scope_agent",
+        "target": "nested_view"
+      },
+      {
+        "id": "e_out_data_to_action",
+        "type": "feeds_data",
+        "source": "out_of_scope_data",
+        "target": "out_of_scope_action",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "command_input",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_out_depends_in_scope",
+        "type": "depends_on",
+        "source": "out_of_scope_action",
+        "target": "in_scope_agent"
+      }
+    ]
+  }
+}

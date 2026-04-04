@@ -1,0 +1,70 @@
+{
+  "name": "stale-upstream-rerun-detection",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "data_source",
+        "type": "data",
+        "data": {
+          "cachedData": { "value": 1 }
+        }
+      },
+      {
+        "id": "upstream_transform",
+        "type": "transformer",
+        "data": {
+          "transformExpression": "identity",
+          "lastOutput": { "value": 2 },
+          "lastRunAt": "2026-04-04T10:00:00.000Z"
+        }
+      },
+      {
+        "id": "downstream_agent",
+        "type": "agent",
+        "data": {
+          "role": "Downstream",
+          "mode": "orchestrate",
+          "lastOutput": { "summary": "stale" },
+          "lastRunAt": "2026-04-04T09:00:00.000Z"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_data_to_transform",
+        "type": "feeds_data",
+        "source": "data_source",
+        "target": "upstream_transform",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "input",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_transform_to_agent",
+        "type": "feeds_data",
+        "source": "upstream_transform",
+        "target": "downstream_agent",
+        "metadata": {
+          "contract": {
+            "sourcePort": "output",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_transform_depends_agent",
+        "type": "depends_on",
+        "source": "upstream_transform",
+        "target": "downstream_agent"
+      }
+    ]
+  }
+}

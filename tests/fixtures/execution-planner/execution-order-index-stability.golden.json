@@ -1,0 +1,132 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "helper_note",
+    "first_agent",
+    "second_transform",
+    "sink_action",
+    "dataset_one",
+    "dataset_two"
+  ],
+  "runnableNodeIds": [
+    "first_agent",
+    "second_transform",
+    "sink_action"
+  ],
+  "readyNodeIds": [
+    "first_agent",
+    "second_transform",
+    "sink_action"
+  ],
+  "blockedNodeIds": [],
+  "cycles": [],
+  "executionOrder": [
+    "first_agent",
+    "second_transform",
+    "sink_action"
+  ],
+  "nodes": {
+    "dataset_one": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "dataset_two": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "first_agent": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "dataset_one"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    },
+    "helper_note": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "second_transform": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "dataset_two"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 1
+    },
+    "sink_action": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "first_agent",
+        "second_transform"
+      ],
+      "dataProviderIds": [
+        "first_agent",
+        "second_transform"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 2
+    }
+  }
+}

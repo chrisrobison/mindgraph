@@ -1,0 +1,78 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "data_source",
+    "upstream_transform",
+    "downstream_agent"
+  ],
+  "runnableNodeIds": [
+    "upstream_transform",
+    "downstream_agent"
+  ],
+  "readyNodeIds": [
+    "upstream_transform",
+    "downstream_agent"
+  ],
+  "blockedNodeIds": [],
+  "cycles": [],
+  "executionOrder": [
+    "upstream_transform",
+    "downstream_agent"
+  ],
+  "nodes": {
+    "data_source": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "downstream_agent": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "upstream_transform"
+      ],
+      "dataProviderIds": [
+        "upstream_transform"
+      ],
+      "staleDependencies": [
+        "upstream_transform"
+      ],
+      "needsRerun": true,
+      "isInCycle": false,
+      "executionOrderIndex": 1
+    },
+    "upstream_transform": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "data_source"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    }
+  }
+}

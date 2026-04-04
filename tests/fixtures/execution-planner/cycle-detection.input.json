@@ -1,0 +1,75 @@
+{
+  "name": "cycle-detection",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "data_context",
+        "type": "data",
+        "data": {
+          "cachedData": { "seed": 1 }
+        }
+      },
+      {
+        "id": "node_a",
+        "type": "agent",
+        "data": {
+          "role": "A",
+          "mode": "orchestrate",
+          "lastOutput": { "a": 1 }
+        }
+      },
+      {
+        "id": "node_b",
+        "type": "agent",
+        "data": {
+          "role": "B",
+          "mode": "orchestrate",
+          "lastOutput": { "b": 1 }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_data_to_a",
+        "type": "feeds_data",
+        "source": "data_context",
+        "target": "node_a",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_data_to_b",
+        "type": "feeds_data",
+        "source": "data_context",
+        "target": "node_b",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_a_depends_b",
+        "type": "depends_on",
+        "source": "node_a",
+        "target": "node_b"
+      },
+      {
+        "id": "e_b_depends_a",
+        "type": "depends_on",
+        "source": "node_b",
+        "target": "node_a"
+      }
+    ]
+  }
+}

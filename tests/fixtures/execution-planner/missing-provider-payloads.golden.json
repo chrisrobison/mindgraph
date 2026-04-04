@@ -1,0 +1,56 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "empty_data",
+    "consumer_agent"
+  ],
+  "runnableNodeIds": [
+    "consumer_agent"
+  ],
+  "readyNodeIds": [],
+  "blockedNodeIds": [
+    "consumer_agent"
+  ],
+  "cycles": [],
+  "executionOrder": [
+    "consumer_agent"
+  ],
+  "nodes": {
+    "consumer_agent": {
+      "runnable": true,
+      "ready": false,
+      "blocked": true,
+      "blockedReasons": [
+        "Missing input payloads from: empty_data"
+      ],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "empty_data"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    },
+    "empty_data": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    }
+  }
+}

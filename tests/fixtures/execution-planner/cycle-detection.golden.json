@@ -1,0 +1,88 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "data_context",
+    "node_a",
+    "node_b"
+  ],
+  "runnableNodeIds": [
+    "node_a",
+    "node_b"
+  ],
+  "readyNodeIds": [],
+  "blockedNodeIds": [
+    "node_a",
+    "node_b"
+  ],
+  "cycles": [
+    [
+      "node_a",
+      "node_b",
+      "node_a"
+    ]
+  ],
+  "executionOrder": [
+    "node_a",
+    "node_b"
+  ],
+  "nodes": {
+    "data_context": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "node_a": {
+      "runnable": true,
+      "ready": false,
+      "blocked": true,
+      "blockedReasons": [
+        "Node is in an execution cycle"
+      ],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "node_b"
+      ],
+      "dataProviderIds": [
+        "data_context"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": true,
+      "executionOrderIndex": 0
+    },
+    "node_b": {
+      "runnable": true,
+      "ready": false,
+      "blocked": true,
+      "blockedReasons": [
+        "Node is in an execution cycle"
+      ],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "node_a"
+      ],
+      "dataProviderIds": [
+        "data_context"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": true,
+      "executionOrderIndex": 1
+    }
+  }
+}
