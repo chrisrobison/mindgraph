@@ -169,15 +169,15 @@ Migration authoring details: [docs/graph-schema-migrations.md](/Users/cdr/Projec
 ## Current Limitations
 
 - Port contracts are lightweight and do not enforce full JSON Schema semantics.
-- Proxy server currently supports single-node execution requests (`run-node`) and sequential plan execution.
+- Proxy server currently supports single-node execution requests (`run-node`) and WebSocket progress events (plan orchestration remains client-side).
 - API keys are stored in browser local storage for local development convenience.
 - Planner uses in-memory recomputation each render/request (no incremental diff engine yet).
-- Batch execution is currently sequential, not parallelized by independent DAG branches.
+- Batch execution parallelism is intentionally bounded by a configurable concurrency limit (`metadata.runtimePolicy.batchConcurrencyLimit` or `runtimePolicy.concurrencyLimit` override).
 
 ## Suggested Next Steps
 
 1. Add editable per-port schema templates in inspector (with typed presets).
 2. Add planner diff views between snapshots for run-to-run diagnosis.
 3. Add resumable run sessions with explicit run IDs and timeline filtering.
-4. Add branch-parallel execution for independent DAG segments.
-5. Expand HTTP adapter contract to support streaming outputs and structured tool traces.
+4. Add streaming/tool-call traces to HTTP runtime protocol.
+5. Add richer run timeline filters and branch-level session analytics.

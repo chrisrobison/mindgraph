@@ -96,12 +96,13 @@ Per node, planner emits:
 
 Behavior:
 - builds planner snapshot before batch runs
-- executes in planner order
+- executes dependency-safe branches in parallel (stable planner-order dispatch, bounded concurrency)
 - retries with backoff per node runtime policy
 - respects cancellation across adapters
 - propagates upstream failures through batch skips
 - supports per-node fail-fast policy
 - injects runtime provider settings (`provider`, `model`, `apiKey`, `temperature`, `maxTokens`, `systemPrompt`) into HTTP runtime requests
+- supports batch concurrency override via runtime policy (`batchConcurrencyLimit` / `concurrencyLimit`)
 
 Runtime adapters currently implemented:
 - `mock-agent-runtime` (local planner-aware execution)
@@ -134,6 +135,7 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 - connect flow aligned with runtime/planner semantics
 - port-level node IO defaults + edge payload contracts
 - request-driven runtime service with retry/cancel/failure propagation
+- branch-parallel batch scheduling for independent runnable DAG branches
 - HTTP adapter behind shared planner/executor interface with WebSocket realtime transport
 - provider proxy server for OpenAI/Anthropic/Gemini model execution
 - runtime settings control panel for provider/model/key selection
@@ -142,6 +144,5 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 ### Planned next
 
 - richer schema enforcement and schema-aware port presets
-- branch-parallel planner execution
 - run-session timeline UX and snapshot diffing
 - richer HTTP adapter protocol (streaming/tool-call traces)
