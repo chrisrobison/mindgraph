@@ -57,7 +57,37 @@ const readProviderSettings = () => {
   }
 };
 
+const sanitizeThemePreference = (value) => {
+  const next = String(value ?? "system").trim().toLowerCase();
+  if (next === "light" || next === "dark") return next;
+  return "system";
+};
+
+const sanitizeToolbarDisplay = (value) => {
+  const next = String(value ?? "icons").trim().toLowerCase();
+  if (next === "icons+text" || next === "text") return next;
+  return "icons";
+};
+
+const sanitizeUiSettings = (raw = {}) => ({
+  theme: sanitizeThemePreference(raw?.theme),
+  toolbarDisplay: sanitizeToolbarDisplay(raw?.toolbarDisplay)
+});
+
+const readUiSettings = () => {
+  try {
+    return sanitizeUiSettings({
+      theme: window.localStorage.getItem(PERSISTENCE.storage.uiTheme),
+      toolbarDisplay: window.localStorage.getItem(PERSISTENCE.storage.uiToolbarDisplay)
+    });
+  } catch {
+    return sanitizeUiSettings();
+  }
+};
+
 class UiStore {
+  #systemThemeMedia = null;
+  #systemThemeListener = null;
   #state = {
     selectedNodeId: null,
     selectedNodeIds: [],
@@ -68,6 +98,7 @@ class UiStore {
     devConsoleVisible: true,
     runtimeMode: readRuntimeMode(),
     runtimeProviderSettings: readProviderSettings(),
+    uiSettings: readUiSettings(),
     activityItems: [],
     taskQueue: [],
     runHistory: [],
@@ -76,6 +107,8 @@ class UiStore {
   };
 
   constructor() {
+    this.#applyUiSettings(this.#state.uiSettings);
+
     subscribe(EVENTS.GRAPH_NODE_SELECTED, ({ payload }) => {
       const nodeIds = toArray(payload?.nodeIds);
       this.#state.selectedNodeIds = nodeIds.length ? nodeIds : payload?.nodeId ? [payload.nodeId] : [];
@@ -134,6 +167,25 @@ class UiStore {
         settings: { ...next },
         origin: payload?.origin ?? "ui-store"
       });
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.UI_SETTINGS_UPDATE_REQUESTED, ({ payload }) => {
+      const patch = payload?.patch ?? {};
+      const next = sanitizeUiSettings({
+        ...(this.#state.uiSettings ?? {}),
+        ...(patch ?? {})
+      });
+
+      this.#state.uiSettings = next;
+      this.#persistUiSettings(next);
+      this.#applyUiSettings(next);
+
+      publish(EVENTS.UI_SETTINGS_CHANGED, {
+        settings: { ...next },
+        origin: payload?.origin ?? "ui-store"
+      });
+
       this.#emitRuntimeState();
     });
 
@@ -208,7 +260,8 @@ class UiStore {
       runtime: this.getRuntimeState(),
       bottomTab: this.#state.bottomTab,
       devConsoleVisible: this.#state.devConsoleVisible,
-      providerSettings: { ...(this.#state.runtimeProviderSettings ?? {}) }
+      providerSettings: { ...(this.#state.runtimeProviderSettings ?? {}) },
+      uiSettings: { ...(this.#state.uiSettings ?? {}) }
     });
   }
 
@@ -220,6 +273,65 @@ class UiStore {
     }
   }
 
+  #persistUiSettings(settings) {
+    try {
+      window.localStorage.setItem(PERSISTENCE.storage.uiTheme, settings.theme);
+      window.localStorage.setItem(PERSISTENCE.storage.uiToolbarDisplay, settings.toolbarDisplay);
+    } catch {
+      // noop
+    }
+  }
+
+  #resolveTheme(themePreference) {
+    if (themePreference === "light" || themePreference === "dark") return themePreference;
+    try {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  }
+
+  #syncSystemThemeListener(themePreference) {
+    if (this.#systemThemeMedia && this.#systemThemeListener) {
+      if (typeof this.#systemThemeMedia.removeEventListener === "function") {
+        this.#systemThemeMedia.removeEventListener("change", this.#systemThemeListener);
+      } else if (typeof this.#systemThemeMedia.removeListener === "function") {
+        this.#systemThemeMedia.removeListener(this.#systemThemeListener);
+      }
+      this.#systemThemeMedia = null;
+      this.#systemThemeListener = null;
+    }
+
+    if (themePreference !== "system") return;
+
+    try {
+      this.#systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+      this.#systemThemeListener = () => {
+        const root = document.documentElement;
+        if (!root) return;
+        root.dataset.theme = this.#resolveTheme("system");
+      };
+      if (typeof this.#systemThemeMedia.addEventListener === "function") {
+        this.#systemThemeMedia.addEventListener("change", this.#systemThemeListener);
+      } else if (typeof this.#systemThemeMedia.addListener === "function") {
+        this.#systemThemeMedia.addListener(this.#systemThemeListener);
+      }
+    } catch {
+      // noop
+    }
+  }
+
+  #applyUiSettings(settings) {
+    const root = document.documentElement;
+    if (!root) return;
+
+    const nextSettings = sanitizeUiSettings(settings ?? {});
+    root.dataset.themePreference = nextSettings.theme;
+    root.dataset.theme = this.#resolveTheme(nextSettings.theme);
+    root.dataset.toolbarDisplay = nextSettings.toolbarDisplay;
+    this.#syncSystemThemeListener(nextSettings.theme);
+  }
+
   getState() {
     return {
       ...this.#state,
@@ -229,7 +341,8 @@ class UiStore {
       runHistory: [...this.#state.runHistory],
       traces: [...this.#state.traces],
       errors: [...this.#state.errors],
-      runtimeProviderSettings: { ...(this.#state.runtimeProviderSettings ?? {}) }
+      runtimeProviderSettings: { ...(this.#state.runtimeProviderSettings ?? {}) },
+      uiSettings: { ...(this.#state.uiSettings ?? {}) }
     };
   }
 
@@ -242,7 +355,8 @@ class UiStore {
       errors: this.#state.errors.map((entry) => ({ ...entry })),
       providerSettings: { ...(this.#state.runtimeProviderSettings ?? {}) },
       runtimeMode: this.#state.runtimeMode,
-      devConsoleVisible: this.#state.devConsoleVisible
+      devConsoleVisible: this.#state.devConsoleVisible,
+      uiSettings: { ...(this.#state.uiSettings ?? {}) }
     };
   }
 
@@ -284,6 +398,20 @@ class UiStore {
 
   updateRuntimeProviderSettings(patch = {}, origin = "ui-store") {
     publish(EVENTS.RUNTIME_PROVIDER_SETTINGS_UPDATE_REQUESTED, {
+      patch: { ...(patch ?? {}) },
+      origin
+    });
+  }
+
+  updateUiSettings(patch = {}, origin = "ui-store") {
+    publish(EVENTS.UI_SETTINGS_UPDATE_REQUESTED, {
+      patch: { ...(patch ?? {}) },
+      origin
+    });
+  }
+
+  updateDocumentDetails(patch = {}, origin = "ui-store") {
+    publish(EVENTS.GRAPH_DOCUMENT_DETAILS_UPDATE_REQUESTED, {
       patch: { ...(patch ?? {}) },
       origin
     });

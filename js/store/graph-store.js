@@ -49,6 +49,15 @@ class GraphStore {
       this.redo();
     });
 
+    subscribe(EVENTS.GRAPH_DOCUMENT_DETAILS_UPDATE_REQUESTED, ({ payload }) => {
+      if (!payload?.patch || typeof payload.patch !== "object") return;
+      this.updateDocumentDetails(payload.patch, {
+        reason: payload?.reason ?? "document_details_updated",
+        origin: payload?.origin ?? "request",
+        recordHistory: payload?.recordHistory !== false
+      });
+    });
+
     subscribe(EVENTS.GRAPH_METADATA_UPDATE_REQUESTED, ({ payload }) => {
       if (!payload?.patch || typeof payload.patch !== "object") return;
       this.updateMetadata(payload.patch, {
@@ -387,6 +396,39 @@ class GraphStore {
 
     this.#emitDocumentChanged(reason, { metadataUpdated: true, requestedBy: origin });
     return clone(merged);
+  }
+
+  updateDocumentDetails(
+    patch = {},
+    { reason = "document_details_updated", origin = "graph-store", recordHistory = true } = {}
+  ) {
+    if (!this.#document || !patch || typeof patch !== "object") return null;
+
+    const nextTitle = patch.title == null ? this.#document.title : String(patch.title).trim();
+    const nextDescription =
+      patch.description == null ? this.#document.description : String(patch.description);
+
+    this.#applyMutation(
+      () => {
+        this.#document.title = nextTitle || "Untitled MindGraph";
+        this.#document.description = nextDescription;
+      },
+      { recordHistory }
+    );
+
+    publish(EVENTS.GRAPH_DOCUMENT_DETAILS_UPDATED, {
+      title: this.#document.title,
+      description: this.#document.description,
+      reason,
+      origin: "graph-store",
+      requestedBy: origin
+    });
+
+    this.#emitDocumentChanged(reason, { detailsUpdated: true, requestedBy: origin });
+    return {
+      title: this.#document.title,
+      description: this.#document.description
+    };
   }
 
   updateNodePosition(nodeId, position) {

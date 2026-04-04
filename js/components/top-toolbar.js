@@ -373,7 +373,7 @@ class TopToolbar extends HTMLElement {
               <option value="http" ${this.#runtimeMode === "http" ? "selected" : ""}>HTTP Runtime</option>
             </select>
             <input data-field="runtime-endpoint" type="text" value="${this.#runtimeEndpoint}" placeholder="/api/mindgraph/runtime" />
-            <button data-action="open-runtime-settings" type="button">Provider Settings</button>
+            <button data-action="open-runtime-settings" type="button">Settings</button>
           </div>
 
           <div class="toolbar-actions toolbar-action-group toolbar-zoom">

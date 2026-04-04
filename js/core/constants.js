@@ -114,7 +114,9 @@ export const PERSISTENCE = Object.freeze({
     autosaveEnabled: "mindgraph.autosave.enabled",
     runtimeMode: "mindgraph.runtime.mode",
     runtimeEndpoint: "mindgraph.runtime.endpoint",
-    runtimeProviderSettings: "mindgraph.runtime.provider.settings"
+    runtimeProviderSettings: "mindgraph.runtime.provider.settings",
+    uiTheme: "mindgraph.ui.theme",
+    uiToolbarDisplay: "mindgraph.ui.toolbar.display"
   })
 });
 

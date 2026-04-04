@@ -3,6 +3,8 @@
 :root {
   --bg: #edf2f8;
   --bg-2: #dce7f6;
+  --bg-glow-a: rgba(255, 255, 255, 0.88);
+  --bg-glow-b: rgba(196, 218, 244, 0.55);
   --surface: #ffffff;
   --surface-muted: #f4f8fe;
   --line: #d7e1ef;
@@ -22,6 +24,27 @@
   --radius: 14px;
   --font: "Manrope", "Segoe UI", "SF Pro Text", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1522;
+  --bg-2: #0a121f;
+  --bg-glow-a: rgba(87, 121, 168, 0.12);
+  --bg-glow-b: rgba(38, 64, 94, 0.24);
+  --surface: #121c2a;
+  --surface-muted: #172333;
+  --line: #263a53;
+  --line-strong: #3a5473;
+  --text: #dce9f9;
+  --text-soft: #9db1c8;
+  --accent: #66a5e2;
+  --accent-soft: #1d3550;
+  --danger: #d57484;
+  --success: #63c28f;
+  --shadow-soft: 0 10px 28px -20px rgba(4, 8, 14, 0.8);
+  --shadow-panel: 0 18px 40px -26px rgba(1, 6, 13, 0.9);
+  color-scheme: dark;
 }
 
 * {
@@ -36,16 +59,17 @@ body {
   height: 100%;
   color: var(--text);
   font-family: var(--font);
-  background:
-    radial-gradient(circle at 7% 3%, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 42%),
-    radial-gradient(circle at 92% 84%, rgba(196, 218, 244, 0.55) 0%, rgba(196, 218, 244, 0) 38%),
-    linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
+  background-color: var(--bg);
 }
 
 body {
   min-height: 100vh;
   font-size: 14px;
   letter-spacing: 0.01em;
+  background:
+    radial-gradient(circle at 7% 3%, var(--bg-glow-a) 0%, rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 92% 84%, var(--bg-glow-b) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
 }
 
 app-shell {

@@ -34,9 +34,29 @@ const sanitizeSettings = (raw = {}) => {
   };
 };
 
+const sanitizeThemePreference = (value) => {
+  const next = String(value ?? "system").trim().toLowerCase();
+  if (next === "light" || next === "dark") return next;
+  return "system";
+};
+
+const sanitizeToolbarDisplay = (value) => {
+  const next = String(value ?? "icons").trim().toLowerCase();
+  if (next === "icons+text" || next === "text") return next;
+  return "icons";
+};
+
+const sanitizeUiSettings = (raw = {}) => ({
+  theme: sanitizeThemePreference(raw?.theme),
+  toolbarDisplay: sanitizeToolbarDisplay(raw?.toolbarDisplay)
+});
+
 class BottomRuntimeSettingsView extends HTMLElement {
   #settings = sanitizeSettings();
   #runtimeMode = "mock";
+  #uiSettings = sanitizeUiSettings();
+  #documentTitle = "";
+  #documentDescription = "";
 
   set settings(value) {
     this.#settings = sanitizeSettings(value ?? {});
@@ -48,6 +68,21 @@ class BottomRuntimeSettingsView extends HTMLElement {
     if (this.isConnected) this.render();
   }
 
+  set uiSettings(value) {
+    this.#uiSettings = sanitizeUiSettings(value ?? {});
+    if (this.isConnected) this.render();
+  }
+
+  set documentTitle(value) {
+    this.#documentTitle = String(value ?? "");
+    if (this.isConnected) this.render();
+  }
+
+  set documentDescription(value) {
+    this.#documentDescription = String(value ?? "");
+    if (this.isConnected) this.render();
+  }
+
   connectedCallback() {
     this.render();
   }
@@ -56,17 +91,68 @@ class BottomRuntimeSettingsView extends HTMLElement {
     uiStore.updateRuntimeProviderSettings(patch, "runtime-settings-view");
   }
 
+  #updateUiSettings(patch) {
+    uiStore.updateUiSettings(patch, "runtime-settings-view");
+  }
+
+  #updateDocumentDetails(patch) {
+    uiStore.updateDocumentDetails(patch, "runtime-settings-view");
+  }
+
   render() {
     const settings = this.#settings;
     const provider = providerByKey[settings.provider] ?? providerByKey.openai;
+    const uiSettings = this.#uiSettings;
     const modelOptions = provider.models
       .map((model) => `<option value="${escapeHtml(model)}" ${settings.model === model ? "selected" : ""}>${escapeHtml(model)}</option>`)
       .join("");
 
     this.innerHTML = `
       <section class="panel-split">
+        <h4>General Settings</h4>
+        <p class="panel-empty">Theme and toolbar preferences are saved in local browser storage.</p>
+      </section>
+
+      <section class="runtime-settings-grid">
+        <label class="runtime-settings-field">
+          <span>Theme</span>
+          <select data-field="theme">
+            <option value="system" ${uiSettings.theme === "system" ? "selected" : ""}>System Default</option>
+            <option value="light" ${uiSettings.theme === "light" ? "selected" : ""}>Light</option>
+            <option value="dark" ${uiSettings.theme === "dark" ? "selected" : ""}>Dark</option>
+          </select>
+        </label>
+
+        <label class="runtime-settings-field">
+          <span>Tool Palette Display</span>
+          <select data-field="toolbar-display">
+            <option value="icons" ${uiSettings.toolbarDisplay === "icons" ? "selected" : ""}>Icons Only</option>
+            <option value="icons+text" ${uiSettings.toolbarDisplay === "icons+text" ? "selected" : ""}>Icons + Text</option>
+            <option value="text" ${uiSettings.toolbarDisplay === "text" ? "selected" : ""}>Text Only</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel-split">
+        <h4>Graph Metadata</h4>
+        <p class="panel-empty">These fields are stored in the graph document and exported with JSON saves.</p>
+      </section>
+
+      <section class="runtime-settings-grid">
+        <label class="runtime-settings-field runtime-settings-field-wide">
+          <span>Graph Title</span>
+          <input type="text" data-field="graph-title" value="${escapeHtml(this.#documentTitle)}" placeholder="Untitled MindGraph" />
+        </label>
+
+        <label class="runtime-settings-field runtime-settings-field-wide">
+          <span>Description</span>
+          <textarea rows="3" data-field="graph-description" placeholder="Describe the intent of this graph.">${escapeHtml(this.#documentDescription)}</textarea>
+        </label>
+      </section>
+
+      <section class="panel-split">
         <h4>Provider Settings</h4>
-        <p class="panel-empty">These keys are stored in local browser storage and sent only to the configured runtime proxy.</p>
+        <p class="panel-empty">Keys stay in local browser storage and are sent only to the configured runtime proxy.</p>
       </section>
 
       <section class="runtime-settings-grid">
@@ -108,6 +194,22 @@ class BottomRuntimeSettingsView extends HTMLElement {
         <p class="panel-empty">Current runtime mode: <strong>${escapeHtml(this.#runtimeMode)}</strong>. Use <strong>HTTP Runtime</strong> in the top toolbar to route runs through the proxy server via WebSocket (with HTTP fallback).</p>
       </section>
     `;
+
+    this.querySelector('[data-field="theme"]')?.addEventListener("change", (event) => {
+      this.#updateUiSettings({ theme: String(event.target.value ?? "system").trim() });
+    });
+
+    this.querySelector('[data-field="toolbar-display"]')?.addEventListener("change", (event) => {
+      this.#updateUiSettings({ toolbarDisplay: String(event.target.value ?? "icons").trim() });
+    });
+
+    this.querySelector('[data-field="graph-title"]')?.addEventListener("change", (event) => {
+      this.#updateDocumentDetails({ title: String(event.target.value ?? "").trim() || "Untitled MindGraph" });
+    });
+
+    this.querySelector('[data-field="graph-description"]')?.addEventListener("change", (event) => {
+      this.#updateDocumentDetails({ description: String(event.target.value ?? "") });
+    });
 
     this.querySelector('[data-field="provider"]')?.addEventListener("change", (event) => {
       const nextProvider = event.target.value;

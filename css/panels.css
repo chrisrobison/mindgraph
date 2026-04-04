@@ -181,15 +181,18 @@
 
 .palette-tool-btn {
   width: 100%;
-  height: 40px;
+  min-height: 40px;
   border: 1px solid #cfdded;
   background: #ffffff;
   color: #1e334d;
   border-radius: 9px;
-  padding: 0;
+  padding: 0.3rem;
   cursor: pointer;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  text-align: center;
 }
 
 .palette-tool-btn:hover {
@@ -208,6 +211,41 @@
   height: 20px;
   object-fit: contain;
   pointer-events: none;
+}
+
+.palette-tool-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+  pointer-events: none;
+}
+
+:root[data-toolbar-display="icons"] .palette-tool-label {
+  display: none;
+}
+
+:root[data-toolbar-display="icons+text"] .palette-group .palette-tools {
+  grid-template-columns: 1fr;
+}
+
+:root[data-toolbar-display="icons+text"] .palette-tool-btn {
+  min-height: 52px;
+  justify-content: flex-start;
+  padding: 0.46rem 0.52rem;
+}
+
+:root[data-toolbar-display="text"] .palette-group .palette-tools {
+  grid-template-columns: 1fr;
+}
+
+:root[data-toolbar-display="text"] .palette-tool-icon {
+  display: none;
+}
+
+:root[data-toolbar-display="text"] .palette-tool-btn {
+  min-height: 40px;
+  justify-content: flex-start;
+  padding: 0.38rem 0.52rem;
 }
 
 .palette-shortcuts {
@@ -899,6 +937,270 @@
   fill: #395677;
   text-anchor: middle;
   font-weight: 700;
+}
+
+:root[data-theme="dark"] .mg-panel {
+  background: color-mix(in srgb, var(--surface) 96%, #111b2a 4%);
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .mg-panel header {
+  background: linear-gradient(180deg, #18273a 0%, #142233 100%);
+  border-bottom-color: var(--line);
+  color: #a9bfda;
+}
+
+:root[data-theme="dark"] .toolbar-action-group {
+  border-right-color: #26374e;
+}
+
+:root[data-theme="dark"] .toolbar-actions button,
+:root[data-theme="dark"] .bottom-panel-toolbar .toolbar-actions button,
+:root[data-theme="dark"] .bottom-dev-toggle,
+:root[data-theme="dark"] .pan-console-toolbar button,
+:root[data-theme="dark"] .inspector-inline-row button {
+  border-color: #2f4562;
+  background: #162536;
+  color: #d6e7fb;
+}
+
+:root[data-theme="dark"] .toolbar-actions button:hover,
+:root[data-theme="dark"] .bottom-panel-toolbar .toolbar-actions button:hover,
+:root[data-theme="dark"] .bottom-dev-toggle:hover,
+:root[data-theme="dark"] .pan-console-toolbar button:hover,
+:root[data-theme="dark"] .inspector-inline-row button:hover {
+  border-color: #3b5a80;
+  background: #1c2f46;
+}
+
+:root[data-theme="dark"] .toolbar-actions button[aria-pressed="true"],
+:root[data-theme="dark"] .bottom-panel-toolbar .toolbar-actions button[aria-pressed="true"],
+:root[data-theme="dark"] .bottom-dev-toggle[aria-pressed="true"] {
+  border-color: #4f78a7;
+  color: #e2efff;
+  background: #214063;
+}
+
+:root[data-theme="dark"] .brand-glyph {
+  background: linear-gradient(145deg, #396fa9 0%, #4f8cca 100%);
+}
+
+:root[data-theme="dark"] .palette-group {
+  border-color: #2b4260;
+  background: #142233;
+}
+
+:root[data-theme="dark"] .palette-group h4,
+:root[data-theme="dark"] .palette-shortcuts h4 {
+  color: #a4bbd8;
+}
+
+:root[data-theme="dark"] .palette-tool-btn {
+  border-color: #2f4765;
+  background: #1a2a3d;
+  color: #dceaf9;
+}
+
+:root[data-theme="dark"] .palette-tool-btn:hover {
+  border-color: #426289;
+  background: #213550;
+}
+
+:root[data-theme="dark"] .palette-tool-btn[aria-pressed="true"] {
+  border-color: #5781b4;
+  background: #284669;
+  color: #eff6ff;
+}
+
+:root[data-theme="dark"] .palette-shortcuts {
+  border-color: #355173;
+  background: linear-gradient(180deg, #16283a 0%, #132133 100%);
+}
+
+:root[data-theme="dark"] .palette-shortcuts p {
+  color: #a3b9d4;
+}
+
+:root[data-theme="dark"] .inspector-summary,
+:root[data-theme="dark"] .inspector-group {
+  border-color: #2f4564;
+  background: #172537;
+}
+
+:root[data-theme="dark"] .inspector-tabs button {
+  border-color: #375273;
+  background: #1a2d43;
+  color: #d2e2f5;
+}
+
+:root[data-theme="dark"] .inspector-tabs button[aria-pressed="true"] {
+  border-color: #5283bb;
+  background: #335e90;
+  color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .inspector-field input[type="text"],
+:root[data-theme="dark"] .inspector-field input[type="url"],
+:root[data-theme="dark"] .inspector-field input[type="number"],
+:root[data-theme="dark"] .inspector-field select,
+:root[data-theme="dark"] .inspector-field textarea,
+:root[data-theme="dark"] .pan-console-toolbar input,
+:root[data-theme="dark"] .runtime-settings-field input,
+:root[data-theme="dark"] .runtime-settings-field select,
+:root[data-theme="dark"] .runtime-settings-field textarea,
+:root[data-theme="dark"] .toolbar-actions input,
+:root[data-theme="dark"] .toolbar-actions select {
+  border-color: #3b5473;
+  background: #111e2d;
+  color: #d8e9fc;
+}
+
+:root[data-theme="dark"] .row-meta,
+:root[data-theme="dark"] .panel-row-meta,
+:root[data-theme="dark"] .panel-row-detail,
+:root[data-theme="dark"] .panel-row-main code,
+:root[data-theme="dark"] .pan-event-row code,
+:root[data-theme="dark"] .chip,
+:root[data-theme="dark"] .runtime-settings-field > span {
+  color: #a7c0dd;
+}
+
+:root[data-theme="dark"] .panel-row,
+:root[data-theme="dark"] .log-item {
+  border-color: #314a68;
+  background: #162639;
+}
+
+:root[data-theme="dark"] .panel-row-main code,
+:root[data-theme="dark"] .pan-event-row code {
+  border-color: #385473;
+  background: #0f1b2a;
+  color: #c4d8ef;
+}
+
+:root[data-theme="dark"] .chip {
+  border-color: #355070;
+  background: #213751;
+}
+
+:root[data-theme="dark"] .panel-row-error {
+  border-color: #6e3f48;
+  background: #3a1f28;
+}
+
+:root[data-theme="dark"] .graph-workspace {
+  border-color: #304663;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background-color: #101c2a;
+  background-image:
+    linear-gradient(to right, rgba(125, 157, 191, 0.2) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(125, 157, 191, 0.2) 1px, transparent 1px);
+}
+
+:root[data-theme="dark"] .graph-edge-chooser-card {
+  border-color: #3a5577;
+  background: rgba(16, 27, 40, 0.98);
+}
+
+:root[data-theme="dark"] .graph-edge-chooser-card h4 {
+  color: #b2c9e5;
+}
+
+:root[data-theme="dark"] .graph-edge-chooser-meta {
+  color: #adc4df;
+}
+
+:root[data-theme="dark"] .mg-node {
+  border-color: #335072;
+  background: linear-gradient(180deg, #162739 0%, #132234 100%);
+  color: #dbe9f9;
+}
+
+:root[data-theme="dark"] .mg-node p,
+:root[data-theme="dark"] .node-meta-grid span,
+:root[data-theme="dark"] .node-meta-inline,
+:root[data-theme="dark"] .node-runtime-summary,
+:root[data-theme="dark"] .node-compact-meta {
+  color: #9db4d0;
+}
+
+:root[data-theme="dark"] .node-meta-grid strong {
+  color: #dbe9f9;
+}
+
+:root[data-theme="dark"] .compact-title {
+  color: #aac1dd;
+}
+
+:root[data-theme="dark"] .node-runtime-summary,
+:root[data-theme="dark"] .node-planner-reason {
+  border-top-color: #35516f;
+}
+
+:root[data-theme="dark"] .status-badge {
+  background: #223348;
+  border-color: #355172;
+  color: #c2d6ee;
+}
+
+:root[data-theme="dark"] .status-active,
+:root[data-theme="dark"] .status-completed {
+  background: #1e3a30;
+  border-color: #2f6d55;
+  color: #9de0bb;
+}
+
+:root[data-theme="dark"] .status-running {
+  background: #423118;
+  border-color: #886b3f;
+  color: #f3cf94;
+}
+
+:root[data-theme="dark"] .status-failed {
+  background: #43262b;
+  border-color: #8e4a54;
+  color: #f5b9c0;
+}
+
+:root[data-theme="dark"] .readonly-badge {
+  background: #1d3c34;
+  border-color: #2f6a5a;
+  color: #9ce3cb;
+}
+
+:root[data-theme="dark"] .node-connect-handle {
+  border-color: #6289b6;
+  background: #3b648f;
+  box-shadow: 0 0 0 1px rgba(16, 24, 36, 0.9);
+}
+
+:root[data-theme="dark"] .graph-edge-label-bg {
+  fill: rgba(15, 30, 46, 0.96);
+  stroke: #3a577a;
+}
+
+:root[data-theme="dark"] .graph-edge-label-group.graph-edge-category-execution .graph-edge-label-bg {
+  fill: rgba(56, 41, 20, 0.96);
+  stroke: #947643;
+}
+
+:root[data-theme="dark"] .graph-edge-label-group.graph-edge-category-data .graph-edge-label-bg {
+  fill: rgba(23, 54, 44, 0.96);
+  stroke: #3c826d;
+}
+
+:root[data-theme="dark"] .graph-edge-label-group.graph-edge-category-hierarchy .graph-edge-label-bg {
+  fill: rgba(22, 42, 64, 0.96);
+  stroke: #446996;
+}
+
+:root[data-theme="dark"] .graph-edge-label-group.graph-edge-category-informational .graph-edge-label-bg {
+  fill: rgba(36, 47, 62, 0.96);
+  stroke: #5a6f8d;
+}
+
+:root[data-theme="dark"] .graph-edge-label {
+  fill: #cedff2;
 }
 
 @media (max-width: 1200px) {

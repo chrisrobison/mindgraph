@@ -9,7 +9,7 @@ const tabs = [
   { key: "queue", label: "Task Queue", tag: "bottom-task-queue-view" },
   { key: "history", label: "Run History", tag: "bottom-run-history-view" },
   { key: "traces", label: "Run Traces", tag: "bottom-trace-view" },
-  { key: "settings", label: "Runtime Settings", tag: "bottom-runtime-settings-view" },
+  { key: "settings", label: "Settings", tag: "bottom-runtime-settings-view" },
   { key: "errors", label: "Errors", tag: "bottom-error-view" }
 ];
 
@@ -46,6 +46,12 @@ class BottomActivityPanel extends HTMLElement {
         this.#runtime = uiStore.getRuntimeState();
         this.renderView();
         this.#syncDevConsoleToggle();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.GRAPH_DOCUMENT_CHANGED, () => {
+        if (this.#tab === "settings") this.renderView();
       })
     );
 
@@ -129,6 +135,10 @@ class BottomActivityPanel extends HTMLElement {
     } else if (this.#tab === "settings") {
       view.settings = this.#runtime.providerSettings;
       view.runtimeMode = this.#runtime.runtimeMode;
+      view.uiSettings = this.#runtime.uiSettings;
+      const document = graphStore.getDocument();
+      view.documentTitle = document?.title ?? "";
+      view.documentDescription = document?.description ?? "";
     } else {
       view.items = this.#runtime.errors;
     }

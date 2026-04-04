@@ -89,6 +89,7 @@ class LeftToolPalette extends HTMLElement {
           (tool) => `
             <button class="palette-tool-btn" type="button" data-tool="${tool.id}" aria-pressed="false" title="${tool.label}" aria-label="${tool.label}">
               <img class="palette-tool-icon" src="${ICON_BY_TOOL[tool.id] ?? ""}" alt="" aria-hidden="true" />
+              <span class="palette-tool-label">${tool.label}</span>
             </button>
           `
         )
