@@ -120,6 +120,35 @@ const buildTopologicalOrder = (nodeIds, incomingByNode, outgoingByNode) => {
   return [...order, ...leftovers];
 };
 
+export const buildRunnableDependencyGraph = (plan = {}) => {
+  const runnableNodeIds = toArray(plan?.executionOrder).filter((nodeId) => Boolean(plan?.nodes?.[nodeId]?.runnable));
+  const runnableSet = new Set(runnableNodeIds);
+  const orderIndexByNode = new Map(runnableNodeIds.map((nodeId, index) => [nodeId, index]));
+  const upstreamByNode = new Map();
+  const downstreamByNode = new Map(runnableNodeIds.map((nodeId) => [nodeId, []]));
+
+  runnableNodeIds.forEach((nodeId) => {
+    const upstream = [...new Set(toArray(plan?.nodes?.[nodeId]?.upstreamDependencies).filter((depId) => runnableSet.has(depId)))];
+    upstreamByNode.set(nodeId, upstream);
+    upstream.forEach((depId) => {
+      if (!downstreamByNode.has(depId)) return;
+      downstreamByNode.get(depId).push(nodeId);
+    });
+  });
+
+  downstreamByNode.forEach((targets, depId) => {
+    targets.sort((a, b) => (orderIndexByNode.get(a) ?? Number.MAX_SAFE_INTEGER) - (orderIndexByNode.get(b) ?? Number.MAX_SAFE_INTEGER));
+    downstreamByNode.set(depId, [...new Set(targets)]);
+  });
+
+  return {
+    runnableNodeIds,
+    orderIndexByNode,
+    upstreamByNode,
+    downstreamByNode
+  };
+};
+
 export const buildExecutionPlan = (document, options = {}) => {
   const nodes = toArray(document?.nodes);
   const edges = toArray(document?.edges);

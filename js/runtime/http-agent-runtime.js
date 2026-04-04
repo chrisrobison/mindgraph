@@ -7,6 +7,12 @@ import { AgentRuntime } from "./agent-runtime.js";
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const makeRunId = (nodeId) => `http_${nodeId}_${Date.now()}_${Math.floor(Math.random() * 1_000)}`;
 const asMessage = (error) => (error instanceof Error ? error.message : String(error));
+const asText = (value, fallback = "") => {
+  const next = String(value ?? "").trim();
+  return next || fallback;
+};
+const toObject = (value) => (value && typeof value === "object" ? value : {});
+const compactText = (value, max = 420) => asText(value).replace(/\s+/g, " ").slice(0, max);
 
 const resolveWsUrl = (endpoint) => {
   const base = String(endpoint ?? "").trim().replace(/\/$/, "");
@@ -33,6 +39,7 @@ export class HttpAgentRuntime extends AgentRuntime {
   #socket = null;
   #socketOpenPromise = null;
   #pendingSocketRuns = new Map();
+  #streamStateByRequest = new Map();
   #requestSeq = 0;
 
   constructor(options = {}) {
@@ -71,6 +78,7 @@ export class HttpAgentRuntime extends AgentRuntime {
       clearTimeout(pending.timeoutId);
       pending.reject(new Error(`Cancelled: ${reason}`));
       this.#pendingSocketRuns.delete(requestId);
+      this.#streamStateByRequest.delete(requestId);
     }
   }
 
@@ -354,11 +362,13 @@ export class HttpAgentRuntime extends AgentRuntime {
     return new Promise((resolve, reject) => {
       const timeoutId = window.setTimeout(() => {
         this.#pendingSocketRuns.delete(requestId);
+        this.#streamStateByRequest.delete(requestId);
         reject(new Error("WebSocket runtime request timed out"));
       }, 120_000);
 
       const onAbort = () => {
         this.#pendingSocketRuns.delete(requestId);
+        this.#streamStateByRequest.delete(requestId);
         clearTimeout(timeoutId);
         try {
           socket.send(JSON.stringify({ type: "runtime.run_node.cancel", requestId }));
@@ -451,42 +461,274 @@ export class HttpAgentRuntime extends AgentRuntime {
 
     const requestId = message?.requestId;
     if (!requestId) return;
+    const pending = this.#pendingSocketRuns.get(requestId);
 
     if (message.type === "runtime.run_node.progress") {
       publish(EVENTS.RUNTIME_TRACE_APPENDED, {
         kind: "proxy_progress",
         at: message?.at ?? new Date().toISOString(),
-        nodeId: message?.nodeId,
-        runId: message?.runId,
+        nodeId: message?.nodeId ?? pending?.nodeId,
+        runId: message?.runId ?? pending?.runId,
         mode: "http",
         detail: {
           stage: message?.stage,
           message: message?.message
         }
       });
+      this.#applyStreamingNodeUpdate(requestId, {
+        eventType: "runtime.stream.stage",
+        at: message?.at,
+        stage: message?.stage,
+        message: message?.message,
+        nodeId: message?.nodeId ?? pending?.nodeId,
+        runId: message?.runId ?? pending?.runId
+      });
       return;
     }
 
-    const pending = this.#pendingSocketRuns.get(requestId);
+    if (message.type === "runtime.run_node.event") {
+      const trace = this.#normalizeStreamTraceEvent(requestId, message?.event, pending);
+      if (trace) {
+        publish(EVENTS.RUNTIME_TRACE_APPENDED, trace);
+      }
+      this.#applyStreamingNodeUpdate(requestId, message?.event);
+      return;
+    }
+
     if (!pending) return;
 
     if (message.type === "runtime.run_node.completed") {
       this.#pendingSocketRuns.delete(requestId);
+      this.#streamStateByRequest.delete(requestId);
       pending.resolve(message.result ?? {});
       return;
     }
 
     if (message.type === "runtime.run_node.failed") {
       this.#pendingSocketRuns.delete(requestId);
+      this.#streamStateByRequest.delete(requestId);
       const error = new Error(String(message.error ?? "Runtime WebSocket request failed"));
       error.noHttpFallback = true;
       pending.reject(error);
     }
   }
 
+  #normalizeStreamTraceEvent(requestId, rawEvent, pending) {
+    const event = toObject(rawEvent);
+    const eventType = asText(event?.eventType);
+    if (!eventType) return null;
+
+    const at = asText(event?.at, new Date().toISOString());
+    const nodeId = asText(event?.nodeId) || (pending?.nodeId ?? null);
+    const runId = asText(event?.runId) || (pending?.runId ?? null);
+
+    if (eventType === "runtime.stream.stage") {
+      return {
+        kind: "proxy_stage",
+        at,
+        nodeId,
+        runId,
+        mode: "http",
+        detail: {
+          eventType,
+          requestId,
+          stage: event?.stage,
+          message: event?.message
+        }
+      };
+    }
+
+    if (eventType === "runtime.stream.text.delta") {
+      const delta = String(event?.delta ?? "");
+      return {
+        kind: "proxy_text_delta",
+        at,
+        nodeId,
+        runId,
+        mode: "http",
+        detail: {
+          eventType,
+          requestId,
+          delta,
+          deltaIndex: Number.isFinite(Number(event?.deltaIndex)) ? Number(event.deltaIndex) : null,
+          deltaLength: delta.length
+        }
+      };
+    }
+
+    if (eventType === "runtime.stream.tool_call.started") {
+      return {
+        kind: "proxy_tool_call_started",
+        at,
+        nodeId,
+        runId,
+        mode: "http",
+        detail: {
+          eventType,
+          requestId,
+          toolCallId: event?.toolCallId,
+          toolName: event?.toolName,
+          input: event?.input ?? null
+        }
+      };
+    }
+
+    if (eventType === "runtime.stream.tool_call.progress") {
+      return {
+        kind: "proxy_tool_call_progress",
+        at,
+        nodeId,
+        runId,
+        mode: "http",
+        detail: {
+          eventType,
+          requestId,
+          toolCallId: event?.toolCallId,
+          toolName: event?.toolName,
+          progress: event?.progress,
+          message: event?.message
+        }
+      };
+    }
+
+    if (eventType === "runtime.stream.tool_call.completed") {
+      return {
+        kind: "proxy_tool_call_completed",
+        at,
+        nodeId,
+        runId,
+        mode: "http",
+        detail: {
+          eventType,
+          requestId,
+          toolCallId: event?.toolCallId,
+          toolName: event?.toolName,
+          output: event?.output ?? null
+        }
+      };
+    }
+
+    if (eventType === "runtime.stream.output.final") {
+      return {
+        kind: "proxy_output_final",
+        at,
+        nodeId,
+        runId,
+        mode: "http",
+        detail: {
+          eventType,
+          requestId,
+          confidence: event?.confidence,
+          summary: event?.summary,
+          output: event?.output ?? null
+        }
+      };
+    }
+
+    return {
+      kind: "proxy_stream_event",
+      at,
+      nodeId,
+      runId,
+      mode: "http",
+      detail: {
+        eventType,
+        requestId,
+        ...event
+      }
+    };
+  }
+
+  #applyStreamingNodeUpdate(requestId, rawEvent) {
+    const pending = this.#pendingSocketRuns.get(requestId);
+    if (!pending?.nodeId) return;
+
+    const event = toObject(rawEvent);
+    const eventType = asText(event?.eventType);
+    const at = asText(event?.at, new Date().toISOString());
+
+    const state =
+      this.#streamStateByRequest.get(requestId) ??
+      {
+        nodeId: pending.nodeId,
+        runId: pending.runId,
+        text: "",
+        stage: "",
+        stageMessage: "",
+        toolCalls: new Map(),
+        finalOutput: null
+      };
+
+    if (eventType === "runtime.stream.stage") {
+      state.stage = asText(event?.stage);
+      state.stageMessage = asText(event?.message);
+    } else if (eventType === "runtime.stream.text.delta") {
+      const delta = String(event?.delta ?? "");
+      state.text += delta;
+    } else if (eventType === "runtime.stream.tool_call.started" || eventType === "runtime.stream.tool_call.progress") {
+      const toolCallId = asText(event?.toolCallId) || `tool_${state.toolCalls.size + 1}`;
+      const current = state.toolCalls.get(toolCallId) ?? { id: toolCallId };
+      state.toolCalls.set(toolCallId, {
+        ...current,
+        id: toolCallId,
+        name: asText(event?.toolName) || current.name || "tool",
+        input: event?.input ?? current.input ?? null,
+        progress: event?.progress ?? current.progress ?? null,
+        message: asText(event?.message) || current.message || ""
+      });
+    } else if (eventType === "runtime.stream.tool_call.completed") {
+      const toolCallId = asText(event?.toolCallId) || `tool_${state.toolCalls.size + 1}`;
+      const current = state.toolCalls.get(toolCallId) ?? { id: toolCallId };
+      state.toolCalls.set(toolCallId, {
+        ...current,
+        id: toolCallId,
+        name: asText(event?.toolName) || current.name || "tool",
+        output: event?.output ?? null
+      });
+    } else if (eventType === "runtime.stream.output.final") {
+      state.finalOutput = event?.output && typeof event.output === "object" ? event.output : null;
+    }
+
+    this.#streamStateByRequest.set(requestId, state);
+
+    const latest = this.store.getNode(state.nodeId);
+    if (!latest) return;
+
+    const summary =
+      compactText(state.text, 280) ||
+      compactText(state.stageMessage, 280) ||
+      (state.stage ? `Stage: ${state.stage}` : "Streaming response...");
+
+    const partialOutput =
+      state.finalOutput ??
+      {
+        type: "provider_stream",
+        summary: compactText(state.text, 420) || compactText(state.stageMessage, 420) || "Streaming response",
+        text: state.text,
+        toolCalls: [...state.toolCalls.values()],
+        partial: true,
+        generatedAt: at
+      };
+
+    this.publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
+      nodeId: state.nodeId,
+      patch: {
+        data: {
+          ...(latest?.data ?? {}),
+          status: "running",
+          lastRunAt: at,
+          lastRunSummary: summary,
+          lastOutput: partialOutput
+        }
+      },
+      origin: "http-runtime"
+    });
+  }
+
   #handleSocketClosed() {
     const pending = [...this.#pendingSocketRuns.entries()];
     this.#pendingSocketRuns.clear();
+    this.#streamStateByRequest.clear();
     pending.forEach(([, entry]) => {
       clearTimeout(entry.timeoutId);
       entry.reject(new Error("Runtime WebSocket disconnected"));

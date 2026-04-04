@@ -6,6 +6,7 @@ import { uiStore } from "../store/ui-store.js";
 import { buildExecutionPlan } from "./execution-planner.js";
 import { HttpAgentRuntime } from "./http-agent-runtime.js";
 import { mockAgentRuntime } from "./mock-agent-runtime.js";
+import { resolveBatchConcurrencyLimit, runPlanWithBranchParallelism } from "./plan-batch-runner.js";
 
 const clampInt = (value, fallback, min = 1, max = 6) => {
   const n = Number(value);
@@ -30,6 +31,7 @@ const defaultPolicy = Object.freeze({
   retryBackoffFactor: 1.7,
   failFast: false
 });
+const defaultBatchConcurrencyLimit = 2;
 
 const isNonRetryable = (result) => {
   const outputType = result?.output?.type ?? "";
@@ -338,79 +340,70 @@ class RuntimeService {
   async #runPlan(plan, context = {}) {
     this.#cancelRequested = false;
     const startedAt = nowIso();
-    const runIds = [];
+    const concurrencyLimit = this.#resolveBatchConcurrencyLimit(context);
 
     publish(EVENTS.RUNTIME_TRACE_APPENDED, buildPlannerSnapshotTrace(plan, { at: startedAt, mode: this.#mode }));
+    publish(EVENTS.RUNTIME_TRACE_APPENDED, {
+      kind: "plan_parallel_started",
+      at: startedAt,
+      mode: this.#mode,
+      concurrencyLimit
+    });
 
-    const failedNodeIds = new Set();
-    const skippedNodeIds = [];
-    let completed = 0;
-    let failed = 0;
-
-    for (const nodeId of plan.executionOrder ?? []) {
-      if (!plan.nodes?.[nodeId]?.runnable) continue;
-      if (this.#cancelRequested) {
-        skippedNodeIds.push(nodeId);
-        continue;
-      }
-
-      const upstream = plan.nodes?.[nodeId]?.upstreamDependencies ?? [];
-      const blockedByFailure = upstream.some((depId) => failedNodeIds.has(depId));
-      if (blockedByFailure) {
-        skippedNodeIds.push(nodeId);
-        publish(EVENTS.RUNTIME_RUN_HISTORY_APPENDED, {
-          nodeId,
-          nodeLabel: graphStore.getNode(nodeId)?.label ?? nodeId,
-          runId: `skip_${nodeId}_${Date.now()}`,
-          status: "blocked_by_upstream_failure",
-          summary: `Skipped ${nodeId}: upstream dependency failed`,
-          confidence: 0,
-          output: {
-            type: "upstream_failure_propagation"
-          },
+    const batchResult = await runPlanWithBranchParallelism(plan, {
+      concurrencyLimit,
+      shouldCancel: () => this.#cancelRequested,
+      runNode: (nodeId) => this.runNode(nodeId, { ...context, inBatch: true }),
+      resolveFailFast: (nodeId, result) => {
+        if (result?.ok) return false;
+        return this.#resolvePolicy(graphStore.getNode(nodeId), context).failFast;
+      },
+      onNodeScheduled: ({ nodeId, scheduleIndex, fallback }) => {
+        publish(EVENTS.RUNTIME_TRACE_APPENDED, {
+          kind: "batch_node_scheduled",
           at: nowIso(),
+          nodeId,
+          scheduleIndex,
+          fallback: Boolean(fallback),
           mode: this.#mode
         });
+      },
+      onNodeSkipped: ({ nodeId, reason, upstream, failedUpstream }) => {
+        if (reason === "upstream_failure") {
+          this.#emitUpstreamFailureSkip(nodeId, upstream, failedUpstream);
+          return;
+        }
+
         publish(EVENTS.RUNTIME_TRACE_APPENDED, {
-          kind: "skipped_upstream_failure",
+          kind: "skipped",
           at: nowIso(),
           nodeId,
           mode: this.#mode,
-          upstream
+          reason,
+          upstream: unique(upstream),
+          failedUpstream: unique(failedUpstream)
         });
-        continue;
-      }
-
-      const result = await this.runNode(nodeId, { ...context, inBatch: true });
-      if (result?.runId) runIds.push(result.runId);
-
-      if (result?.ok) {
-        completed += 1;
-      } else {
-        failed += 1;
-        failedNodeIds.add(nodeId);
-
-        const failFast = this.#resolvePolicy(graphStore.getNode(nodeId), context).failFast;
-        if (failFast) {
+      },
+      onNodeResult: ({ nodeId, result }) => {
+        if (!result?.ok && this.#resolvePolicy(graphStore.getNode(nodeId), context).failFast) {
           publish(EVENTS.RUNTIME_TRACE_APPENDED, {
             kind: "fail_fast_stop",
             at: nowIso(),
             nodeId,
             mode: this.#mode
           });
-          break;
         }
       }
-    }
+    });
 
     const summary = {
-      ok: failed === 0,
+      ok: batchResult.failed === 0,
       mode: this.#mode,
       rootNodeId: plan.rootNodeId ?? null,
-      completed,
-      failed,
-      skipped: skippedNodeIds.length,
-      runIds,
+      completed: batchResult.completed,
+      failed: batchResult.failed,
+      skipped: batchResult.skippedNodeIds.length,
+      runIds: batchResult.runIds,
       cancelled: this.#cancelRequested
     };
 
@@ -438,6 +431,42 @@ class RuntimeService {
       ),
       failFast: Boolean(overridePolicy.failFast ?? nodePolicy.failFast ?? defaultPolicy.failFast)
     };
+  }
+
+  #resolveBatchConcurrencyLimit(context = {}) {
+    const document = graphStore.getDocument();
+    const metadataPolicy = document?.metadata?.runtimePolicy ?? {};
+    const overridePolicy = context?.runtimePolicy ?? {};
+    const requestedLimit =
+      overridePolicy.batchConcurrencyLimit ??
+      overridePolicy.concurrencyLimit ??
+      metadataPolicy.batchConcurrencyLimit ??
+      metadataPolicy.concurrencyLimit;
+    return resolveBatchConcurrencyLimit(requestedLimit, defaultBatchConcurrencyLimit);
+  }
+
+  #emitUpstreamFailureSkip(nodeId, upstream = [], failedUpstream = []) {
+    publish(EVENTS.RUNTIME_RUN_HISTORY_APPENDED, {
+      nodeId,
+      nodeLabel: graphStore.getNode(nodeId)?.label ?? nodeId,
+      runId: `skip_${nodeId}_${Date.now()}`,
+      status: "blocked_by_upstream_failure",
+      summary: `Skipped ${nodeId}: upstream dependency failed`,
+      confidence: 0,
+      output: {
+        type: "upstream_failure_propagation"
+      },
+      at: nowIso(),
+      mode: this.#mode
+    });
+    publish(EVENTS.RUNTIME_TRACE_APPENDED, {
+      kind: "skipped_upstream_failure",
+      at: nowIso(),
+      nodeId,
+      mode: this.#mode,
+      upstream: unique(upstream),
+      failedUpstream: unique(failedUpstream)
+    });
   }
 
   #getAdapter() {

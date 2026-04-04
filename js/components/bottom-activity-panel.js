@@ -8,6 +8,7 @@ const tabs = [
   { key: "activity", label: "Activity Log", tag: "bottom-activity-log-view" },
   { key: "queue", label: "Task Queue", tag: "bottom-task-queue-view" },
   { key: "history", label: "Run History", tag: "bottom-run-history-view" },
+  { key: "timeline", label: "Timeline", tag: "bottom-run-session-view" },
   { key: "traces", label: "Run Traces", tag: "bottom-trace-view" },
   { key: "plannerDiff", label: "Planner Diff", tag: "bottom-planner-diff-view" },
   { key: "settings", label: "Settings", tag: "bottom-runtime-settings-view" },
@@ -23,6 +24,10 @@ class BottomActivityPanel extends HTMLElement {
   #runtime = uiStore.getRuntimeState();
   #selectedNodeId = null;
   #selectedNode = null;
+
+  #isSelectionSensitiveTab() {
+    return this.#tab === "activity" || this.#tab === "timeline";
+  }
 
   connectedCallback() {
     const state = uiStore.getState();
@@ -58,9 +63,10 @@ class BottomActivityPanel extends HTMLElement {
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
-        this.#selectedNodeId = payload?.nodeId ?? null;
+        const selectedIds = Array.isArray(payload?.nodeIds) ? payload.nodeIds : [];
+        this.#selectedNodeId = payload?.nodeId ?? selectedIds[0] ?? null;
         this.#selectedNode = this.#selectedNodeId ? graphStore.getNode(this.#selectedNodeId) : null;
-        if (this.#tab === "activity") this.renderView();
+        if (this.#isSelectionSensitiveTab()) this.renderView();
       })
     );
 
@@ -68,7 +74,7 @@ class BottomActivityPanel extends HTMLElement {
       subscribe(EVENTS.GRAPH_SELECTION_CLEARED, () => {
         this.#selectedNodeId = null;
         this.#selectedNode = null;
-        if (this.#tab === "activity") this.renderView();
+        if (this.#isSelectionSensitiveTab()) this.renderView();
       })
     );
 
@@ -76,7 +82,7 @@ class BottomActivityPanel extends HTMLElement {
       subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
         if (!this.#selectedNodeId || payload?.nodeId !== this.#selectedNodeId) return;
         this.#selectedNode = graphStore.getNode(this.#selectedNodeId);
-        if (this.#tab === "activity") this.renderView();
+        if (this.#isSelectionSensitiveTab()) this.renderView();
       })
     );
 
@@ -85,7 +91,7 @@ class BottomActivityPanel extends HTMLElement {
         if (!this.#selectedNodeId || payload?.nodeId !== this.#selectedNodeId) return;
         this.#selectedNodeId = null;
         this.#selectedNode = null;
-        if (this.#tab === "activity") this.renderView();
+        if (this.#isSelectionSensitiveTab()) this.renderView();
       })
     );
   }
@@ -131,6 +137,12 @@ class BottomActivityPanel extends HTMLElement {
       view.items = this.#runtime.taskQueue;
     } else if (this.#tab === "history") {
       view.items = this.#runtime.runHistory;
+    } else if (this.#tab === "timeline") {
+      const document = graphStore.getDocument();
+      view.traces = this.#runtime.traces;
+      view.runHistory = this.#runtime.runHistory;
+      view.selectedNodeId = this.#selectedNodeId;
+      view.nodeCatalog = document?.nodes ?? [];
     } else if (this.#tab === "traces") {
       view.items = this.#runtime.traces;
     } else if (this.#tab === "settings") {
