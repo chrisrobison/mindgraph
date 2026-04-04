@@ -16,6 +16,7 @@ const tabs = [
   { key: "prompt", label: "Prompt", tag: "inspector-prompt" },
   { key: "data", label: "Data", tag: "inspector-data" },
   { key: "tools", label: "Tools", tag: "inspector-tools" },
+  { key: "diagnostics", label: "Diagnostics", tag: "inspector-diagnostics" },
   { key: "activity", label: "Activity", tag: "inspector-activity" },
   { key: "output", label: "Output", tag: "inspector-output" },
   { key: "automation", label: "Automation", tag: "inspector-automation" },

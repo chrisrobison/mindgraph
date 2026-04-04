@@ -24,6 +24,7 @@ import "./components/inspector/inspector-overview.js";
 import "./components/inspector/inspector-prompt.js";
 import "./components/inspector/inspector-data.js";
 import "./components/inspector/inspector-tools.js";
+import "./components/inspector/inspector-diagnostics.js";
 import "./components/inspector/inspector-activity.js";
 import "./components/inspector/inspector-output.js";
 import "./components/inspector/inspector-automation.js";

@@ -457,6 +457,125 @@
   color: #304766;
 }
 
+.inspector-diagnostics-status {
+  border: 1px solid #d5e3f4;
+  border-radius: 10px;
+  padding: 0.56rem 0.62rem;
+  background: #f8fbff;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.inspector-diagnostics-status.is-good {
+  border-color: #b7decd;
+  background: #effaf5;
+}
+
+.inspector-diagnostics-status.is-warn {
+  border-color: #e6d2aa;
+  background: #fff8eb;
+}
+
+.inspector-diagnostics-status.is-info {
+  border-color: #d2deed;
+  background: #f4f8fd;
+}
+
+.inspector-diagnostics-status-label {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #385a7f;
+}
+
+.inspector-diagnostics-status-summary,
+.inspector-diagnostics-status-meta {
+  margin: 0;
+  font-size: 0.79rem;
+  color: #314b68;
+}
+
+.inspector-diagnostics-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.48rem;
+}
+
+.inspector-diagnostics-reason,
+.inspector-diagnostics-item {
+  border: 1px solid #dbe7f4;
+  border-radius: 10px;
+  background: #f9fcff;
+  padding: 0.52rem 0.56rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.inspector-diagnostics-item-title {
+  margin: 0;
+  font-size: 0.79rem;
+  font-weight: 700;
+  color: #2f4867;
+}
+
+.inspector-diagnostics-item-meta {
+  margin: 0.16rem 0 0;
+  font-size: 0.76rem;
+  color: #506987;
+}
+
+.inspector-diagnostics-actions {
+  display: grid;
+  gap: 0.36rem;
+}
+
+.inspector-diagnostics-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+}
+
+.inspector-diagnostics-action-row button {
+  border: 1px solid #c8d7ea;
+  background: #fdfefe;
+  color: #1f3550;
+  border-radius: 9px;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.73rem;
+  line-height: 1.2;
+  box-shadow: var(--shadow-soft);
+}
+
+.inspector-diagnostics-action-row button:hover {
+  border-color: #afc4de;
+  background: #f5f9ff;
+}
+
+.inspector-diagnostics-chips {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+}
+
+.inspector-diagnostics-chips li {
+  border: 1px solid #d4dfed;
+  border-radius: 999px;
+  padding: 0.14rem 0.42rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3c5878;
+  background: #f2f7fd;
+}
+
 .log-list {
   list-style: none;
   padding: 0;
@@ -1037,6 +1156,61 @@
   border-color: #5283bb;
   background: #335e90;
   color: #f4f8ff;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-status {
+  border-color: #365172;
+  background: #122033;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-status.is-good {
+  border-color: #3e705f;
+  background: #122a22;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-status.is-warn {
+  border-color: #6a5636;
+  background: #2a2215;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-status-label {
+  color: #c4d8ef;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-status-summary,
+:root[data-theme="dark"] .inspector-diagnostics-status-meta {
+  color: #a8c0db;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-reason,
+:root[data-theme="dark"] .inspector-diagnostics-item {
+  border-color: #314a68;
+  background: #162639;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-item-title {
+  color: #d3e4f8;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-item-meta {
+  color: #9db6d3;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-action-row button {
+  border-color: #2f4562;
+  background: #162536;
+  color: #d6e7fb;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-action-row button:hover {
+  border-color: #3b5a80;
+  background: #1c2f46;
+}
+
+:root[data-theme="dark"] .inspector-diagnostics-chips li {
+  border-color: #365172;
+  background: #1d3047;
+  color: #b8cde5;
 }
 
 :root[data-theme="dark"] .inspector-field input[type="text"],
