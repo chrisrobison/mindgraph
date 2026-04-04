@@ -101,10 +101,12 @@ Behavior:
 - respects cancellation across adapters
 - propagates upstream failures through batch skips
 - supports per-node fail-fast policy
+- injects runtime provider settings (`provider`, `model`, `apiKey`, `temperature`, `maxTokens`, `systemPrompt`) into HTTP runtime requests
 
 Runtime adapters currently implemented:
 - `mock-agent-runtime` (local planner-aware execution)
-- `http-agent-runtime` (`POST {endpoint}/run-node`)
+- `http-agent-runtime` (WebSocket-first transport at `{endpoint}/ws`, with HTTP fallback to `POST {endpoint}/run-node`)
+- `provider-proxy-server` backend (`server/provider-proxy-server.mjs`) supporting OpenAI ChatGPT, Anthropic Claude, and Google Gemini
 
 ## 6. UI Semantic Visibility
 
@@ -114,6 +116,7 @@ Implemented UI surfaces:
 - edge contract editor (ports/type/required/schema)
 - planner readiness status in node/inspector
 - run traces tab for execution diagnostics
+- runtime settings tab for provider/model/API key configuration
 
 ## 7. Persistence and Audit
 
@@ -131,7 +134,9 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 - connect flow aligned with runtime/planner semantics
 - port-level node IO defaults + edge payload contracts
 - request-driven runtime service with retry/cancel/failure propagation
-- HTTP adapter behind shared planner/executor interface
+- HTTP adapter behind shared planner/executor interface with WebSocket realtime transport
+- provider proxy server for OpenAI/Anthropic/Gemini model execution
+- runtime settings control panel for provider/model/key selection
 - persisted planner snapshots and run traces
 
 ### Planned next
