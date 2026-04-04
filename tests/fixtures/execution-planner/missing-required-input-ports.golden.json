@@ -1,0 +1,58 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "data_primary",
+    "multi_input_transform"
+  ],
+  "runnableNodeIds": [
+    "multi_input_transform"
+  ],
+  "readyNodeIds": [],
+  "blockedNodeIds": [
+    "multi_input_transform"
+  ],
+  "cycles": [],
+  "executionOrder": [
+    "multi_input_transform"
+  ],
+  "nodes": {
+    "data_primary": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "multi_input_transform": {
+      "runnable": true,
+      "ready": false,
+      "blocked": true,
+      "blockedReasons": [
+        "Missing required input ports: secondary"
+      ],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [
+        "secondary"
+      ],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "data_primary"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    }
+  }
+}

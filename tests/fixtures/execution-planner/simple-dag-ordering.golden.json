@@ -1,0 +1,98 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "data_source",
+    "transform_normalize",
+    "agent_synth",
+    "view_brief"
+  ],
+  "runnableNodeIds": [
+    "transform_normalize",
+    "agent_synth",
+    "view_brief"
+  ],
+  "readyNodeIds": [
+    "transform_normalize",
+    "agent_synth",
+    "view_brief"
+  ],
+  "blockedNodeIds": [],
+  "cycles": [],
+  "executionOrder": [
+    "transform_normalize",
+    "agent_synth",
+    "view_brief"
+  ],
+  "nodes": {
+    "agent_synth": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "transform_normalize"
+      ],
+      "dataProviderIds": [
+        "transform_normalize"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 1
+    },
+    "data_source": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "transform_normalize": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "data_source"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    },
+    "view_brief": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "agent_synth"
+      ],
+      "dataProviderIds": [
+        "agent_synth"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 2
+    }
+  }
+}

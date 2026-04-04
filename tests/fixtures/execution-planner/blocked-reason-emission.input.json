@@ -1,0 +1,29 @@
+{
+  "name": "blocked-reason-emission",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "upstream_agent",
+        "type": "agent",
+        "data": {
+          "role": "Upstream",
+          "mode": "orchestrate"
+        }
+      },
+      {
+        "id": "blocked_agent",
+        "type": "agent",
+        "data": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_upstream_depends_blocked",
+        "type": "depends_on",
+        "source": "upstream_agent",
+        "target": "blocked_agent"
+      }
+    ]
+  }
+}

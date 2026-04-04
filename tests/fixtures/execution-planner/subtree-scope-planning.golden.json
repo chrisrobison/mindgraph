@@ -1,0 +1,91 @@
+{
+  "rootNodeId": "root_note",
+  "scopeNodeIds": [
+    "root_note",
+    "in_scope_data",
+    "in_scope_agent",
+    "nested_view"
+  ],
+  "runnableNodeIds": [
+    "in_scope_agent",
+    "nested_view"
+  ],
+  "readyNodeIds": [
+    "in_scope_agent",
+    "nested_view"
+  ],
+  "blockedNodeIds": [],
+  "cycles": [],
+  "executionOrder": [
+    "in_scope_agent",
+    "nested_view"
+  ],
+  "nodes": {
+    "in_scope_agent": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [
+        "in_scope_data"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    },
+    "in_scope_data": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [
+        "sourceType",
+        "sourcePath",
+        "refreshMode"
+      ],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    },
+    "nested_view": {
+      "runnable": true,
+      "ready": true,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [
+        "in_scope_agent"
+      ],
+      "dataProviderIds": [
+        "in_scope_agent"
+      ],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 1
+    },
+    "root_note": {
+      "runnable": false,
+      "ready": false,
+      "blocked": false,
+      "blockedReasons": [],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": -1
+    }
+  }
+}

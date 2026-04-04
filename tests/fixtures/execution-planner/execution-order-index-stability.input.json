@@ -1,0 +1,122 @@
+{
+  "name": "execution-order-index-stability",
+  "options": {},
+  "document": {
+    "nodes": [
+      {
+        "id": "helper_note",
+        "type": "note",
+        "data": {}
+      },
+      {
+        "id": "first_agent",
+        "type": "agent",
+        "data": {
+          "role": "First",
+          "mode": "orchestrate",
+          "lastOutput": { "ok": true }
+        }
+      },
+      {
+        "id": "second_transform",
+        "type": "transformer",
+        "data": {
+          "transformExpression": "identity",
+          "lastOutput": { "ok": true }
+        }
+      },
+      {
+        "id": "sink_action",
+        "type": "action",
+        "data": {
+          "command": "ship",
+          "lastOutput": { "ok": true }
+        }
+      },
+      {
+        "id": "dataset_one",
+        "type": "data",
+        "data": {
+          "cachedData": { "a": 1 }
+        }
+      },
+      {
+        "id": "dataset_two",
+        "type": "data",
+        "data": {
+          "cachedData": { "b": 2 }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_dataset_one_to_first",
+        "type": "feeds_data",
+        "source": "dataset_one",
+        "target": "first_agent",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "context",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_dataset_two_to_second",
+        "type": "feeds_data",
+        "source": "dataset_two",
+        "target": "second_transform",
+        "metadata": {
+          "contract": {
+            "sourcePort": "dataset",
+            "targetPort": "input",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_first_to_sink",
+        "type": "feeds_data",
+        "source": "first_agent",
+        "target": "sink_action",
+        "metadata": {
+          "contract": {
+            "sourcePort": "response",
+            "targetPort": "command_input",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_second_to_sink",
+        "type": "feeds_data",
+        "source": "second_transform",
+        "target": "sink_action",
+        "metadata": {
+          "contract": {
+            "sourcePort": "output",
+            "targetPort": "command_input",
+            "payloadType": "object",
+            "required": true
+          }
+        }
+      },
+      {
+        "id": "e_first_depends_sink",
+        "type": "depends_on",
+        "source": "first_agent",
+        "target": "sink_action"
+      },
+      {
+        "id": "e_second_depends_sink",
+        "type": "depends_on",
+        "source": "second_transform",
+        "target": "sink_action"
+      }
+    ]
+  }
+}

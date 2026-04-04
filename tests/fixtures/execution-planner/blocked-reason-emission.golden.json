@@ -1,0 +1,68 @@
+{
+  "rootNodeId": null,
+  "scopeNodeIds": [
+    "upstream_agent",
+    "blocked_agent"
+  ],
+  "runnableNodeIds": [
+    "upstream_agent",
+    "blocked_agent"
+  ],
+  "readyNodeIds": [],
+  "blockedNodeIds": [
+    "upstream_agent",
+    "blocked_agent"
+  ],
+  "cycles": [],
+  "executionOrder": [
+    "upstream_agent",
+    "blocked_agent"
+  ],
+  "nodes": {
+    "blocked_agent": {
+      "runnable": true,
+      "ready": false,
+      "blocked": true,
+      "blockedReasons": [
+        "Waiting for dependencies: upstream_agent",
+        "Requires at least 1 input source(s)",
+        "Missing required fields: role, mode",
+        "Missing required input ports: context"
+      ],
+      "contractMissingFields": [
+        "role",
+        "mode"
+      ],
+      "missingRequiredPorts": [
+        "context"
+      ],
+      "upstreamDependencies": [
+        "upstream_agent"
+      ],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 1
+    },
+    "upstream_agent": {
+      "runnable": true,
+      "ready": false,
+      "blocked": true,
+      "blockedReasons": [
+        "Requires at least 1 input source(s)",
+        "Missing required input ports: context"
+      ],
+      "contractMissingFields": [],
+      "missingRequiredPorts": [
+        "context"
+      ],
+      "upstreamDependencies": [],
+      "dataProviderIds": [],
+      "staleDependencies": [],
+      "needsRerun": false,
+      "isInCycle": false,
+      "executionOrderIndex": 0
+    }
+  }
+}
