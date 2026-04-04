@@ -21,6 +21,8 @@ const clampNum = (value, fallback, min = 0, max = Number.POSITIVE_INFINITY) => {
 
 const nowIso = () => new Date().toISOString();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const toArray = (value) => (Array.isArray(value) ? value : []);
+const unique = (value) => [...new Set(toArray(value).filter(Boolean))];
 
 const defaultPolicy = Object.freeze({
   maxAttempts: 2,
@@ -37,6 +39,41 @@ const isNonRetryable = (result) => {
   if (result?.blockedReasons?.length) return true;
   if (message.includes("validation") || message.includes("planner")) return true;
   return false;
+};
+
+const snapshotNodePlan = (nodePlan = {}) => ({
+  nodeId: nodePlan.nodeId ?? null,
+  runnable: Boolean(nodePlan.runnable),
+  ready: Boolean(nodePlan.ready),
+  blocked: Boolean(nodePlan.blocked),
+  blockedReasons: unique(nodePlan.blockedReasons),
+  missingRequiredPorts: unique(nodePlan.missingRequiredPorts),
+  upstreamDependencies: unique(nodePlan.upstreamDependencies),
+  dataProviderIds: unique(nodePlan.dataProviderIds),
+  staleDependencies: unique(nodePlan.staleDependencies),
+  needsRerun: Boolean(nodePlan.needsRerun),
+  executionOrderIndex: Number.isInteger(nodePlan.executionOrderIndex) ? nodePlan.executionOrderIndex : -1
+});
+
+const buildPlannerSnapshotTrace = (plan, { at, mode }) => {
+  const snapshotId = `planner_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  const nodeEntries = Object.entries(plan?.nodes ?? {}).map(([nodeId, nodePlan]) => [
+    nodeId,
+    snapshotNodePlan({ ...(nodePlan ?? {}), nodeId })
+  ]);
+
+  return {
+    kind: "planner_snapshot",
+    snapshotId,
+    at,
+    mode,
+    rootNodeId: plan?.rootNodeId ?? null,
+    executionOrder: [...(plan?.executionOrder ?? [])],
+    readyNodeIds: [...(plan?.readyNodeIds ?? [])],
+    blockedNodeIds: [...(plan?.blockedNodeIds ?? [])],
+    cycles: [...(plan?.cycles ?? [])],
+    nodes: Object.fromEntries(nodeEntries)
+  };
 };
 
 class RuntimeService {
@@ -303,16 +340,7 @@ class RuntimeService {
     const startedAt = nowIso();
     const runIds = [];
 
-    publish(EVENTS.RUNTIME_TRACE_APPENDED, {
-      kind: "planner_snapshot",
-      at: startedAt,
-      mode: this.#mode,
-      rootNodeId: plan.rootNodeId ?? null,
-      executionOrder: [...(plan.executionOrder ?? [])],
-      readyNodeIds: [...(plan.readyNodeIds ?? [])],
-      blockedNodeIds: [...(plan.blockedNodeIds ?? [])],
-      cycles: [...(plan.cycles ?? [])]
-    });
+    publish(EVENTS.RUNTIME_TRACE_APPENDED, buildPlannerSnapshotTrace(plan, { at: startedAt, mode: this.#mode }));
 
     const failedNodeIds = new Set();
     const skippedNodeIds = [];

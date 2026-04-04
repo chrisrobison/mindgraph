@@ -745,6 +745,100 @@
   color: #2d425d;
 }
 
+.planner-diff-shell {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.planner-diff-controls {
+  margin-bottom: 0;
+}
+
+.planner-diff-controls-grid {
+  display: grid;
+  gap: 0.48rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.planner-diff-controls-grid .planner-diff-toggle {
+  margin-bottom: 0;
+  align-self: end;
+}
+
+.planner-diff-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
+.planner-diff-list {
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 0.12rem;
+}
+
+.planner-diff-node-row {
+  justify-content: space-between;
+}
+
+.planner-diff-node-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.planner-diff-node-actions button {
+  border: 1px solid #c8d7ea;
+  background: #fdfefe;
+  color: #1f3550;
+  border-radius: 9px;
+  padding: 0.3rem 0.52rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.72rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.planner-diff-node-actions button:hover {
+  border-color: #afc4de;
+  background: #f5f9ff;
+}
+
+.planner-diff-change-grid {
+  display: grid;
+  gap: 0.36rem;
+}
+
+.planner-diff-delta-group {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.planner-diff-delta-label {
+  font-size: 0.72rem;
+  color: #4e6786;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.planner-diff-delta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.planner-diff-chip-added {
+  border-color: #b9dbc7;
+  background: #eefaf3;
+  color: #2f6d4f;
+}
+
+.planner-diff-chip-removed {
+  border-color: #e7c4ca;
+  background: #fff4f6;
+  color: #8a3a44;
+}
+
 .runtime-settings-grid {
   display: grid;
   gap: 0.56rem;
@@ -1260,6 +1354,33 @@
 :root[data-theme="dark"] .panel-row-error {
   border-color: #6e3f48;
   background: #3a1f28;
+}
+
+:root[data-theme="dark"] .planner-diff-node-actions button {
+  border-color: #2f4562;
+  background: #162536;
+  color: #d6e7fb;
+}
+
+:root[data-theme="dark"] .planner-diff-node-actions button:hover {
+  border-color: #3b5a80;
+  background: #1c2f46;
+}
+
+:root[data-theme="dark"] .planner-diff-delta-label {
+  color: #9fb7d3;
+}
+
+:root[data-theme="dark"] .planner-diff-chip-added {
+  border-color: #3e705f;
+  background: #1f3a31;
+  color: #97ddb9;
+}
+
+:root[data-theme="dark"] .planner-diff-chip-removed {
+  border-color: #754450;
+  background: #41242d;
+  color: #e6aeb7;
 }
 
 :root[data-theme="dark"] .graph-workspace {

@@ -10,6 +10,7 @@ import "./components/bottom-panel/activity-log-view.js";
 import "./components/bottom-panel/task-queue-view.js";
 import "./components/bottom-panel/run-history-view.js";
 import "./components/bottom-panel/trace-view.js";
+import "./components/bottom-panel/planner-diff-view.js";
 import "./components/bottom-panel/runtime-settings-view.js";
 import "./components/bottom-panel/error-view.js";
 

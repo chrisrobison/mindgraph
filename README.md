@@ -131,6 +131,7 @@ Provider settings (provider/model/api key/system prompt) are available in bottom
 - Connect drag now opens an edge-type chooser with semantic presets and validity hints.
 - Edge inspector shows semantic category/effects and payload contract fields.
 - Planner readiness is surfaced in node/inspector views.
+- Bottom panel `Planner Diff` compares any two saved planner snapshots (status, blockers, dependencies, order, stale/rerun hints).
 - Bottom panel now includes `Run Traces` alongside activity/history/errors.
 - Bottom panel includes a `Runtime Settings` control panel for provider/model/API key configuration.
 

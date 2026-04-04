@@ -9,6 +9,7 @@ const tabs = [
   { key: "queue", label: "Task Queue", tag: "bottom-task-queue-view" },
   { key: "history", label: "Run History", tag: "bottom-run-history-view" },
   { key: "traces", label: "Run Traces", tag: "bottom-trace-view" },
+  { key: "plannerDiff", label: "Planner Diff", tag: "bottom-planner-diff-view" },
   { key: "settings", label: "Settings", tag: "bottom-runtime-settings-view" },
   { key: "errors", label: "Errors", tag: "bottom-error-view" }
 ];
@@ -51,7 +52,7 @@ class BottomActivityPanel extends HTMLElement {
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_DOCUMENT_CHANGED, () => {
-        if (this.#tab === "settings") this.renderView();
+        if (this.#tab === "settings" || this.#tab === "plannerDiff") this.renderView();
       })
     );
 
@@ -139,6 +140,10 @@ class BottomActivityPanel extends HTMLElement {
       const document = graphStore.getDocument();
       view.documentTitle = document?.title ?? "";
       view.documentDescription = document?.description ?? "";
+    } else if (this.#tab === "plannerDiff") {
+      const document = graphStore.getDocument();
+      view.snapshots = document?.metadata?.executionAudit?.plannerSnapshots ?? [];
+      view.nodeLabels = document?.nodes ?? [];
     } else {
       view.items = this.#runtime.errors;
     }

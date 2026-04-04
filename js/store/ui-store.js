@@ -226,6 +226,21 @@ class UiStore {
 
     subscribe(EVENTS.RUNTIME_TRACE_APPENDED, ({ payload }) => {
       if (!payload) return;
+      const detail =
+        payload?.kind === "planner_snapshot"
+          ? {
+              kind: payload.kind,
+              snapshotId: payload.snapshotId ?? null,
+              at: payload.at ?? nowIso(),
+              mode: payload.mode ?? this.#state.runtimeMode,
+              rootNodeId: payload.rootNodeId ?? null,
+              executionOrder: toArray(payload.executionOrder),
+              readyNodeIds: toArray(payload.readyNodeIds),
+              blockedNodeIds: toArray(payload.blockedNodeIds),
+              cycles: toArray(payload.cycles),
+              nodeCount: Object.keys(payload?.nodes ?? {}).length
+            }
+          : payload;
       const entry = {
         at: payload?.at ?? nowIso(),
         kind: payload?.kind ?? "trace",
@@ -233,7 +248,7 @@ class UiStore {
         runId: payload?.runId ?? null,
         attempt: payload?.attempt,
         mode: payload?.mode ?? this.#state.runtimeMode,
-        detail: payload
+        detail
       };
       this.#state.traces = cap([entry, ...this.#state.traces], 250);
       this.#emitRuntimeState();
