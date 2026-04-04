@@ -133,6 +133,7 @@ Provider settings (provider/model/api key/system prompt) are available in bottom
 - Connect drag now opens an edge-type chooser with semantic presets and validity hints.
 - Edge inspector shows semantic category/effects, schema preset controls, and clearer compatibility errors.
 - Node overview includes role-aware input/output port preset editing plus manual schema JSON editing.
+- Toolbar includes a demo template picker/import action with scenario descriptions.
 - Planner readiness is surfaced in node/inspector views.
 - Bottom panel `Planner Diff` compares any two saved planner snapshots (status, blockers, dependencies, order, stale/rerun hints).
 - Bottom panel now includes `Run Traces` alongside activity/history/errors.
@@ -149,6 +150,20 @@ With additional semantics:
 - `depends_on` for execution ordering
 - `parent_of` for subtree scope
 - `references` for non-executable context links
+
+## Demo Templates
+
+Use the top toolbar `Import Template` picker to load these sample graphs:
+
+1. `Research -> Brief -> Publish`
+   - Flow: market research ingest -> synthesis transform -> brief drafting -> packet render -> CMS publish.
+   - Demo value: explicit execution + data contracts (`feeds_data`, `reads_from`, `depends_on`) and a clean end-to-end publish path.
+2. `Ingest -> Normalize -> Analyze -> Dashboard`
+   - Flow: telemetry ingest -> schema normalization -> KPI analysis -> dashboard rendering.
+   - Demo value: showcases semantic `transforms` + `reads_from` edges and planner-visible staging from data prep to presentation.
+3. `Human Approval Gate`
+   - Flow: draft recommendation -> review packet -> approval request -> gated release decision -> publish.
+   - Demo value: intentionally leaves approval-state data empty so planner clearly shows `blocked` vs `ready` nodes and missing payload diagnostics.
 
 ## Audit and Trace Persistence
 

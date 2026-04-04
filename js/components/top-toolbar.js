@@ -6,6 +6,7 @@ import { graphStore } from "../store/graph-store.js";
 import { persistenceStore } from "../store/persistence-store.js";
 import { uiStore } from "../store/ui-store.js";
 import { isExecutableNodeType } from "../core/graph-semantics.js";
+import { DEMO_TEMPLATES, getDemoTemplateById, loadDemoTemplateDocument } from "../core/demo-templates.js";
 
 class TopToolbar extends HTMLElement {
   #dispose = [];
@@ -17,6 +18,7 @@ class TopToolbar extends HTMLElement {
   #autosaveEnabled = true;
   #runtimeMode = "mock";
   #runtimeEndpoint = "";
+  #selectedTemplateId = DEMO_TEMPLATES[0]?.id ?? "";
 
   connectedCallback() {
     const history = graphStore.getHistoryState();
@@ -25,6 +27,9 @@ class TopToolbar extends HTMLElement {
     this.#autosaveEnabled = persistenceStore.isAutosaveEnabled();
     this.#runtimeMode = runtimeService.getMode();
     this.#runtimeEndpoint = runtimeService.getEndpoint();
+    if (!getDemoTemplateById(this.#selectedTemplateId) && DEMO_TEMPLATES.length) {
+      this.#selectedTemplateId = DEMO_TEMPLATES[0].id;
+    }
 
     this.render();
     this.#bind();
@@ -101,6 +106,7 @@ class TopToolbar extends HTMLElement {
     this.#syncHistoryButtons();
     this.#syncAutosaveToggle();
     this.#syncRuntimeFields();
+    this.#syncTemplatePicker();
   }
 
   disconnectedCallback() {
@@ -123,6 +129,7 @@ class TopToolbar extends HTMLElement {
 
     this.querySelector("[data-action='save']")?.addEventListener("click", () => this.#onSave());
     this.querySelector("[data-action='load']")?.addEventListener("click", () => this.#onLoadRequest());
+    this.querySelector("[data-action='load-template']")?.addEventListener("click", () => void this.#onLoadTemplate());
 
     this.querySelector("[data-action='undo']")?.addEventListener("click", () => this.#undo());
     this.querySelector("[data-action='redo']")?.addEventListener("click", () => this.#redo());
@@ -155,6 +162,11 @@ class TopToolbar extends HTMLElement {
       runtimeService.setEndpoint(endpoint);
       this.#runtimeEndpoint = runtimeService.getEndpoint();
       this.#syncRuntimeFields();
+    });
+
+    this.querySelector('[data-field="template-picker"]')?.addEventListener("change", (event) => {
+      this.#selectedTemplateId = String(event.target.value ?? "");
+      this.#syncTemplatePicker();
     });
 
     this.querySelector("[data-action='zoom-in']")?.addEventListener("click", () =>
@@ -273,6 +285,16 @@ class TopToolbar extends HTMLElement {
     if (endpointField) endpointField.disabled = this.#runtimeMode !== "http";
   }
 
+  #syncTemplatePicker() {
+    const picker = this.querySelector('[data-field="template-picker"]');
+    if (picker) picker.value = this.#selectedTemplateId;
+    const description = this.querySelector('[data-role="template-description"]');
+    const selected = getDemoTemplateById(this.#selectedTemplateId);
+    if (description) {
+      description.textContent = selected?.description ?? "Select a demo template to import.";
+    }
+  }
+
   #onSave() {
     const snapshot = graphStore.getDocument();
     if (!snapshot) return;
@@ -332,7 +354,46 @@ class TopToolbar extends HTMLElement {
     }
   }
 
+  async #onLoadTemplate() {
+    const selected = getDemoTemplateById(this.#selectedTemplateId);
+    if (!selected) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "warn",
+        message: "Select a template before importing"
+      });
+      return;
+    }
+
+    try {
+      const document = await loadDemoTemplateDocument(selected.id);
+      publish(EVENTS.GRAPH_DOCUMENT_LOAD_REQUESTED, {
+        document,
+        reason: `toolbar_load_template:${selected.id}`,
+        origin: "top-toolbar"
+      });
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "info",
+        message: `Loaded demo template: ${selected.title}`
+      });
+    } catch (error) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "error",
+        message: `Failed to load template: ${error?.message ?? "Unknown error"}`
+      });
+    }
+  }
+
   render() {
+    const templateOptions = DEMO_TEMPLATES.map(
+      (template) =>
+        `<option value="${template.id}" ${
+          template.id === this.#selectedTemplateId ? "selected" : ""
+        }>${template.title}</option>`
+    ).join("");
+    const selectedTemplate = getDemoTemplateById(this.#selectedTemplateId);
+    const templateDescription = selectedTemplate?.description ?? "Select a demo template to import.";
+    const templatesDisabled = DEMO_TEMPLATES.length ? "" : "disabled";
+
     this.innerHTML = `
       <section class="mg-panel top-toolbar-panel">
         <div class="top-toolbar-content">
@@ -365,6 +426,14 @@ class TopToolbar extends HTMLElement {
             <button data-action="load" type="button">Load JSON</button>
             <button data-action="toggle-autosave" type="button" aria-pressed="true">Autosave On</button>
             <input data-role="load-input" name="graph-load-file" type="file" accept="application/json,.json" hidden />
+          </div>
+
+          <div class="toolbar-actions toolbar-action-group toolbar-template-group">
+            <select data-field="template-picker" aria-label="Demo templates" ${templatesDisabled}>
+              ${templateOptions}
+            </select>
+            <button data-action="load-template" type="button" ${templatesDisabled}>Import Template</button>
+            <span data-role="template-description" class="toolbar-template-description">${templateDescription}</span>
           </div>
 
           <div class="toolbar-actions toolbar-action-group">

@@ -1,0 +1,669 @@
+{
+  "id": "graph_template_human_approval_blocked_ready",
+  "title": "Template: Human Approval Gate (Blocked/Ready Visibility)",
+  "version": "1.0.0",
+  "schemaVersion": 3,
+  "nodes": [
+    {
+      "id": "note_release_policy",
+      "type": "note",
+      "label": "Release Policy + Approval SLA",
+      "description": "Defines who can approve release and the SLA for pending approvals.",
+      "position": { "x": 526, "y": 86 },
+      "data": {
+        "color": "#f4f9ff",
+        "tags": ["approval", "governance"],
+        "inputPorts": [],
+        "outputPorts": [
+          {
+            "id": "reference",
+            "label": "Reference",
+            "payloadType": "string",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "policy"
+      }
+    },
+    {
+      "id": "data_change_request",
+      "type": "data",
+      "label": "Incoming Change Request",
+      "description": "Initial request payload queued for evaluation and human sign-off.",
+      "position": { "x": 116, "y": 280 },
+      "data": {
+        "source": "json",
+        "sourceType": "json",
+        "sourcePath": "site_config.json",
+        "sourceUrl": "",
+        "jsonPath": "",
+        "refreshMode": "manual",
+        "refreshInterval": 120,
+        "cachedData": {
+          "requestId": "CR-2048",
+          "changeType": "config_update",
+          "riskTier": "medium",
+          "requestedBy": "ops-team"
+        },
+        "cachedSchema": null,
+        "lastUpdated": "2026-04-04T16:10:00.000Z",
+        "readonly": true,
+        "inputPorts": [],
+        "outputPorts": [
+          {
+            "id": "dataset",
+            "label": "Dataset",
+            "payloadType": "object",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "request",
+        "owner": "ops"
+      }
+    },
+    {
+      "id": "agent_draft_release",
+      "type": "agent",
+      "label": "Draft Release Recommendation",
+      "description": "Builds a release recommendation package from request context.",
+      "position": { "x": 476, "y": 280 },
+      "data": {
+        "role": "Release Coordinator",
+        "mode": "synthesize",
+        "objective": "Summarize the request, risk, and recommended approval decision.",
+        "status": "idle",
+        "confidence": 0.74,
+        "lastRunSummary": "Drafted recommendation package for CR-2048.",
+        "lastOutput": {
+          "requestId": "CR-2048",
+          "recommendation": "approve",
+          "riskSummary": "No schema-breaking changes detected"
+        },
+        "lastRunAt": "2026-04-04T16:12:00.000Z",
+        "inputSchema": {},
+        "outputSchema": {},
+        "runHistory": [],
+        "activityHistory": [],
+        "runtimePolicy": {
+          "maxAttempts": 2,
+          "retryBackoffMs": 300,
+          "retryBackoffFactor": 1.7,
+          "failFast": false
+        },
+        "inputPorts": [
+          {
+            "id": "context",
+            "label": "Context",
+            "payloadType": "object",
+            "required": true,
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        ],
+        "outputPorts": [
+          {
+            "id": "response",
+            "label": "Response",
+            "payloadType": "object",
+            "required": true,
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "recommendation",
+        "owner": "release-eng"
+      }
+    },
+    {
+      "id": "view_review_packet",
+      "type": "view",
+      "label": "Render Approval Packet",
+      "description": "Builds a human-review packet from recommendation output.",
+      "position": { "x": 846, "y": 280 },
+      "data": {
+        "outputTemplate": "approval_packet",
+        "status": "idle",
+        "lastOutput": {
+          "packetId": "PKT-991",
+          "status": "ready_for_review"
+        },
+        "lastRunAt": "2026-04-04T16:13:00.000Z",
+        "lastRunSummary": "Approval packet prepared for CR-2048.",
+        "runtimePolicy": {
+          "maxAttempts": 1,
+          "retryBackoffMs": 250,
+          "retryBackoffFactor": 1.5,
+          "failFast": true
+        },
+        "inputPorts": [
+          {
+            "id": "model",
+            "label": "Model",
+            "payloadType": "object",
+            "required": true,
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        ],
+        "outputPorts": [
+          {
+            "id": "render",
+            "label": "Render",
+            "payloadType": "object",
+            "required": false,
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "human-review"
+      }
+    },
+    {
+      "id": "action_request_approval",
+      "type": "action",
+      "label": "Request Human Approval",
+      "description": "Sends review packet to approvers and records a pending approval ticket.",
+      "position": { "x": 1222, "y": 280 },
+      "data": {
+        "command": "open_approval_ticket",
+        "config": {
+          "queue": "release-approvals",
+          "slaHours": 4
+        },
+        "status": "idle",
+        "lastOutput": {
+          "ticketId": "APR-441",
+          "status": "pending_human_approval"
+        },
+        "lastRunAt": "2026-04-04T16:14:00.000Z",
+        "lastRunSummary": "Approval request sent to release approvers.",
+        "runtimePolicy": {
+          "maxAttempts": 2,
+          "retryBackoffMs": 400,
+          "retryBackoffFactor": 2,
+          "failFast": false
+        },
+        "inputPorts": [
+          {
+            "id": "command_input",
+            "label": "Command Input",
+            "payloadType": "object",
+            "required": true,
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        ],
+        "outputPorts": [
+          {
+            "id": "result",
+            "label": "Result",
+            "payloadType": "object",
+            "required": false,
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "approval-request",
+        "owner": "release-ops"
+      }
+    },
+    {
+      "id": "data_human_decision",
+      "type": "data",
+      "label": "Approval Decision State",
+      "description": "Human-owned approval state. Intentionally empty to demonstrate planner blocked reasons.",
+      "position": { "x": 1222, "y": 540 },
+      "data": {
+        "source": "json",
+        "sourceType": "json",
+        "sourcePath": "embedded:site_config",
+        "sourceUrl": "",
+        "jsonPath": "",
+        "refreshMode": "manual",
+        "refreshInterval": 60,
+        "cachedData": null,
+        "cachedSchema": null,
+        "lastUpdated": "",
+        "readonly": false,
+        "inputPorts": [
+          {
+            "id": "input",
+            "label": "Input",
+            "payloadType": "object",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        ],
+        "outputPorts": [
+          {
+            "id": "dataset",
+            "label": "Dataset",
+            "payloadType": "object",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["approvalStatus"],
+              "properties": {
+                "approvalStatus": {
+                  "type": "string",
+                  "enum": ["approved", "rejected", "pending"]
+                },
+                "approvedBy": { "type": "string" }
+              }
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "approval-state",
+        "owner": "human-approver",
+        "demo": "Leave empty to keep downstream publish gate blocked."
+      }
+    },
+    {
+      "id": "agent_release_gate",
+      "type": "agent",
+      "label": "Gate Release Decision",
+      "description": "Combines recommendation + human decision and determines release readiness.",
+      "position": { "x": 1604, "y": 368 },
+      "data": {
+        "role": "Release Gatekeeper",
+        "mode": "orchestrate",
+        "objective": "Only authorize release when an explicit human approval is present.",
+        "status": "idle",
+        "confidence": 0.51,
+        "lastRunSummary": "",
+        "lastOutput": null,
+        "lastRunAt": "2026-04-04T16:11:00.000Z",
+        "inputSchema": {},
+        "outputSchema": {},
+        "runHistory": [],
+        "activityHistory": [],
+        "runtimePolicy": {
+          "maxAttempts": 2,
+          "retryBackoffMs": 350,
+          "retryBackoffFactor": 1.7,
+          "failFast": false
+        },
+        "inputPorts": [
+          {
+            "id": "context",
+            "label": "Context",
+            "payloadType": "object",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        ],
+        "outputPorts": [
+          {
+            "id": "response",
+            "label": "Response",
+            "payloadType": "object",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "gate",
+        "owner": "release-governance"
+      }
+    },
+    {
+      "id": "action_publish_release",
+      "type": "action",
+      "label": "Publish Release",
+      "description": "Final side-effect step that is blocked until gate node is ready.",
+      "position": { "x": 1978, "y": 368 },
+      "data": {
+        "command": "publish_release_artifacts",
+        "config": {
+          "channel": "release-bus",
+          "requireHumanApproval": true
+        },
+        "status": "idle",
+        "lastOutput": null,
+        "lastRunAt": "",
+        "lastRunSummary": "",
+        "runtimePolicy": {
+          "maxAttempts": 2,
+          "retryBackoffMs": 500,
+          "retryBackoffFactor": 2,
+          "failFast": false
+        },
+        "inputPorts": [
+          {
+            "id": "command_input",
+            "label": "Command Input",
+            "payloadType": "object",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        ],
+        "outputPorts": [
+          {
+            "id": "result",
+            "label": "Result",
+            "payloadType": "object",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "lane": "publish",
+        "owner": "release-bot"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_note_reports_to_gate",
+      "type": "reports_to",
+      "source": "action_request_approval",
+      "target": "note_release_policy",
+      "label": "reports_to",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": false,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_request_to_draft",
+      "type": "feeds_data",
+      "source": "data_change_request",
+      "target": "agent_draft_release",
+      "label": "feeds_data",
+      "metadata": {
+        "contract": {
+          "sourcePort": "dataset",
+          "targetPort": "context",
+          "payloadType": "object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_dep_draft_to_packet",
+      "type": "depends_on",
+      "source": "agent_draft_release",
+      "target": "view_review_packet",
+      "label": "depends_on",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": true,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_draft_to_packet",
+      "type": "feeds_data",
+      "source": "agent_draft_release",
+      "target": "view_review_packet",
+      "label": "feeds_data",
+      "metadata": {
+        "contract": {
+          "sourcePort": "response",
+          "targetPort": "model",
+          "payloadType": "object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_dep_packet_to_request",
+      "type": "depends_on",
+      "source": "view_review_packet",
+      "target": "action_request_approval",
+      "label": "depends_on",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": true,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_packet_to_request",
+      "type": "feeds_data",
+      "source": "view_review_packet",
+      "target": "action_request_approval",
+      "label": "feeds_data",
+      "metadata": {
+        "contract": {
+          "sourcePort": "render",
+          "targetPort": "command_input",
+          "payloadType": "object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_request_writes_approval_state",
+      "type": "writes_to",
+      "source": "action_request_approval",
+      "target": "data_human_decision",
+      "label": "writes_to",
+      "metadata": {
+        "contract": {
+          "sourcePort": "result",
+          "targetPort": "input",
+          "payloadType": "object",
+          "required": false,
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_dep_request_to_gate",
+      "type": "depends_on",
+      "source": "action_request_approval",
+      "target": "agent_release_gate",
+      "label": "depends_on",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": true,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_draft_to_gate",
+      "type": "feeds_data",
+      "source": "agent_draft_release",
+      "target": "agent_release_gate",
+      "label": "feeds_data",
+      "metadata": {
+        "contract": {
+          "sourcePort": "response",
+          "targetPort": "context",
+          "payloadType": "object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_gate_reads_human_decision",
+      "type": "reads_from",
+      "source": "agent_release_gate",
+      "target": "data_human_decision",
+      "label": "reads_from",
+      "metadata": {
+        "contract": {
+          "sourcePort": "dataset",
+          "targetPort": "context",
+          "payloadType": "object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "required": ["approvalStatus"]
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_dep_gate_to_publish",
+      "type": "depends_on",
+      "source": "agent_release_gate",
+      "target": "action_publish_release",
+      "label": "depends_on",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": true,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_gate_to_publish",
+      "type": "feeds_data",
+      "source": "agent_release_gate",
+      "target": "action_publish_release",
+      "label": "feeds_data",
+      "metadata": {
+        "contract": {
+          "sourcePort": "response",
+          "targetPort": "command_input",
+          "payloadType": "object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "id": "edge_policy_critiques_publish",
+      "type": "critiques",
+      "source": "note_release_policy",
+      "target": "action_publish_release",
+      "label": "critiques",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": false,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_parent_policy_to_gate",
+      "type": "parent_of",
+      "source": "note_release_policy",
+      "target": "agent_release_gate",
+      "label": "parent_of",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": false,
+          "schema": {}
+        }
+      }
+    },
+    {
+      "id": "edge_parent_policy_to_publish",
+      "type": "parent_of",
+      "source": "note_release_policy",
+      "target": "action_publish_release",
+      "label": "parent_of",
+      "metadata": {
+        "contract": {
+          "sourcePort": null,
+          "targetPort": null,
+          "payloadType": "none",
+          "required": false,
+          "schema": {}
+        }
+      }
+    }
+  ],
+  "viewport": {
+    "x": -56,
+    "y": -58,
+    "zoom": 0.82
+  },
+  "metadata": {
+    "createdBy": "mindgraph-demo-template",
+    "templateId": "human-approval-blocked-ready",
+    "description": "Human-in-the-loop gate with clear planner blocked reasons until approval payload exists.",
+    "demoFocus": [
+      "blocked vs ready visibility",
+      "reads_from human decision",
+      "release gating"
+    ],
+    "plannerHints": {
+      "expectedReady": ["agent_draft_release"],
+      "expectedBlocked": ["agent_release_gate", "action_publish_release"],
+      "highlightReasonContains": "Missing input payloads from: data_human_decision"
+    }
+  }
+}
