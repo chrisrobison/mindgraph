@@ -1,6 +1,10 @@
 import { HISTORY_LIMITS } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import * as graphDocument from "../core/graph-document.js";
+import {
+  createGraphSchemaMigrationError,
+  migrateGraphDocument
+} from "../core/graph-migrations.js";
 import { seedDocument } from "../core/seed-data.js";
 import { clone } from "../core/utils.js";
 import { publish, subscribe } from "../core/pan.js";
@@ -133,7 +137,12 @@ class GraphStore {
   }
 
   load(documentLike, { fromHistory = false, reason = "load" } = {}) {
-    const normalized = normalizeGraphDocument(documentLike);
+    const migrationResult = migrateGraphDocument(documentLike);
+    if (!migrationResult.ok) {
+      throw createGraphSchemaMigrationError(migrationResult.error);
+    }
+
+    const normalized = normalizeGraphDocument(migrationResult.document);
     const validation = validateGraphDocument(normalized);
 
     if (!validation.valid) {

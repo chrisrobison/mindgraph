@@ -57,6 +57,7 @@ No component directly mutates shared graph state.
 - `js/store/ui-store.js`: UI-only runtime/feed state (`activity`, `queue`, `history`, `traces`)
 - `js/store/persistence-store.js`: autosave/restore
 - `js/core/graph-document.js`: normalize + validate graph docs
+- `js/core/graph-migrations.js`: schema versioning + ordered graph document migrations
 - `js/core/graph-semantics.js`: node/edge contracts and semantic rules
 - `js/runtime/execution-planner.js`: readiness, order, cycles, stale detection
 - `js/runtime/runtime-service.js`: request-driven runtime orchestration, retries, cancellation, propagation
@@ -152,6 +153,17 @@ Runtime audit data is persisted in `document.metadata.executionAudit`:
 - `runTraces` (capped)
 
 This gives replay/debug context directly in the saved graph document.
+
+## Graph Schema Versioning
+
+Graph documents include a top-level integer `schemaVersion` and are migrated before normalization/validation.
+
+- Current value is `CURRENT_GRAPH_SCHEMA_VERSION` in `js/core/graph-migrations.js`.
+- Migration entrypoint is `migrateGraphDocument(...)`, called by `graphStore.load(...)`.
+- `persistence-store` restore and toolbar JSON load both flow through `graphStore.load(...)`, so migration happens automatically on import/restore.
+- Future schema versions fail safely with a readable migration error object (`code`, `message`, `sourceVersion`, `targetVersion`, `details`).
+
+Migration authoring details: [docs/graph-schema-migrations.md](/Users/cdr/Projects/mindgraph/docs/graph-schema-migrations.md)
 
 ## Current Limitations
 

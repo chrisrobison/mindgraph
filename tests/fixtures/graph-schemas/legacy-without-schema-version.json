@@ -1,0 +1,23 @@
+{
+  "id": "graph_legacy_without_schema",
+  "title": "Legacy Graph Without Schema Version",
+  "version": "0.2.0",
+  "nodes": [
+    {
+      "id": "note_legacy",
+      "type": "note",
+      "label": "Legacy Note",
+      "description": "Created before schemaVersion was introduced.",
+      "position": { "x": 40, "y": 60 },
+      "data": {
+        "text": "legacy"
+      },
+      "metadata": {}
+    }
+  ],
+  "edges": [],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "metadata": {
+    "fixture": true
+  }
+}

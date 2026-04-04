@@ -1,6 +1,5 @@
 import { PERSISTENCE } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
-import { normalizeGraphDocument, validateGraphDocument } from "../core/graph-document.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "./graph-store.js";
 
@@ -77,17 +76,17 @@ class PersistenceStore {
 
     try {
       const parsed = JSON.parse(raw);
-      const normalized = normalizeGraphDocument(parsed);
-      const validation = validateGraphDocument(normalized);
-      if (!validation.valid) return false;
-
-      graphStore.load(normalized);
+      graphStore.load(parsed, { reason: "restore_last_session" });
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
         level: "info",
         message: "Restored graph from last autosaved session"
       });
       return true;
-    } catch {
+    } catch (error) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "error",
+        message: `Failed to restore autosaved graph: ${error?.message ?? "Unknown error"}`
+      });
       return false;
     }
   }

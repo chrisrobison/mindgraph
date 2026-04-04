@@ -1,6 +1,7 @@
 import { EDGE_TYPE_VALUES, NODE_TYPE_VALUES } from "./types.js";
 import { clone, uid } from "./utils.js";
 import { normalizeNodeDataWithContract, validateEdgeSemantics, validateNodeContract } from "./graph-semantics.js";
+import { CURRENT_GRAPH_SCHEMA_VERSION } from "./graph-migrations.js";
 
 export const createNode = (partial = {}) => ({
   id: partial.id ?? uid("node"),
@@ -28,6 +29,7 @@ export const createGraphDocument = ({
   id = uid("graph"),
   title = "Untitled MindGraph",
   version = "0.1.0",
+  schemaVersion = CURRENT_GRAPH_SCHEMA_VERSION,
   nodes = [],
   edges = [],
   viewport = { x: 0, y: 0, zoom: 1 },
@@ -36,6 +38,7 @@ export const createGraphDocument = ({
   id,
   title,
   version,
+  schemaVersion,
   nodes: nodes.map((node) => createNode(node)),
   edges: edges.map((edge) => createEdge(edge)),
   viewport,

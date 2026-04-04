@@ -1,0 +1,24 @@
+{
+  "id": "graph_legacy_schema_v2",
+  "title": "Legacy Graph Schema v2",
+  "version": "0.2.5",
+  "schemaVersion": 2,
+  "nodes": [
+    {
+      "id": "note_schema_v2",
+      "type": "note",
+      "label": "Schema v2 Note",
+      "description": "Fixture for migration v2 -> current.",
+      "position": { "x": 120, "y": 80 },
+      "data": {
+        "text": "v2"
+      },
+      "metadata": {}
+    }
+  ],
+  "edges": [],
+  "viewport": { "x": 12, "y": 18, "zoom": 1 },
+  "metadata": {
+    "fixture": true
+  }
+}
