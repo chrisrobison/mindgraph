@@ -1,5 +1,13 @@
 import { uiStore } from "../../store/ui-store.js";
-import { escapeHtml, formatDateTime, formatTime, toArray } from "./shared.js";
+import {
+  escapeHtml,
+  formatDateTime,
+  formatTime,
+  isRunningStatus,
+  normalizeRunStatus,
+  toArray,
+  toStatusClass
+} from "./shared.js";
 import { buildRunSessionTimelineModel, filterRunSessionTimelineModel, TIMELINE_FILTERS } from "./run-session-model.js";
 
 class BottomRunSessionView extends HTMLElement {
@@ -52,7 +60,9 @@ class BottomRunSessionView extends HTMLElement {
   }
 
   #renderSession(session) {
-    const statusClass = `timeline-session--${escapeHtml(session.status ?? "running")}`;
+    const status = normalizeRunStatus(session?.status ?? "running");
+    const statusClass = `timeline-session--${toStatusClass(status)}`;
+    const running = isRunningStatus(status);
     const runIds = toArray(session?.runIds);
     const runIdsLabel = runIds.length ? runIds.slice(0, 2).join(", ") : "(none)";
 
@@ -67,7 +77,7 @@ class BottomRunSessionView extends HTMLElement {
         <header class="timeline-session-header">
           <div class="timeline-session-main">
             <strong>${escapeHtml(formatDateTime(session?.startedAt))}</strong>
-            <span class="chip">${escapeHtml(session?.status ?? "running")}</span>
+            <span class="chip chip-status chip-status-${toStatusClass(status)} ${running ? "chip-running" : ""}">${escapeHtml(status)}</span>
             <span class="chip">${escapeHtml(String(session?.counts?.total ?? 0))} event(s)</span>
             <span class="chip">${escapeHtml(String(session?.nodeCount ?? 0))} node(s)</span>
           </div>

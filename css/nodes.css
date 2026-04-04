@@ -99,6 +99,26 @@
   color: #37557d;
 }
 
+@keyframes status-running-badge-pulse {
+  0%,
+  100% {
+    filter: saturate(1);
+  }
+  50% {
+    filter: saturate(1.2);
+  }
+}
+
+@keyframes agent-running-border-pulse {
+  0%,
+  100% {
+    border-left-color: #b26c10;
+  }
+  50% {
+    border-left-color: #d88a17;
+  }
+}
+
 .status-active {
   background: #e9f8ef;
   border-color: #b9dfc8;
@@ -121,6 +141,7 @@
   background: #fff6e8;
   border-color: #f0d3a2;
   color: #8d4f00;
+  animation: status-running-badge-pulse 1.6s ease-in-out infinite;
 }
 
 .status-completed {
@@ -162,6 +183,7 @@
 
 .mg-node.agent.agent-status-running {
   border-left-color: #b26c10;
+  animation: agent-running-border-pulse 1.4s ease-in-out infinite;
 }
 
 .mg-node.agent.agent-status-completed {
@@ -244,4 +266,11 @@
 .node-connect-handle:focus-visible {
   outline: 2px solid #7fa6d3;
   outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-running,
+  .mg-node.agent.agent-status-running {
+    animation: none;
+  }
 }

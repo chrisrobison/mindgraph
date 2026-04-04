@@ -1,4 +1,4 @@
-import { escapeHtml, formatDateTime, toArray } from "./shared.js";
+import { escapeHtml, formatDateTime, isRunningStatus, normalizeRunStatus, toArray, toStatusClass } from "./shared.js";
 
 class BottomTaskQueueView extends HTMLElement {
   #items = [];
@@ -25,11 +25,14 @@ class BottomTaskQueueView extends HTMLElement {
           .map((task) => {
             const progress = Number(task?.progress);
             const progressLabel = Number.isFinite(progress) ? `${Math.round(progress * 100)}%` : "--";
+            const status = normalizeRunStatus(task?.status ?? "unknown");
+            const statusClass = toStatusClass(status);
+            const running = isRunningStatus(status);
             return `
-              <li class="panel-row">
+              <li class="panel-row ${running ? "panel-row-running" : ""}">
                 <div class="panel-row-main">
                   <strong>${escapeHtml(task?.label ?? "Untitled task")}</strong>
-                  <span class="chip">${escapeHtml(task?.status ?? "unknown")}</span>
+                  <span class="chip chip-status chip-status-${statusClass} ${running ? "chip-running" : ""}">${escapeHtml(status)}</span>
                 </div>
                 <div class="panel-row-meta">
                   <span>Progress ${escapeHtml(progressLabel)}</span>

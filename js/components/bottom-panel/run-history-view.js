@@ -1,4 +1,4 @@
-import { escapeHtml, formatDateTime, toArray } from "./shared.js";
+import { escapeHtml, formatDateTime, isRunningStatus, normalizeRunStatus, toArray, toStatusClass } from "./shared.js";
 
 class BottomRunHistoryView extends HTMLElement {
   #items = [];
@@ -25,11 +25,14 @@ class BottomRunHistoryView extends HTMLElement {
           .map((entry) => {
             const confidenceValue = Number(entry?.confidence);
             const confidence = Number.isFinite(confidenceValue) ? confidenceValue.toFixed(2) : "--";
+            const status = normalizeRunStatus(entry?.status ?? "unknown");
+            const statusClass = toStatusClass(status);
+            const running = isRunningStatus(status);
             return `
-              <li class="panel-row">
+              <li class="panel-row ${running ? "panel-row-running" : ""}">
                 <div class="panel-row-main">
                   <strong>${escapeHtml(entry?.nodeLabel ?? "Unknown node")}</strong>
-                  <span class="chip">${escapeHtml(entry?.status ?? "unknown")}</span>
+                  <span class="chip chip-status chip-status-${statusClass} ${running ? "chip-running" : ""}">${escapeHtml(status)}</span>
                   <code>${escapeHtml(entry?.runId ?? "run_unknown")}</code>
                 </div>
                 <div class="panel-row-meta">
