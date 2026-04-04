@@ -13,11 +13,46 @@ test("buildRunSessionTimelineModel maps run traces into timeline events", () => 
     { kind: "plan_parallel_started", at: "2026-04-04T10:00:00.000Z", concurrencyLimit: 2 },
     { kind: "attempt_started", at: "2026-04-04T10:00:01.000Z", nodeId: "node_a", runId: "run_a", attempt: 1, maxAttempts: 2 },
     {
-      kind: "proxy_progress",
+      kind: "proxy_stage",
       at: "2026-04-04T10:00:02.000Z",
       nodeId: "node_a",
       runId: "run_a",
       detail: { stage: "planning", message: "collecting context" }
+    },
+    {
+      kind: "proxy_text_delta",
+      at: "2026-04-04T10:00:02.200Z",
+      nodeId: "node_a",
+      runId: "run_a",
+      detail: { delta: "partial output chunk" }
+    },
+    {
+      kind: "proxy_tool_call_started",
+      at: "2026-04-04T10:00:02.300Z",
+      nodeId: "node_a",
+      runId: "run_a",
+      detail: { toolName: "search" }
+    },
+    {
+      kind: "proxy_tool_call_progress",
+      at: "2026-04-04T10:00:02.400Z",
+      nodeId: "node_a",
+      runId: "run_a",
+      detail: { toolName: "search", message: "querying index" }
+    },
+    {
+      kind: "proxy_tool_call_completed",
+      at: "2026-04-04T10:00:02.500Z",
+      nodeId: "node_a",
+      runId: "run_a",
+      detail: { toolName: "search" }
+    },
+    {
+      kind: "proxy_output_final",
+      at: "2026-04-04T10:00:02.600Z",
+      nodeId: "node_a",
+      runId: "run_a",
+      detail: { summary: "structured output ready" }
     },
     {
       kind: "attempt_failed",
@@ -68,9 +103,33 @@ test("buildRunSessionTimelineModel maps run traces into timeline events", () => 
   assert.equal(types.has("run_requested"), true);
   assert.equal(types.has("node_started"), true);
   assert.equal(types.has("progress"), true);
+  assert.equal(types.has("stream"), true);
+  assert.equal(types.has("tool_call"), true);
+  assert.equal(types.has("tool_progress"), true);
+  assert.equal(types.has("tool_completed"), true);
+  assert.equal(types.has("output"), true);
   assert.equal(types.has("retry"), true);
   assert.equal(types.has("completed"), true);
   assert.equal(types.has("skipped_upstream_failure"), true);
+  assert.equal(types.has("run_completed"), true);
+});
+
+test("buildRunSessionTimelineModel keeps legacy proxy_progress traces compatible", () => {
+  const traces = [
+    { kind: "plan_parallel_started", at: "2026-04-04T09:00:00.000Z", concurrencyLimit: 1 },
+    {
+      kind: "proxy_progress",
+      at: "2026-04-04T09:00:01.000Z",
+      nodeId: "node_a",
+      runId: "run_a",
+      detail: { stage: "provider", message: "calling model" }
+    },
+    { kind: "plan_completed", at: "2026-04-04T09:00:02.000Z", completed: 1, failed: 0, skipped: 0 }
+  ];
+
+  const model = buildRunSessionTimelineModel({ traces, runHistory: [], nodeCatalog });
+  const types = new Set(model.sessions[0].events.map((event) => event.type));
+  assert.equal(types.has("progress"), true);
   assert.equal(types.has("run_completed"), true);
 });
 

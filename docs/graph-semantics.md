@@ -136,7 +136,7 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 - port-level node IO defaults + edge payload contracts
 - request-driven runtime service with retry/cancel/failure propagation
 - branch-parallel batch scheduling for independent runnable DAG branches
-- HTTP adapter behind shared planner/executor interface with WebSocket realtime transport
+- HTTP adapter behind shared planner/executor interface with structured WebSocket realtime transport
 - provider proxy server for OpenAI/Anthropic/Gemini model execution
 - runtime settings control panel for provider/model/key selection
 - persisted planner snapshots and run traces
@@ -145,4 +145,3 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 
 - richer schema enforcement and schema-aware port presets
 - run-session timeline UX and snapshot diffing
-- richer HTTP adapter protocol (streaming/tool-call traces)

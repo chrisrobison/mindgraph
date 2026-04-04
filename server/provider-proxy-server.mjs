@@ -18,6 +18,14 @@ const providerEnvKey = Object.freeze({
   anthropic: "ANTHROPIC_API_KEY",
   gemini: "GEMINI_API_KEY"
 });
+const STREAM_EVENT_TYPES = Object.freeze({
+  STAGE: "runtime.stream.stage",
+  TEXT_DELTA: "runtime.stream.text.delta",
+  TOOL_CALL_STARTED: "runtime.stream.tool_call.started",
+  TOOL_CALL_PROGRESS: "runtime.stream.tool_call.progress",
+  TOOL_CALL_COMPLETED: "runtime.stream.tool_call.completed",
+  OUTPUT_FINAL: "runtime.stream.output.final"
+});
 
 let wsClientSeq = 0;
 const wsClients = new Map();
@@ -101,6 +109,20 @@ const requireProviderConfig = (settings) => {
 };
 
 const asErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
+const asString = (value) => String(value ?? "").trim();
+
+const parseJsonLike = (value) => {
+  if (value == null) return null;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+};
 
 const parseResponseError = async (response) => {
   try {
@@ -113,36 +135,109 @@ const parseResponseError = async (response) => {
   }
 };
 
-const extractTextOpenAI = (data) => {
-  const choice = data?.choices?.[0]?.message?.content;
-  if (typeof choice === "string" && choice.trim()) return choice.trim();
-  if (Array.isArray(choice)) {
-    const text = choice
+const normalizeToolCall = (rawToolCall, fallbackName = "tool", index = 0) => ({
+  id: asString(rawToolCall?.id) || `tool_${index + 1}`,
+  name: asString(rawToolCall?.name ?? rawToolCall?.function?.name ?? fallbackName) || fallbackName,
+  input: parseJsonLike(rawToolCall?.input ?? rawToolCall?.arguments ?? rawToolCall?.function?.arguments)
+});
+
+const extractOpenAIResult = (data) => {
+  const message = data?.choices?.[0]?.message ?? {};
+  const content = message?.content;
+  let text = "";
+
+  if (typeof content === "string" && content.trim()) {
+    text = content.trim();
+  } else if (Array.isArray(content)) {
+    text = content
       .map((entry) => (typeof entry?.text === "string" ? entry.text : ""))
       .join("\n")
       .trim();
-    if (text) return text;
   }
-  throw new Error("OpenAI returned no message content");
+
+  const toolCalls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls.map((entry, index) =>
+        normalizeToolCall(
+          {
+            id: entry?.id,
+            name: entry?.function?.name,
+            arguments: entry?.function?.arguments
+          },
+          "function",
+          index
+        )
+      )
+    : [];
+
+  if (!text && !toolCalls.length) {
+    throw new Error("OpenAI returned no message content");
+  }
+
+  return {
+    text,
+    toolCalls
+  };
 };
 
-const extractTextAnthropic = (data) => {
-  const text = (Array.isArray(data?.content) ? data.content : [])
+const extractAnthropicResult = (data) => {
+  const entries = Array.isArray(data?.content) ? data.content : [];
+  const text = entries
     .map((entry) => (entry?.type === "text" ? entry.text : ""))
     .join("\n")
     .trim();
-  if (text) return text;
-  throw new Error("Anthropic returned no text content");
+  const toolCalls = entries
+    .map((entry, index) => {
+      if (entry?.type !== "tool_use") return null;
+      return normalizeToolCall(
+        {
+          id: entry?.id,
+          name: entry?.name,
+          input: entry?.input
+        },
+        "tool_use",
+        index
+      );
+    })
+    .filter(Boolean);
+
+  if (!text && !toolCalls.length) {
+    throw new Error("Anthropic returned no text content");
+  }
+
+  return {
+    text,
+    toolCalls
+  };
 };
 
-const extractTextGemini = (data) => {
-  const text = (Array.isArray(data?.candidates) ? data.candidates : [])
-    .flatMap((candidate) => candidate?.content?.parts ?? [])
+const extractGeminiResult = (data) => {
+  const parts = (Array.isArray(data?.candidates) ? data.candidates : []).flatMap((candidate) => candidate?.content?.parts ?? []);
+  const text = parts
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
     .join("\n")
     .trim();
-  if (text) return text;
-  throw new Error("Gemini returned no text content");
+  const toolCalls = parts
+    .map((part, index) => {
+      if (!part?.functionCall?.name) return null;
+      return normalizeToolCall(
+        {
+          name: part.functionCall.name,
+          input: part.functionCall.args
+        },
+        "function_call",
+        index
+      );
+    })
+    .filter(Boolean);
+
+  if (!text && !toolCalls.length) {
+    throw new Error("Gemini returned no text content");
+  }
+
+  return {
+    text,
+    toolCalls
+  };
 };
 
 const callOpenAI = async ({ apiKey, model, systemPrompt, prompt, temperature, maxTokens, signal }) => {
@@ -168,7 +263,7 @@ const callOpenAI = async ({ apiKey, model, systemPrompt, prompt, temperature, ma
     throw new Error(`OpenAI error: ${await parseResponseError(response)}`);
   }
 
-  return extractTextOpenAI(await response.json());
+  return extractOpenAIResult(await response.json());
 };
 
 const callAnthropic = async ({ apiKey, model, systemPrompt, prompt, temperature, maxTokens, signal }) => {
@@ -193,7 +288,7 @@ const callAnthropic = async ({ apiKey, model, systemPrompt, prompt, temperature,
     throw new Error(`Anthropic error: ${await parseResponseError(response)}`);
   }
 
-  return extractTextAnthropic(await response.json());
+  return extractAnthropicResult(await response.json());
 };
 
 const callGemini = async ({ apiKey, model, systemPrompt, prompt, temperature, maxTokens, signal }) => {
@@ -226,7 +321,7 @@ const callGemini = async ({ apiKey, model, systemPrompt, prompt, temperature, ma
     throw new Error(`Gemini error: ${await parseResponseError(response)}`);
   }
 
-  return extractTextGemini(await response.json());
+  return extractGeminiResult(await response.json());
 };
 
 const runProvider = async ({ provider, ...rest }) => {
@@ -260,41 +355,125 @@ const buildPrompt = ({ node, nodePlan, context }) => {
   ].join("\n");
 };
 
-const buildRuntimeResult = ({ settings, text }) => {
+const chunkText = (value, chunkSize = 48) => {
+  const source = asString(value);
+  if (!source) return [];
+
+  const segments = source.match(/(\s+|[^\s]+)/g) ?? [];
+  const chunks = [];
+  let buffer = "";
+  segments.forEach((segment) => {
+    if ((buffer + segment).length > chunkSize && buffer) {
+      chunks.push(buffer);
+      buffer = segment;
+      return;
+    }
+    buffer += segment;
+  });
+  if (buffer) chunks.push(buffer);
+  return chunks;
+};
+
+const buildRuntimeResult = ({ settings, text, toolCalls = [] }) => {
   const compact = String(text ?? "").trim();
+  const summary = compact.split(/\n+/).slice(0, 2).join(" ").slice(0, 280) || "Provider response captured";
   return {
     confidence: 0.76,
-    summary: compact.split(/\n+/).slice(0, 2).join(" ").slice(0, 280),
+    summary,
     output: {
       type: "provider_output",
       provider: settings.provider,
       model: settings.model,
-      summary: compact.slice(0, 420),
+      summary: compact.slice(0, 420) || summary,
       text: compact,
+      toolCalls: toolCalls.length ? toolCalls : [],
       generatedAt: nowIso()
     }
   };
 };
 
-const executeRunRequest = async (payload, { progress, signal } = {}) => {
+const executeRunRequest = async (payload, { progress, stream, signal } = {}) => {
   const settings = normalizeProviderSettings(payload?.context?.providerSettings ?? {});
   requireProviderConfig(settings);
 
   const node = payload?.node ?? {};
   const nodePlan = payload?.nodePlan ?? {};
+  const runId = asString(payload?.runId) || `run_${Date.now()}`;
+  const nodeId = asString(node?.id) || null;
+  let eventSeq = 0;
 
-  progress?.({ stage: "plan", message: "Planning prompt", at: nowIso(), nodeId: node?.id, runId: payload?.runId });
+  const emitStream = (eventType, detail = {}) => {
+    const at = detail?.at ?? nowIso();
+    stream?.({
+      eventType,
+      at,
+      seq: ++eventSeq,
+      nodeId,
+      runId,
+      provider: settings.provider,
+      model: settings.model,
+      ...detail
+    });
+  };
+
+  const emitStage = (stage, message) => {
+    const at = nowIso();
+    progress?.({ stage, message, at, nodeId, runId });
+    emitStream(STREAM_EVENT_TYPES.STAGE, { at, stage, message });
+  };
+
+  emitStage("plan", "Planning prompt");
   const prompt = buildPrompt({ node, nodePlan, context: payload?.context ?? {} });
 
-  progress?.({ stage: "provider", message: `Calling ${settings.provider}/${settings.model}`, at: nowIso(), nodeId: node?.id, runId: payload?.runId });
-  const text = await runProvider({
+  emitStage("provider", `Calling ${settings.provider}/${settings.model}`);
+  const providerResult = await runProvider({
     ...settings,
     prompt,
     signal
   });
+  const text = asString(providerResult?.text);
+  const toolCalls = Array.isArray(providerResult?.toolCalls) ? providerResult.toolCalls : [];
 
-  progress?.({ stage: "finalize", message: "Formatting provider output", at: nowIso(), nodeId: node?.id, runId: payload?.runId });
-  return buildRuntimeResult({ settings, text });
+  toolCalls.forEach((toolCall, index) => {
+    const toolCallId = asString(toolCall?.id) || `tool_${index + 1}`;
+    const toolName = asString(toolCall?.name) || "tool";
+    emitStream(STREAM_EVENT_TYPES.TOOL_CALL_STARTED, {
+      toolCallId,
+      toolName,
+      index,
+      input: toolCall?.input ?? null
+    });
+    emitStream(STREAM_EVENT_TYPES.TOOL_CALL_PROGRESS, {
+      toolCallId,
+      toolName,
+      index,
+      progress: 1,
+      message: "Tool call payload received"
+    });
+    emitStream(STREAM_EVENT_TYPES.TOOL_CALL_COMPLETED, {
+      toolCallId,
+      toolName,
+      index,
+      output: toolCall?.output ?? null
+    });
+  });
+
+  chunkText(text).forEach((delta, index) => {
+    emitStream(STREAM_EVENT_TYPES.TEXT_DELTA, {
+      delta,
+      deltaIndex: index,
+      isFinalChunk: false
+    });
+  });
+
+  emitStage("finalize", "Formatting provider output");
+  const result = buildRuntimeResult({ settings, text, toolCalls });
+  emitStream(STREAM_EVENT_TYPES.OUTPUT_FINAL, {
+    summary: result.summary,
+    confidence: result.confidence,
+    output: result.output
+  });
+  return result;
 };
 
 const sendWsFrame = (socket, data) => {
@@ -433,6 +612,13 @@ const handleWsMessage = async (client, message) => {
           type: "runtime.run_node.progress",
           requestId,
           ...entry
+        });
+      },
+      stream: (event) => {
+        sendWsJson(client, {
+          type: "runtime.run_node.event",
+          requestId,
+          event
         });
       }
     });

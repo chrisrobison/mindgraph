@@ -165,6 +165,128 @@ const normalizeTraceEvent = (entry, order, nodeLabels) => {
     });
   }
 
+  if (rawKind === "proxy_stage") {
+    const stage = sanitizeText(raw?.detail?.stage ?? raw?.stage);
+    const message = sanitizeText(raw?.detail?.message ?? raw?.message);
+    return createBaseEvent({
+      source: "trace",
+      rawKind,
+      type: "progress",
+      title: "Stage update",
+      detail: [stage, message].filter(Boolean).join(" - ") || "Stage update",
+      at,
+      timestamp,
+      order,
+      nodeId,
+      nodeLabel,
+      runId,
+      mode,
+      attempt,
+      maxAttempts
+    });
+  }
+
+  if (rawKind === "proxy_text_delta") {
+    const delta = sanitizeText(raw?.detail?.delta ?? raw?.delta);
+    return createBaseEvent({
+      source: "trace",
+      rawKind,
+      type: "stream",
+      title: "Output chunk",
+      detail: delta || "Streamed text delta",
+      at,
+      timestamp,
+      order,
+      nodeId,
+      nodeLabel,
+      runId,
+      mode,
+      attempt,
+      maxAttempts
+    });
+  }
+
+  if (rawKind === "proxy_tool_call_started") {
+    const toolName = sanitizeText(raw?.detail?.toolName ?? raw?.toolName, "tool");
+    return createBaseEvent({
+      source: "trace",
+      rawKind,
+      type: "tool_call",
+      title: "Tool call started",
+      detail: toolName,
+      at,
+      timestamp,
+      order,
+      nodeId,
+      nodeLabel,
+      runId,
+      mode,
+      attempt,
+      maxAttempts
+    });
+  }
+
+  if (rawKind === "proxy_tool_call_progress") {
+    const toolName = sanitizeText(raw?.detail?.toolName ?? raw?.toolName, "tool");
+    const message = sanitizeText(raw?.detail?.message ?? raw?.message);
+    return createBaseEvent({
+      source: "trace",
+      rawKind,
+      type: "tool_progress",
+      title: "Tool call progress",
+      detail: [toolName, message].filter(Boolean).join(" - ") || toolName,
+      at,
+      timestamp,
+      order,
+      nodeId,
+      nodeLabel,
+      runId,
+      mode,
+      attempt,
+      maxAttempts
+    });
+  }
+
+  if (rawKind === "proxy_tool_call_completed") {
+    const toolName = sanitizeText(raw?.detail?.toolName ?? raw?.toolName, "tool");
+    return createBaseEvent({
+      source: "trace",
+      rawKind,
+      type: "tool_completed",
+      title: "Tool call completed",
+      detail: toolName,
+      at,
+      timestamp,
+      order,
+      nodeId,
+      nodeLabel,
+      runId,
+      mode,
+      attempt,
+      maxAttempts
+    });
+  }
+
+  if (rawKind === "proxy_output_final") {
+    const summary = sanitizeText(raw?.detail?.summary ?? raw?.summary, "Final structured output ready");
+    return createBaseEvent({
+      source: "trace",
+      rawKind,
+      type: "output",
+      title: "Structured output",
+      detail: summary,
+      at,
+      timestamp,
+      order,
+      nodeId,
+      nodeLabel,
+      runId,
+      mode,
+      attempt,
+      maxAttempts
+    });
+  }
+
   if (rawKind === "attempt_backoff") {
     const backoffMs = toFiniteNumber(raw?.backoffMs);
     return createBaseEvent({

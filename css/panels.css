@@ -893,6 +893,18 @@
   border-left: 4px solid #a0742e;
 }
 
+.timeline-event--progress,
+.timeline-event--stream,
+.timeline-event--output {
+  border-left: 4px solid #3f79bd;
+}
+
+.timeline-event--tool_call,
+.timeline-event--tool_progress,
+.timeline-event--tool_completed {
+  border-left: 4px solid #6f58a6;
+}
+
 .timeline-event--failed,
 .timeline-event--run_failed {
   border-left: 4px solid #9b3f49;

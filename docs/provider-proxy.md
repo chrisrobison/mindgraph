@@ -49,9 +49,36 @@ Client -> server:
 
 Server -> client:
 
+- `runtime.run_node.event`
 - `runtime.run_node.progress`
 - `runtime.run_node.completed`
 - `runtime.run_node.failed`
+
+### `runtime.run_node.event` payload
+
+`event.eventType` values are namespaced and provider-agnostic:
+
+- `runtime.stream.stage`
+- `runtime.stream.text.delta`
+- `runtime.stream.tool_call.started`
+- `runtime.stream.tool_call.progress`
+- `runtime.stream.tool_call.completed`
+- `runtime.stream.output.final`
+
+Each event includes stable transport fields:
+
+- `requestId` (envelope)
+- `event.seq`
+- `event.at`
+- `event.nodeId`
+- `event.runId`
+- `event.provider`
+- `event.model`
+
+Notes:
+
+- `runtime.run_node.progress` remains for compatibility with older clients.
+- HTTP `POST /run-node` remains completion-only fallback and does not require streaming support.
 
 ## Runtime settings in UI
 
