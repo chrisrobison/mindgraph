@@ -131,6 +131,10 @@ class TopToolbar extends HTMLElement {
       persistenceStore.setAutosaveEnabled(!this.#autosaveEnabled);
     });
 
+    this.querySelector("[data-action='open-runtime-settings']")?.addEventListener("click", () => {
+      uiStore.setBottomTab("settings");
+    });
+
     this.querySelector("[data-action='cancel-runs']")?.addEventListener("click", () => {
       publish(EVENTS.RUNTIME_RUN_CANCEL_REQUESTED, {
         reason: "toolbar_cancel_runs",
@@ -369,6 +373,7 @@ class TopToolbar extends HTMLElement {
               <option value="http" ${this.#runtimeMode === "http" ? "selected" : ""}>HTTP Runtime</option>
             </select>
             <input data-field="runtime-endpoint" type="text" value="${this.#runtimeEndpoint}" placeholder="/api/mindgraph/runtime" />
+            <button data-action="open-runtime-settings" type="button">Provider Settings</button>
           </div>
 
           <div class="toolbar-actions toolbar-action-group toolbar-zoom">

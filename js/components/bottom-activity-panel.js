@@ -9,6 +9,7 @@ const tabs = [
   { key: "queue", label: "Task Queue", tag: "bottom-task-queue-view" },
   { key: "history", label: "Run History", tag: "bottom-run-history-view" },
   { key: "traces", label: "Run Traces", tag: "bottom-trace-view" },
+  { key: "settings", label: "Runtime Settings", tag: "bottom-runtime-settings-view" },
   { key: "errors", label: "Errors", tag: "bottom-error-view" }
 ];
 
@@ -125,6 +126,9 @@ class BottomActivityPanel extends HTMLElement {
       view.items = this.#runtime.runHistory;
     } else if (this.#tab === "traces") {
       view.items = this.#runtime.traces;
+    } else if (this.#tab === "settings") {
+      view.settings = this.#runtime.providerSettings;
+      view.runtimeMode = this.#runtime.runtimeMode;
     } else {
       view.items = this.#runtime.errors;
     }

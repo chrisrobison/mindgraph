@@ -21,6 +21,7 @@ export const EVENTS = Object.freeze({
   RUNTIME_SUBTREE_RUN_REQUESTED: "runtime.subtree.run.requested",
   RUNTIME_ALL_RUN_REQUESTED: "runtime.all.run.requested",
   RUNTIME_RUN_CANCEL_REQUESTED: "runtime.run.cancel.requested",
+  RUNTIME_PROVIDER_SETTINGS_UPDATE_REQUESTED: "runtime.provider.settings.update.requested",
 
   GRAPH_NODE_SELECTED: "graph.node.selected",
   GRAPH_NODE_UPDATED: "graph.node.updated",
@@ -48,6 +49,7 @@ export const EVENTS = Object.freeze({
   RUNTIME_AGENT_RUN_COMPLETED: "runtime.agent.run.completed",
   RUNTIME_AGENT_RUN_FAILED: "runtime.agent.run.failed",
   RUNTIME_RUN_CANCELLED: "runtime.run.cancelled",
+  RUNTIME_PROVIDER_SETTINGS_CHANGED: "runtime.provider.settings.changed",
   RUNTIME_RUN_HISTORY_APPENDED: "runtime.run.history.appended",
   RUNTIME_TRACE_APPENDED: "runtime.trace.appended",
   RUNTIME_ERROR_APPENDED: "runtime.error.appended",

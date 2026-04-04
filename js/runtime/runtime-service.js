@@ -2,6 +2,7 @@ import { PERSISTENCE } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
+import { uiStore } from "../store/ui-store.js";
 import { buildExecutionPlan } from "./execution-planner.js";
 import { HttpAgentRuntime } from "./http-agent-runtime.js";
 import { mockAgentRuntime } from "./mock-agent-runtime.js";
@@ -154,6 +155,7 @@ class RuntimeService {
     const adapter = this.#getAdapter();
     const node = graphStore.getNode(nodeId);
     const policy = this.#resolvePolicy(node, context);
+    const providerSettings = uiStore.getRuntimeState().providerSettings ?? {};
 
     let lastResult = null;
     for (let attempt = 1; attempt <= policy.maxAttempts; attempt += 1) {
@@ -181,6 +183,7 @@ class RuntimeService {
       try {
         const result = await adapter.runNode(nodeId, {
           ...context,
+          providerSettings,
           attempt,
           maxAttempts: policy.maxAttempts,
           abortSignal: controller.signal,

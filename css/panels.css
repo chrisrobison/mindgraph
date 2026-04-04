@@ -588,6 +588,47 @@
   color: #2d425d;
 }
 
+.runtime-settings-grid {
+  display: grid;
+  gap: 0.56rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 0.66rem;
+}
+
+.runtime-settings-field {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.runtime-settings-field > span {
+  font-size: 0.72rem;
+  color: #506b8a;
+  font-weight: 600;
+}
+
+.runtime-settings-field input,
+.runtime-settings-field select,
+.runtime-settings-field textarea {
+  width: 100%;
+  border: 1px solid #c9d8eb;
+  border-radius: 9px;
+  padding: 0.44rem 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: #ffffff;
+}
+
+.runtime-settings-field textarea {
+  resize: vertical;
+  min-height: 88px;
+  font-family: var(--font-mono);
+}
+
+.runtime-settings-field-wide {
+  grid-column: 1 / -1;
+}
+
 .pan-console {
   display: grid;
   gap: 0.46rem;

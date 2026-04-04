@@ -14,6 +14,49 @@ const readRuntimeMode = () => {
   }
 };
 
+const providerModels = Object.freeze({
+  openai: Object.freeze(["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"]),
+  anthropic: Object.freeze(["claude-3-5-sonnet-latest", "claude-3-7-sonnet-latest"]),
+  gemini: Object.freeze(["gemini-2.0-flash", "gemini-2.5-pro-preview"])
+});
+
+const defaultModelForProvider = (provider) => {
+  const key = String(provider ?? "openai");
+  return providerModels[key]?.[0] ?? providerModels.openai[0];
+};
+
+const sanitizeProvider = (value) => {
+  const key = String(value ?? "openai").trim().toLowerCase();
+  if (key === "anthropic" || key === "gemini") return key;
+  return "openai";
+};
+
+const sanitizeProviderSettings = (raw = {}) => {
+  const provider = sanitizeProvider(raw?.provider);
+  const model = String(raw?.model ?? defaultModelForProvider(provider)).trim() || defaultModelForProvider(provider);
+  const apiKey = String(raw?.apiKey ?? "").trim();
+  const temperatureValue = Number(raw?.temperature);
+  const maxTokensValue = Number(raw?.maxTokens);
+  return {
+    provider,
+    model,
+    apiKey,
+    temperature: Number.isFinite(temperatureValue) ? Math.min(2, Math.max(0, temperatureValue)) : 0.3,
+    maxTokens: Number.isFinite(maxTokensValue) ? Math.min(8192, Math.max(64, Math.round(maxTokensValue))) : 800,
+    systemPrompt: String(raw?.systemPrompt ?? "").trim()
+  };
+};
+
+const readProviderSettings = () => {
+  try {
+    const raw = window.localStorage.getItem(PERSISTENCE.storage.runtimeProviderSettings);
+    if (!raw) return sanitizeProviderSettings();
+    return sanitizeProviderSettings(JSON.parse(raw));
+  } catch {
+    return sanitizeProviderSettings();
+  }
+};
+
 class UiStore {
   #state = {
     selectedNodeId: null,
@@ -24,6 +67,7 @@ class UiStore {
     bottomTab: "messages",
     devConsoleVisible: true,
     runtimeMode: readRuntimeMode(),
+    runtimeProviderSettings: readProviderSettings(),
     activityItems: [],
     taskQueue: [],
     runHistory: [],
@@ -75,6 +119,21 @@ class UiStore {
 
     subscribe(EVENTS.RUNTIME_MODE_CHANGED, ({ payload }) => {
       this.#state.runtimeMode = payload?.mode ?? "mock";
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.RUNTIME_PROVIDER_SETTINGS_UPDATE_REQUESTED, ({ payload }) => {
+      const patch = payload?.patch ?? {};
+      const next = sanitizeProviderSettings({
+        ...(this.#state.runtimeProviderSettings ?? {}),
+        ...(patch ?? {})
+      });
+      this.#state.runtimeProviderSettings = next;
+      this.#persistProviderSettings(next);
+      publish(EVENTS.RUNTIME_PROVIDER_SETTINGS_CHANGED, {
+        settings: { ...next },
+        origin: payload?.origin ?? "ui-store"
+      });
       this.#emitRuntimeState();
     });
 
@@ -148,8 +207,17 @@ class UiStore {
     publish(EVENTS.UI_RUNTIME_STATE_CHANGED, {
       runtime: this.getRuntimeState(),
       bottomTab: this.#state.bottomTab,
-      devConsoleVisible: this.#state.devConsoleVisible
+      devConsoleVisible: this.#state.devConsoleVisible,
+      providerSettings: { ...(this.#state.runtimeProviderSettings ?? {}) }
     });
+  }
+
+  #persistProviderSettings(settings) {
+    try {
+      window.localStorage.setItem(PERSISTENCE.storage.runtimeProviderSettings, JSON.stringify(settings));
+    } catch {
+      // noop
+    }
   }
 
   getState() {
@@ -160,7 +228,8 @@ class UiStore {
       taskQueue: [...this.#state.taskQueue],
       runHistory: [...this.#state.runHistory],
       traces: [...this.#state.traces],
-      errors: [...this.#state.errors]
+      errors: [...this.#state.errors],
+      runtimeProviderSettings: { ...(this.#state.runtimeProviderSettings ?? {}) }
     };
   }
 
@@ -171,6 +240,7 @@ class UiStore {
       runHistory: this.#state.runHistory.map((entry) => ({ ...entry })),
       traces: this.#state.traces.map((entry) => ({ ...entry })),
       errors: this.#state.errors.map((entry) => ({ ...entry })),
+      providerSettings: { ...(this.#state.runtimeProviderSettings ?? {}) },
       runtimeMode: this.#state.runtimeMode,
       devConsoleVisible: this.#state.devConsoleVisible
     };
@@ -210,6 +280,13 @@ class UiStore {
 
   setDevConsoleVisible(visible) {
     publish(EVENTS.PANEL_DEV_CONSOLE_TOGGLED, { visible: Boolean(visible) });
+  }
+
+  updateRuntimeProviderSettings(patch = {}, origin = "ui-store") {
+    publish(EVENTS.RUNTIME_PROVIDER_SETTINGS_UPDATE_REQUESTED, {
+      patch: { ...(patch ?? {}) },
+      origin
+    });
   }
 }
 
