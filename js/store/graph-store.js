@@ -5,6 +5,7 @@ import { seedDocument } from "../core/seed-data.js";
 import { clone } from "../core/utils.js";
 import { publish, subscribe } from "../core/pan.js";
 import {
+  applyEdgeContractDefaults,
   normalizeNodeDataWithContract,
   validateEdgeSemantics,
   validateNodeContract
@@ -46,6 +47,15 @@ class GraphStore {
 
     subscribe(EVENTS.GRAPH_DOCUMENT_REDO_REQUESTED, () => {
       this.redo();
+    });
+
+    subscribe(EVENTS.GRAPH_METADATA_UPDATE_REQUESTED, ({ payload }) => {
+      if (!payload?.patch || typeof payload.patch !== "object") return;
+      this.updateMetadata(payload.patch, {
+        reason: payload?.reason ?? "metadata_updated",
+        origin: payload?.origin ?? "request",
+        recordHistory: payload?.recordHistory !== false
+      });
     });
 
     subscribe(EVENTS.GRAPH_NODE_SELECT_REQUESTED, ({ payload }) => {
@@ -353,6 +363,32 @@ class GraphStore {
     return clone(this.#document.viewport);
   }
 
+  updateMetadata(patch = {}, { reason = "metadata_updated", origin = "graph-store", recordHistory = true } = {}) {
+    if (!this.#document || !patch || typeof patch !== "object") return null;
+
+    const merged = {
+      ...(this.#document.metadata ?? {}),
+      ...clone(patch)
+    };
+
+    this.#applyMutation(
+      () => {
+        this.#document.metadata = merged;
+      },
+      { recordHistory }
+    );
+
+    publish(EVENTS.GRAPH_METADATA_UPDATED, {
+      metadata: clone(merged),
+      reason,
+      origin: "graph-store",
+      requestedBy: origin
+    });
+
+    this.#emitDocumentChanged(reason, { metadataUpdated: true, requestedBy: origin });
+    return clone(merged);
+  }
+
   updateNodePosition(nodeId, position) {
     const nextPosition = {
       x: Number(position?.x ?? 0),
@@ -502,12 +538,13 @@ class GraphStore {
   addEdge(edgeLike = {}, { selectAfterCreate = false } = {}) {
     if (!this.#document) return null;
 
-    const edge = createEdge(edgeLike);
+    let edge = createEdge(edgeLike);
     const sourceExists = Boolean(findNodeById(this.#document, edge.source));
     const targetExists = Boolean(findNodeById(this.#document, edge.target));
     if (!sourceExists || !targetExists) return null;
     const sourceNode = findNodeById(this.#document, edge.source);
     const targetNode = findNodeById(this.#document, edge.target);
+    edge = applyEdgeContractDefaults(edge, sourceNode, targetNode);
     const semanticValidation = validateEdgeSemantics(edge, sourceNode, targetNode);
     if (!semanticValidation.valid) {
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
@@ -559,7 +596,8 @@ class GraphStore {
     const nextEdge = { ...existing, ...normalizedPatch };
     const sourceNode = findNodeById(this.#document, nextEdge.source);
     const targetNode = findNodeById(this.#document, nextEdge.target);
-    const semanticValidation = validateEdgeSemantics(nextEdge, sourceNode, targetNode);
+    const normalizedEdge = applyEdgeContractDefaults(nextEdge, sourceNode, targetNode);
+    const semanticValidation = validateEdgeSemantics(normalizedEdge, sourceNode, targetNode);
     if (!semanticValidation.valid) {
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
         level: "warn",
@@ -571,7 +609,7 @@ class GraphStore {
 
     this.#applyMutation(() => {
       this.#document.edges = (this.#document.edges ?? []).map((edge) =>
-        edge.id === edgeId ? { ...edge, ...normalizedPatch } : edge
+        edge.id === edgeId ? normalizedEdge : edge
       );
     });
 
@@ -618,13 +656,17 @@ class GraphStore {
     return clone(edge);
   }
 
-  #applyMutation(run) {
+  #applyMutation(run, { recordHistory = true } = {}) {
     if (!this.#document) return;
-    this.#pushUndo(this.#document);
-    this.#redoStack = [];
+    if (recordHistory) {
+      this.#pushUndo(this.#document);
+      this.#redoStack = [];
+    }
     run();
     this.#persistSelectionToDocument();
-    this.#emitHistoryState();
+    if (recordHistory) {
+      this.#emitHistoryState();
+    }
   }
 
   #pushUndo(document) {

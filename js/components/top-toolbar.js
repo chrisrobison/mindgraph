@@ -1,7 +1,7 @@
 import { clampZoom, GRAPH_LIMITS } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
-import { mockAgentRuntime } from "../runtime/mock-agent-runtime.js";
+import { runtimeService } from "../runtime/runtime-service.js";
 import { graphStore } from "../store/graph-store.js";
 import { persistenceStore } from "../store/persistence-store.js";
 import { uiStore } from "../store/ui-store.js";
@@ -11,16 +11,20 @@ class TopToolbar extends HTMLElement {
   #dispose = [];
   #activeTool = "select";
   #zoom = 1;
-  #running = false;
+  #activeRuns = 0;
   #canUndo = false;
   #canRedo = false;
   #autosaveEnabled = true;
+  #runtimeMode = "mock";
+  #runtimeEndpoint = "";
 
   connectedCallback() {
     const history = graphStore.getHistoryState();
     this.#canUndo = history.canUndo;
     this.#canRedo = history.canRedo;
     this.#autosaveEnabled = persistenceStore.isAutosaveEnabled();
+    this.#runtimeMode = runtimeService.getMode();
+    this.#runtimeEndpoint = runtimeService.getEndpoint();
 
     this.render();
     this.#bind();
@@ -56,11 +60,47 @@ class TopToolbar extends HTMLElement {
       })
     );
 
+    this.#dispose.push(
+      subscribe(EVENTS.RUNTIME_MODE_CHANGED, ({ payload }) => {
+        this.#runtimeMode = payload?.mode ?? runtimeService.getMode();
+        this.#syncRuntimeFields();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.RUNTIME_AGENT_RUN_STARTED, () => {
+        this.#activeRuns += 1;
+        this.#syncRunButtons();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.RUNTIME_AGENT_RUN_COMPLETED, () => {
+        this.#activeRuns = Math.max(0, this.#activeRuns - 1);
+        this.#syncRunButtons();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.RUNTIME_AGENT_RUN_FAILED, () => {
+        this.#activeRuns = Math.max(0, this.#activeRuns - 1);
+        this.#syncRunButtons();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.RUNTIME_RUN_CANCELLED, () => {
+        this.#activeRuns = 0;
+        this.#syncRunButtons();
+      })
+    );
+
     this.#syncPressedState();
     this.#syncZoom();
     this.#syncRunButtons();
     this.#syncHistoryButtons();
     this.#syncAutosaveToggle();
+    this.#syncRuntimeFields();
   }
 
   disconnectedCallback() {
@@ -75,18 +115,10 @@ class TopToolbar extends HTMLElement {
       });
     });
 
-    this.querySelector("[data-action='run-all']")?.addEventListener("click", () =>
-      this.#runRuntimeAction(() => {
-        publish(EVENTS.RUNTIME_ALL_RUN_REQUESTED, {
-          trigger: "toolbar_run_all",
-          origin: "top-toolbar"
-        });
-        return mockAgentRuntime.runAll({ trigger: "toolbar_run_all" });
-      })
-    );
+    this.querySelector("[data-action='run-all']")?.addEventListener("click", () => this.#requestRunAll());
 
     this.querySelector("[data-action='summarize-subtree']")?.addEventListener("click", () =>
-      this.#runRuntimeAction(() => this.#summarizeSelectedSubtree())
+      this.#requestSelectedSubtree()
     );
 
     this.querySelector("[data-action='save']")?.addEventListener("click", () => this.#onSave());
@@ -97,6 +129,28 @@ class TopToolbar extends HTMLElement {
 
     this.querySelector("[data-action='toggle-autosave']")?.addEventListener("click", () => {
       persistenceStore.setAutosaveEnabled(!this.#autosaveEnabled);
+    });
+
+    this.querySelector("[data-action='cancel-runs']")?.addEventListener("click", () => {
+      publish(EVENTS.RUNTIME_RUN_CANCEL_REQUESTED, {
+        reason: "toolbar_cancel_runs",
+        origin: "top-toolbar"
+      });
+    });
+
+    this.querySelector('[data-field="runtime-mode"]')?.addEventListener("change", (event) => {
+      const value = String(event.target.value ?? "mock");
+      runtimeService.setMode(value);
+      this.#runtimeMode = runtimeService.getMode();
+      this.#syncRuntimeFields();
+    });
+
+    this.querySelector('[data-field="runtime-endpoint"]')?.addEventListener("change", (event) => {
+      const endpoint = String(event.target.value ?? "").trim();
+      if (!endpoint) return;
+      runtimeService.setEndpoint(endpoint);
+      this.#runtimeEndpoint = runtimeService.getEndpoint();
+      this.#syncRuntimeFields();
     });
 
     this.querySelector("[data-action='zoom-in']")?.addEventListener("click", () =>
@@ -137,26 +191,16 @@ class TopToolbar extends HTMLElement {
     });
   }
 
-  async #runRuntimeAction(run) {
-    if (this.#running) return;
-
-    this.#running = true;
-    this.#syncRunButtons();
-
-    try {
-      await run();
-    } catch (error) {
-      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
-        level: "error",
-        message: `Runtime action failed: ${error?.message ?? "Unknown error"}`
-      });
-    } finally {
-      this.#running = false;
-      this.#syncRunButtons();
-    }
+  #requestRunAll() {
+    if (this.#activeRuns > 0) return;
+    publish(EVENTS.RUNTIME_ALL_RUN_REQUESTED, {
+      trigger: "toolbar_run_all",
+      origin: "top-toolbar"
+    });
   }
 
-  async #summarizeSelectedSubtree() {
+  #requestSelectedSubtree() {
+    if (this.#activeRuns > 0) return;
     const selectedNodeId = graphStore.getSelectedNodeId();
     if (!selectedNodeId) {
       publish(EVENTS.ACTIVITY_LOG_APPENDED, {
@@ -180,7 +224,6 @@ class TopToolbar extends HTMLElement {
       trigger: "toolbar_subtree",
       origin: "top-toolbar"
     });
-    await mockAgentRuntime.runSubtree(selectedNodeId, { trigger: "toolbar_subtree" });
   }
 
   #syncPressedState() {
@@ -198,8 +241,10 @@ class TopToolbar extends HTMLElement {
 
   #syncRunButtons() {
     this.querySelectorAll("[data-action='run-all'], [data-action='summarize-subtree']").forEach((button) => {
-      button.disabled = this.#running;
+      button.disabled = this.#activeRuns > 0;
     });
+    const cancel = this.querySelector("[data-action='cancel-runs']");
+    if (cancel) cancel.disabled = this.#activeRuns === 0;
   }
 
   #syncHistoryButtons() {
@@ -214,6 +259,14 @@ class TopToolbar extends HTMLElement {
     if (!toggle) return;
     toggle.setAttribute("aria-pressed", this.#autosaveEnabled ? "true" : "false");
     toggle.textContent = this.#autosaveEnabled ? "Autosave On" : "Autosave Off";
+  }
+
+  #syncRuntimeFields() {
+    const modeField = this.querySelector('[data-field="runtime-mode"]');
+    const endpointField = this.querySelector('[data-field="runtime-endpoint"]');
+    if (modeField) modeField.value = this.#runtimeMode;
+    if (endpointField) endpointField.value = this.#runtimeEndpoint;
+    if (endpointField) endpointField.disabled = this.#runtimeMode !== "http";
   }
 
   #onSave() {
@@ -290,6 +343,7 @@ class TopToolbar extends HTMLElement {
           <div class="toolbar-actions toolbar-action-group">
             <button data-action="run-all" type="button">Run All</button>
             <button data-action="summarize-subtree" type="button">Run Subtree</button>
+            <button data-action="cancel-runs" type="button" disabled>Cancel Runs</button>
           </div>
 
           <div class="toolbar-actions toolbar-action-group">
@@ -307,6 +361,14 @@ class TopToolbar extends HTMLElement {
             <button data-action="load" type="button">Load JSON</button>
             <button data-action="toggle-autosave" type="button" aria-pressed="true">Autosave On</button>
             <input data-role="load-input" name="graph-load-file" type="file" accept="application/json,.json" hidden />
+          </div>
+
+          <div class="toolbar-actions toolbar-action-group">
+            <select data-field="runtime-mode" aria-label="Runtime mode">
+              <option value="mock" ${this.#runtimeMode === "mock" ? "selected" : ""}>Mock Runtime</option>
+              <option value="http" ${this.#runtimeMode === "http" ? "selected" : ""}>HTTP Runtime</option>
+            </select>
+            <input data-field="runtime-endpoint" type="text" value="${this.#runtimeEndpoint}" placeholder="/api/mindgraph/runtime" />
           </div>
 
           <div class="toolbar-actions toolbar-action-group toolbar-zoom">

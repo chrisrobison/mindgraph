@@ -7,7 +7,7 @@ import {
   WORLD_SIZE
 } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
-import { inferDefaultEdgeType } from "../core/graph-semantics.js";
+import { getEdgeCreationPresets, inferDefaultEdgeType } from "../core/graph-semantics.js";
 import { buildExecutionPlan } from "../runtime/execution-planner.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
@@ -35,6 +35,8 @@ class GraphCanvas extends HTMLElement {
   #nodeLayerEl = null;
   #edgeLayerEl = null;
   #edgeDraftEl = null;
+  #edgeChooserEl = null;
+  #edgeChooserState = null;
   #marqueeEl = null;
   #panState = null;
   #dragState = null;
@@ -140,6 +142,7 @@ class GraphCanvas extends HTMLElement {
               <div class="graph-node-layer" data-role="nodes"></div>
             </div>
             <div class="graph-marquee" data-role="marquee" hidden></div>
+            <div class="graph-edge-chooser" data-role="edge-chooser" hidden></div>
           </div>
         </div>
       </section>
@@ -150,6 +153,7 @@ class GraphCanvas extends HTMLElement {
     this.#nodeLayerEl = this.querySelector('[data-role="nodes"]');
     this.#edgeLayerEl = this.querySelector('[data-role="edges"]');
     this.#marqueeEl = this.querySelector('[data-role="marquee"]');
+    this.#edgeChooserEl = this.querySelector('[data-role="edge-chooser"]');
 
     this.#bindInteractionEvents();
     this.#applyViewportTransform();
@@ -174,6 +178,10 @@ class GraphCanvas extends HTMLElement {
 
   #onWorkspacePointerDown(event) {
     if (event.button !== 0 && event.button !== 1) return;
+    if (event.target.closest('[data-role="edge-chooser"]')) return;
+    if (this.#edgeChooserState) {
+      this.#closeEdgeChooser();
+    }
     this.#workspaceEl.focus();
     if (event.target.closest("[data-node-id]")) return;
 
@@ -267,7 +275,7 @@ class GraphCanvas extends HTMLElement {
   #onWorkspacePointerUp(event) {
     if (this.#connectDragState && event.pointerId === this.#connectDragState.pointerId) {
       this.#connectDragState.captureEl?.releasePointerCapture?.(event.pointerId);
-      this.#commitConnectDrag();
+      this.#commitConnectDrag(event);
       return;
     }
 
@@ -355,6 +363,10 @@ class GraphCanvas extends HTMLElement {
   #onWorkspaceKeyDown(event) {
     if (event.key === "Escape") {
       event.preventDefault();
+      if (this.#edgeChooserState) {
+        this.#closeEdgeChooser();
+        return;
+      }
       if (this.#connectDragState) {
         this.#cancelConnectDrag();
         this.#highlightSelection();
@@ -409,6 +421,7 @@ class GraphCanvas extends HTMLElement {
 
   #onNodePointerDown(event, node) {
     if (event.button !== 0) return;
+    if (this.#edgeChooserState) this.#closeEdgeChooser();
     this.#workspaceEl.focus();
     event.stopPropagation();
 
@@ -465,6 +478,7 @@ class GraphCanvas extends HTMLElement {
     event.preventDefault();
     event.stopPropagation();
     this.#workspaceEl.focus();
+    this.#closeEdgeChooser();
 
     const sourcePoint = this.#connectionPointForNode(node);
     const pointerWorld = this.#screenToWorld(event.clientX, event.clientY);
@@ -490,27 +504,127 @@ class GraphCanvas extends HTMLElement {
     this.#hideConnectDraft();
   }
 
-  #commitConnectDrag() {
+  #commitConnectDrag(pointerEvent = null) {
     const state = this.#connectDragState;
     if (!state) return;
 
     const targetNodeId = state.hoveredNodeId;
     if (targetNodeId && targetNodeId !== state.sourceNodeId) {
-      const sourceNode = graphStore.getNode(state.sourceNodeId);
-      const targetNode = graphStore.getNode(targetNodeId);
-      const edgeType = inferDefaultEdgeType(sourceNode, targetNode);
-      publish(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, {
-        source: state.sourceNodeId,
-        target: targetNodeId,
-        type: edgeType,
-        label: formatEdgeLabel(edgeType),
-        selectAfterCreate: true,
-        origin: "graph-canvas"
-      });
+      this.#openEdgeChooser(
+        state.sourceNodeId,
+        targetNodeId,
+        pointerEvent?.clientX ?? null,
+        pointerEvent?.clientY ?? null
+      );
     }
 
     this.#cancelConnectDrag();
     this.#highlightSelection();
+  }
+
+  #openEdgeChooser(sourceNodeId, targetNodeId, clientX = null, clientY = null) {
+    const sourceNode = graphStore.getNode(sourceNodeId);
+    const targetNode = graphStore.getNode(targetNodeId);
+    if (!sourceNode || !targetNode || !this.#edgeChooserEl || !this.#workspaceEl) return;
+
+    const presets = getEdgeCreationPresets(sourceNode, targetNode);
+    const validPresets = presets.filter((preset) => preset.valid);
+    const defaultType = inferDefaultEdgeType(sourceNode, targetNode);
+    const selectedType = validPresets.some((preset) => preset.type === defaultType)
+      ? defaultType
+      : validPresets[0]?.type ?? defaultType;
+
+    this.#edgeChooserState = {
+      sourceNodeId,
+      targetNodeId,
+      sourceNodeLabel: sourceNode.label,
+      targetNodeLabel: targetNode.label,
+      presets,
+      selectedType
+    };
+
+    this.#renderEdgeChooser();
+
+    const workspaceRect = this.#workspaceEl.getBoundingClientRect();
+    const offsetX = Number.isFinite(clientX) ? clientX - workspaceRect.left : workspaceRect.width * 0.5;
+    const offsetY = Number.isFinite(clientY) ? clientY - workspaceRect.top : workspaceRect.height * 0.5;
+    const width = this.#edgeChooserEl.offsetWidth || 320;
+    const height = this.#edgeChooserEl.offsetHeight || 230;
+    const left = Math.min(Math.max(12, offsetX + 10), workspaceRect.width - width - 12);
+    const top = Math.min(Math.max(12, offsetY + 10), workspaceRect.height - height - 12);
+    this.#edgeChooserEl.style.left = `${Math.round(left)}px`;
+    this.#edgeChooserEl.style.top = `${Math.round(top)}px`;
+
+    this.#edgeChooserEl.hidden = false;
+    this.#edgeChooserEl.querySelector('[data-field="edge-chooser-type"]')?.focus();
+  }
+
+  #closeEdgeChooser() {
+    if (!this.#edgeChooserEl) return;
+    this.#edgeChooserState = null;
+    this.#edgeChooserEl.hidden = true;
+    this.#edgeChooserEl.innerHTML = "";
+  }
+
+  #renderEdgeChooser() {
+    const state = this.#edgeChooserState;
+    if (!state || !this.#edgeChooserEl) return;
+
+    const selectedPreset = state.presets.find((preset) => preset.type === state.selectedType) ?? state.presets[0];
+    const optionsMarkup = state.presets
+      .map((preset) => {
+        const disabled = preset.valid ? "" : "disabled";
+        const suffix = preset.valid ? "" : " (invalid)";
+        return `<option value="${preset.type}" ${preset.type === state.selectedType ? "selected" : ""} ${disabled}>${preset.type}${suffix}</option>`;
+      })
+      .join("");
+
+    this.#edgeChooserEl.innerHTML = `
+      <div class="graph-edge-chooser-card">
+        <h4>Create Edge</h4>
+        <p class="graph-edge-chooser-meta">${state.sourceNodeLabel} -> ${state.targetNodeLabel}</p>
+        <label class="graph-edge-chooser-field">
+          <span>Edge Type</span>
+          <select data-field="edge-chooser-type">${optionsMarkup}</select>
+        </label>
+        <p class="graph-edge-chooser-help">${selectedPreset?.description ?? ""}</p>
+        <p class="graph-edge-chooser-help graph-edge-chooser-reason">${selectedPreset?.reason ?? ""}</p>
+        <p class="graph-edge-chooser-help">
+          Contract: ${selectedPreset?.contract?.sourcePort ?? "-"} -> ${selectedPreset?.contract?.targetPort ?? "-"} (${selectedPreset?.contract?.payloadType ?? "none"})
+        </p>
+        <div class="graph-edge-chooser-actions">
+          <button type="button" data-action="edge-chooser-connect">Connect</button>
+          <button type="button" data-action="edge-chooser-cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    this.#edgeChooserEl.querySelector('[data-field="edge-chooser-type"]')?.addEventListener("change", (event) => {
+      if (!this.#edgeChooserState) return;
+      this.#edgeChooserState.selectedType = event.target.value;
+      this.#renderEdgeChooser();
+    });
+
+    this.#edgeChooserEl.querySelector('[data-action="edge-chooser-cancel"]')?.addEventListener("click", () => {
+      this.#closeEdgeChooser();
+    });
+
+    this.#edgeChooserEl.querySelector('[data-action="edge-chooser-connect"]')?.addEventListener("click", () => {
+      const current = this.#edgeChooserState;
+      if (!current) return;
+      const selected = current.presets.find((preset) => preset.type === current.selectedType);
+      if (!selected?.valid) return;
+
+      publish(EVENTS.GRAPH_EDGE_CREATE_REQUESTED, {
+        source: current.sourceNodeId,
+        target: current.targetNodeId,
+        type: selected.type,
+        label: formatEdgeLabel(selected.type),
+        selectAfterCreate: true,
+        origin: "graph-canvas"
+      });
+      this.#closeEdgeChooser();
+    });
   }
 
   #findNodeIdAtClientPoint(clientX, clientY) {
@@ -699,6 +813,9 @@ class GraphCanvas extends HTMLElement {
     this.#edgeDraftEl = this.#edgeLayerEl.querySelector('[data-role="edge-draft"]');
     this.#bindEdgePointerEvents();
     this.#renderConnectDraft();
+    if (this.#edgeChooserState) {
+      this.#renderEdgeChooser();
+    }
     this.#highlightSelection();
     this.#applyViewportTransform();
   }

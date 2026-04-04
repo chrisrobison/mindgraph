@@ -1,4 +1,6 @@
 import {
+  getEdgeContractEndpoints,
+  getNodePorts,
   edgeAffectsExecution,
   edgeAffectsDataFlow,
   edgeDefinesHierarchy,
@@ -130,12 +132,14 @@ export const buildExecutionPlan = (document, options = {}) => {
   const outgoingExecution = new Map();
   const dataProviders = new Map();
   const dataConsumers = new Map();
+  const incomingDataEdges = new Map();
 
   nodeIdsInScope.forEach((nodeId) => {
     incomingExecution.set(nodeId, []);
     outgoingExecution.set(nodeId, []);
     dataProviders.set(nodeId, []);
     dataConsumers.set(nodeId, []);
+    incomingDataEdges.set(nodeId, []);
   });
 
   for (const edge of edges) {
@@ -149,14 +153,35 @@ export const buildExecutionPlan = (document, options = {}) => {
 
     if (!edgeAffectsDataFlow(edge.type)) continue;
 
+    const sourceNode = nodeById.get(edge.source);
+    const targetNode = nodeById.get(edge.target);
+    const endpoints = getEdgeContractEndpoints(edge, sourceNode, targetNode);
+    const contract = edge.metadata?.contract ?? {};
+    const inputOwnerId = endpoints.consumerNode?.id ?? null;
+    const providerId = endpoints.providerNode?.id ?? null;
+
     if (edge.type === "reads_from") {
       if (dataProviders.has(edge.source)) dataProviders.get(edge.source).push(edge.target);
       if (dataConsumers.has(edge.target)) dataConsumers.get(edge.target).push(edge.source);
+      if (inputOwnerId && incomingDataEdges.has(inputOwnerId)) {
+        incomingDataEdges.get(inputOwnerId).push({
+          edgeId: edge.id,
+          contract,
+          providerId
+        });
+      }
       continue;
     }
 
     if (dataProviders.has(edge.target)) dataProviders.get(edge.target).push(edge.source);
     if (dataConsumers.has(edge.source)) dataConsumers.get(edge.source).push(edge.target);
+    if (inputOwnerId && incomingDataEdges.has(inputOwnerId)) {
+      incomingDataEdges.get(inputOwnerId).push({
+        edgeId: edge.id,
+        contract,
+        providerId
+      });
+    }
   }
 
   const runnableNodeIds = nodeIdsInScope.filter((nodeId) => isExecutableNodeType(nodeById.get(nodeId)?.type));
@@ -174,6 +199,10 @@ export const buildExecutionPlan = (document, options = {}) => {
     const runnable = isExecutableNodeType(node.type);
     const upstreamDependencies = toArray(incomingExecution.get(nodeId));
     const providerIds = [...new Set(toArray(dataProviders.get(nodeId)).concat(toArray(node.data?.allowedDataSources)))].filter((id) => nodeById.has(id));
+    const requiredInputPorts = getNodePorts(node, "input").filter((port) => port.required !== false);
+    const connectedInputPorts = new Set(
+      toArray(incomingDataEdges.get(nodeId)).map((entry) => entry?.contract?.targetPort).filter(Boolean)
+    );
 
     const missingDependencyRuns = upstreamDependencies.filter((depId) => {
       const depNode = nodeById.get(depId);
@@ -194,6 +223,9 @@ export const buildExecutionPlan = (document, options = {}) => {
     });
 
     const contractMissingFields = (spec.requiredDataKeys ?? []).filter((key) => node.data?.[key] == null || node.data?.[key] === "");
+    const missingRequiredPorts = requiredInputPorts
+      .filter((port) => !connectedInputPorts.has(port.id))
+      .map((port) => port.id);
 
     const blockedReasons = [];
 
@@ -210,6 +242,9 @@ export const buildExecutionPlan = (document, options = {}) => {
     if (runnable && contractMissingFields.length) {
       blockedReasons.push(`Missing required fields: ${contractMissingFields.join(", ")}`);
     }
+    if (runnable && missingRequiredPorts.length) {
+      blockedReasons.push(`Missing required input ports: ${missingRequiredPorts.join(", ")}`);
+    }
 
     const ready = runnable && blockedReasons.length === 0;
     if (ready) readyNodeIds.push(nodeId);
@@ -224,6 +259,7 @@ export const buildExecutionPlan = (document, options = {}) => {
       blocked: runnable && !ready,
       blockedReasons,
       contractMissingFields,
+      missingRequiredPorts,
       upstreamDependencies,
       dataProviderIds: providerIds,
       staleDependencies,

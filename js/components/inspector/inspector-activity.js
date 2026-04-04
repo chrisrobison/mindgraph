@@ -1,4 +1,3 @@
-import { mockAgentRuntime } from "../../runtime/mock-agent-runtime.js";
 import { EVENTS } from "../../core/event-constants.js";
 import { publish } from "../../core/pan.js";
 import { uiStore } from "../../store/ui-store.js";
@@ -9,7 +8,6 @@ const toActivityEntries = (value) => (Array.isArray(value) ? value : []);
 
 class InspectorActivity extends HTMLElement {
   #node = null;
-  #running = false;
 
   set node(value) {
     this.#node = value ?? null;
@@ -26,21 +24,12 @@ class InspectorActivity extends HTMLElement {
   }
 
   async #runNode() {
-    if (!this.#node || this.#running) return;
-    this.#running = true;
-    this.render();
-
-    try {
-      publish(EVENTS.RUNTIME_AGENT_RUN_REQUESTED, {
-        nodeId: this.#node.id,
-        trigger: "inspector_run_node",
-        origin: "inspector-activity"
-      });
-      await mockAgentRuntime.runNode(this.#node.id, { trigger: "inspector_run_node" });
-    } finally {
-      this.#running = false;
-      this.render();
-    }
+    if (!this.#node) return;
+    publish(EVENTS.RUNTIME_AGENT_RUN_REQUESTED, {
+      nodeId: this.#node.id,
+      trigger: "inspector_run_node",
+      origin: "inspector-activity"
+    });
   }
 
   render() {
@@ -63,7 +52,13 @@ class InspectorActivity extends HTMLElement {
     }
 
     const status = escapeHtml(textValue(node.data?.status ?? "idle"));
+    const running = String(node.data?.status ?? "idle") === "running";
     const confidence = numberValue(node.data?.confidence, 0.5);
+    const runtimePolicy = node.data?.runtimePolicy ?? {};
+    const maxAttempts = numberValue(runtimePolicy.maxAttempts, 2);
+    const retryBackoffMs = numberValue(runtimePolicy.retryBackoffMs, 350);
+    const retryBackoffFactor = numberValue(runtimePolicy.retryBackoffFactor, 1.7);
+    const failFast = Boolean(runtimePolicy.failFast);
     const fallbackActivity = uiStore
       .getRuntimeState()
       .activityItems.filter((entry) => entry?.context?.nodeId === node.id)
@@ -115,10 +110,27 @@ class InspectorActivity extends HTMLElement {
           <span>Confidence</span>
           <input type="number" min="0" max="1" step="0.01" data-field="confidence" value="${confidence}" />
         </label>
+        <label class="inspector-field">
+          <span>Max Attempts</span>
+          <input type="number" min="1" max="6" step="1" data-field="maxAttempts" value="${maxAttempts}" />
+        </label>
+        <label class="inspector-field">
+          <span>Retry Backoff (ms)</span>
+          <input type="number" min="50" max="5000" step="10" data-field="retryBackoffMs" value="${retryBackoffMs}" />
+        </label>
+        <label class="inspector-field">
+          <span>Retry Backoff Factor</span>
+          <input type="number" min="1" max="5" step="0.1" data-field="retryBackoffFactor" value="${retryBackoffFactor}" />
+        </label>
+        <label class="inspector-field checkbox">
+          <input type="checkbox" data-field="failFast" ${failFast ? "checked" : ""} />
+          <span>Fail Fast in batch runs</span>
+        </label>
         <div class="inspector-inline-row">
-          <button type="button" data-action="run-node" ${this.#running ? "disabled" : ""}>
-            ${this.#running ? "Running..." : "Run Node"}
+          <button type="button" data-action="run-node" ${running ? "disabled" : ""}>
+            ${running ? "Running..." : "Run Node"}
           </button>
+          <button type="button" data-action="cancel-runs">Cancel Runs</button>
         </div>
       </section>
 
@@ -140,7 +152,48 @@ class InspectorActivity extends HTMLElement {
       const nextConfidence = numberValue(event.target.value, confidence);
       this.#patchData({ confidence: Math.min(1, Math.max(0, nextConfidence)) });
     });
+    this.querySelector('[data-field="maxAttempts"]')?.addEventListener("change", (event) => {
+      const next = Math.max(1, Math.min(6, Math.round(numberValue(event.target.value, maxAttempts))));
+      this.#patchData({
+        runtimePolicy: {
+          ...(runtimePolicy ?? {}),
+          maxAttempts: next
+        }
+      });
+    });
+    this.querySelector('[data-field="retryBackoffMs"]')?.addEventListener("change", (event) => {
+      const next = Math.max(50, Math.min(5000, Math.round(numberValue(event.target.value, retryBackoffMs))));
+      this.#patchData({
+        runtimePolicy: {
+          ...(runtimePolicy ?? {}),
+          retryBackoffMs: next
+        }
+      });
+    });
+    this.querySelector('[data-field="retryBackoffFactor"]')?.addEventListener("change", (event) => {
+      const next = Math.max(1, Math.min(5, numberValue(event.target.value, retryBackoffFactor)));
+      this.#patchData({
+        runtimePolicy: {
+          ...(runtimePolicy ?? {}),
+          retryBackoffFactor: next
+        }
+      });
+    });
+    this.querySelector('[data-field="failFast"]')?.addEventListener("change", (event) => {
+      this.#patchData({
+        runtimePolicy: {
+          ...(runtimePolicy ?? {}),
+          failFast: Boolean(event.target.checked)
+        }
+      });
+    });
     this.querySelector('[data-action="run-node"]')?.addEventListener("click", () => this.#runNode());
+    this.querySelector('[data-action="cancel-runs"]')?.addEventListener("click", () => {
+      publish(EVENTS.RUNTIME_RUN_CANCEL_REQUESTED, {
+        reason: "inspector_cancel_runs",
+        origin: "inspector-activity"
+      });
+    });
   }
 }
 

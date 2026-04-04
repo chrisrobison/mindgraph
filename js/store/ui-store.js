@@ -1,9 +1,18 @@
 import { EVENTS } from "../core/event-constants.js";
+import { PERSISTENCE } from "../core/constants.js";
 import { publish, subscribe } from "../core/pan.js";
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const nowIso = () => new Date().toISOString();
 const cap = (items, max = 80) => items.slice(0, max);
+const readRuntimeMode = () => {
+  try {
+    const raw = window.localStorage.getItem(PERSISTENCE.storage.runtimeMode);
+    return raw === "http" ? "http" : "mock";
+  } catch {
+    return "mock";
+  }
+};
 
 class UiStore {
   #state = {
@@ -14,9 +23,11 @@ class UiStore {
     inspectorTab: "overview",
     bottomTab: "messages",
     devConsoleVisible: true,
+    runtimeMode: readRuntimeMode(),
     activityItems: [],
     taskQueue: [],
     runHistory: [],
+    traces: [],
     errors: []
   };
 
@@ -62,6 +73,11 @@ class UiStore {
       this.#emitRuntimeState();
     });
 
+    subscribe(EVENTS.RUNTIME_MODE_CHANGED, ({ payload }) => {
+      this.#state.runtimeMode = payload?.mode ?? "mock";
+      this.#emitRuntimeState();
+    });
+
     subscribe(EVENTS.ACTIVITY_LOG_APPENDED, ({ payload, timestamp }) => {
       const entry = {
         level: payload?.level ?? "info",
@@ -89,10 +105,26 @@ class UiStore {
         summary: payload?.summary ?? "",
         confidence: payload?.confidence,
         outputType: payload?.output?.type,
-        at: payload?.at ?? nowIso()
+        at: payload?.at ?? nowIso(),
+        mode: payload?.mode ?? this.#state.runtimeMode
       };
 
       this.#state.runHistory = cap([entry, ...this.#state.runHistory], 120);
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.RUNTIME_TRACE_APPENDED, ({ payload }) => {
+      if (!payload) return;
+      const entry = {
+        at: payload?.at ?? nowIso(),
+        kind: payload?.kind ?? "trace",
+        nodeId: payload?.nodeId ?? null,
+        runId: payload?.runId ?? null,
+        attempt: payload?.attempt,
+        mode: payload?.mode ?? this.#state.runtimeMode,
+        detail: payload
+      };
+      this.#state.traces = cap([entry, ...this.#state.traces], 250);
       this.#emitRuntimeState();
     });
 
@@ -127,6 +159,7 @@ class UiStore {
       activityItems: [...this.#state.activityItems],
       taskQueue: [...this.#state.taskQueue],
       runHistory: [...this.#state.runHistory],
+      traces: [...this.#state.traces],
       errors: [...this.#state.errors]
     };
   }
@@ -136,7 +169,9 @@ class UiStore {
       activityItems: this.#state.activityItems.map((entry) => ({ ...entry })),
       taskQueue: this.#state.taskQueue.map((entry) => ({ ...entry })),
       runHistory: this.#state.runHistory.map((entry) => ({ ...entry })),
+      traces: this.#state.traces.map((entry) => ({ ...entry })),
       errors: this.#state.errors.map((entry) => ({ ...entry })),
+      runtimeMode: this.#state.runtimeMode,
       devConsoleVisible: this.#state.devConsoleVisible
     };
   }

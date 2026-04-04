@@ -1,6 +1,16 @@
 import { EDGE_TYPES, NODE_TYPES } from "./types.js";
 
 const ALL_NODE_TYPES = Object.freeze(Object.values(NODE_TYPES));
+const PORT_PAYLOAD_TYPES = Object.freeze([
+  "any",
+  "object",
+  "array",
+  "string",
+  "number",
+  "boolean",
+  "null",
+  "none"
+]);
 
 const EXECUTION_EDGE_TYPES = Object.freeze([EDGE_TYPES.DEPENDS_ON, EDGE_TYPES.TRIGGERS]);
 const DATA_EDGE_TYPES = Object.freeze([
@@ -85,6 +95,53 @@ const nodeTypeSpecEntries = [
     }
   ]
 ];
+
+const NODE_PORT_DEFAULTS = Object.freeze({
+  [NODE_TYPES.NOTE]: Object.freeze({
+    input: Object.freeze([]),
+    output: Object.freeze([
+      Object.freeze({ id: "reference", label: "Reference", payloadType: "string", required: false })
+    ])
+  }),
+  [NODE_TYPES.DATA]: Object.freeze({
+    input: Object.freeze([]),
+    output: Object.freeze([
+      Object.freeze({ id: "dataset", label: "Dataset", payloadType: "object", required: true })
+    ])
+  }),
+  [NODE_TYPES.TRANSFORMER]: Object.freeze({
+    input: Object.freeze([
+      Object.freeze({ id: "input", label: "Input", payloadType: "object", required: true })
+    ]),
+    output: Object.freeze([
+      Object.freeze({ id: "output", label: "Output", payloadType: "object", required: true })
+    ])
+  }),
+  [NODE_TYPES.AGENT]: Object.freeze({
+    input: Object.freeze([
+      Object.freeze({ id: "context", label: "Context", payloadType: "object", required: true })
+    ]),
+    output: Object.freeze([
+      Object.freeze({ id: "response", label: "Response", payloadType: "object", required: true })
+    ])
+  }),
+  [NODE_TYPES.VIEW]: Object.freeze({
+    input: Object.freeze([
+      Object.freeze({ id: "model", label: "Model", payloadType: "object", required: true })
+    ]),
+    output: Object.freeze([
+      Object.freeze({ id: "render", label: "Render", payloadType: "object", required: false })
+    ])
+  }),
+  [NODE_TYPES.ACTION]: Object.freeze({
+    input: Object.freeze([
+      Object.freeze({ id: "command_input", label: "Command Input", payloadType: "object", required: true })
+    ]),
+    output: Object.freeze([
+      Object.freeze({ id: "result", label: "Result", payloadType: "object", required: false })
+    ])
+  })
+});
 
 export const NODE_TYPE_SPECS = Object.freeze(Object.fromEntries(nodeTypeSpecEntries));
 
@@ -237,11 +294,172 @@ const edgeTypeSpecEntries = [
 export const EDGE_TYPE_SPECS = Object.freeze(Object.fromEntries(edgeTypeSpecEntries));
 
 const hasType = (value, allowed = []) => allowed.includes(value);
+const sanitizePayloadType = (value) => (PORT_PAYLOAD_TYPES.includes(value) ? value : "any");
+
+const clonePorts = (ports) =>
+  (Array.isArray(ports) ? ports : [])
+    .map((port, index) => {
+      const id = String(port?.id ?? `port_${index + 1}`).trim();
+      if (!id) return null;
+      return {
+        id,
+        label: String(port?.label ?? id),
+        payloadType: sanitizePayloadType(String(port?.payloadType ?? "any")),
+        required: port?.required !== false,
+        schema: typeof port?.schema === "object" && port?.schema != null ? { ...port.schema } : {}
+      };
+    })
+    .filter(Boolean);
+
+export const getDefaultPortsForNodeType = (nodeType) => {
+  const defaults = NODE_PORT_DEFAULTS[nodeType] ?? NODE_PORT_DEFAULTS[NODE_TYPES.NOTE];
+  return {
+    input: clonePorts(defaults.input),
+    output: clonePorts(defaults.output)
+  };
+};
 
 export const getNodeTypeSpec = (nodeType) => NODE_TYPE_SPECS[nodeType] ?? NODE_TYPE_SPECS[NODE_TYPES.NOTE];
 export const getEdgeTypeSpec = (edgeType) => EDGE_TYPE_SPECS[edgeType] ?? null;
 
 export const isExecutableNodeType = (nodeType) => Boolean(getNodeTypeSpec(nodeType)?.executable);
+
+export const getNodePorts = (nodeLike, direction = "input") => {
+  const nodeType = nodeLike?.type ?? NODE_TYPES.NOTE;
+  const fallback = getDefaultPortsForNodeType(nodeType);
+  const dataPorts = direction === "output" ? nodeLike?.data?.outputPorts : nodeLike?.data?.inputPorts;
+  const normalized = clonePorts(dataPorts);
+  return normalized.length ? normalized : direction === "output" ? fallback.output : fallback.input;
+};
+
+const findPort = (ports, portId) => {
+  if (!portId) return null;
+  return ports.find((port) => port.id === portId) ?? null;
+};
+
+const payloadCompatible = (sourceType, targetType) => {
+  if (!sourceType || !targetType) return true;
+  if (sourceType === "any" || targetType === "any") return true;
+  return sourceType === targetType;
+};
+
+const resolveContractEndpoints = (edgeType, sourceNode, targetNode) => {
+  if (edgeType === EDGE_TYPES.READS_FROM) {
+    return {
+      providerNode: targetNode,
+      consumerNode: sourceNode,
+      providerDirection: "target",
+      consumerDirection: "source"
+    };
+  }
+
+  return {
+    providerNode: sourceNode,
+    consumerNode: targetNode,
+    providerDirection: "source",
+    consumerDirection: "target"
+  };
+};
+
+export const getEdgeContractEndpoints = (edge, sourceNode, targetNode) => {
+  const { providerNode, consumerNode, providerDirection, consumerDirection } = resolveContractEndpoints(
+    edge?.type,
+    sourceNode,
+    targetNode
+  );
+  const providerPorts = getNodePorts(providerNode, "output");
+  const consumerPorts = getNodePorts(consumerNode, "input");
+
+  return {
+    providerNode,
+    consumerNode,
+    providerPorts,
+    consumerPorts,
+    providerDirection,
+    consumerDirection
+  };
+};
+
+export const getDefaultEdgeContract = (edgeType, sourceNode, targetNode) => {
+  const spec = getEdgeTypeSpec(edgeType);
+  const { providerPorts, consumerPorts } = getEdgeContractEndpoints(
+    { type: edgeType },
+    sourceNode,
+    targetNode
+  );
+  const sourcePort = providerPorts[0]?.id ?? null;
+  const targetPort = consumerPorts[0]?.id ?? null;
+  const sourceType = providerPorts[0]?.payloadType ?? "any";
+  const targetType = consumerPorts[0]?.payloadType ?? "any";
+
+  let payloadType = "none";
+  if (spec?.affectsDataFlow) {
+    payloadType = sourceType === "any" ? targetType : sourceType;
+  }
+
+  return {
+    sourcePort,
+    targetPort,
+    payloadType: sanitizePayloadType(payloadType),
+    schema: {},
+    required: Boolean(spec?.affectsExecution || spec?.affectsDataFlow)
+  };
+};
+
+export const applyEdgeContractDefaults = (edge, sourceNode, targetNode) => {
+  if (!edge) return edge;
+  const defaults = getDefaultEdgeContract(edge.type, sourceNode, targetNode);
+  const current = edge.metadata?.contract ?? {};
+
+  return {
+    ...edge,
+    metadata: {
+      ...(edge.metadata ?? {}),
+      contract: {
+        ...defaults,
+        ...(typeof current === "object" && current != null ? current : {}),
+        payloadType: sanitizePayloadType(String(current?.payloadType ?? defaults.payloadType ?? "any")),
+        schema: typeof current?.schema === "object" && current?.schema != null ? { ...current.schema } : {}
+      }
+    }
+  };
+};
+
+const validateEdgeContract = (edge, sourceNode, targetNode) => {
+  const spec = getEdgeTypeSpec(edge.type);
+  const contract = edge.metadata?.contract ?? {};
+  const { providerPorts, consumerPorts } = getEdgeContractEndpoints(edge, sourceNode, targetNode);
+  const errors = [];
+
+  const sourcePortId = contract.sourcePort ?? null;
+  const targetPortId = contract.targetPort ?? null;
+  const sourcePort = findPort(providerPorts, sourcePortId) ?? (providerPorts[0] ?? null);
+  const targetPort = findPort(consumerPorts, targetPortId) ?? (consumerPorts[0] ?? null);
+  const payloadType = sanitizePayloadType(String(contract.payloadType ?? "any"));
+
+  if (spec?.affectsDataFlow) {
+    if (!sourcePort) {
+      errors.push(`Edge ${edge.type} requires a source output port`);
+    }
+    if (!targetPort) {
+      errors.push(`Edge ${edge.type} requires a target input port`);
+    }
+
+    if (sourcePort && !payloadCompatible(sourcePort.payloadType, payloadType)) {
+      errors.push(
+        `Contract payload type ${payloadType} is incompatible with source port ${sourcePort.id} (${sourcePort.payloadType})`
+      );
+    }
+
+    if (targetPort && !payloadCompatible(payloadType, targetPort.payloadType)) {
+      errors.push(
+        `Contract payload type ${payloadType} is incompatible with target port ${targetPort.id} (${targetPort.payloadType})`
+      );
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+};
 
 export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
   const spec = getNodeTypeSpec(nodeType);
@@ -277,6 +495,21 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
     next.status = "idle";
   }
 
+  if (spec.executable && (next.runtimePolicy == null || typeof next.runtimePolicy !== "object")) {
+    next.runtimePolicy = {
+      maxAttempts: 2,
+      retryBackoffMs: 350,
+      retryBackoffFactor: 1.7,
+      failFast: false
+    };
+  }
+
+  const defaultPorts = getDefaultPortsForNodeType(nodeType);
+  next.inputPorts = clonePorts(next.inputPorts);
+  next.outputPorts = clonePorts(next.outputPorts);
+  if (!next.inputPorts.length) next.inputPorts = defaultPorts.input;
+  if (!next.outputPorts.length) next.outputPorts = defaultPorts.output;
+
   return next;
 };
 
@@ -287,6 +520,27 @@ export const validateNodeContract = (node) => {
   const data = node.data ?? {};
   const missingDataKeys = (spec.requiredDataKeys ?? []).filter((key) => data[key] == null || data[key] === "");
   const errors = missingDataKeys.map((key) => `Node ${node.id} (${node.type}) missing required data field: ${key}`);
+
+  const inputPorts = getNodePorts(node, "input");
+  const outputPorts = getNodePorts(node, "output");
+  const validatePorts = (ports, direction) => {
+    const seen = new Set();
+    for (const port of ports) {
+      if (!port?.id) {
+        errors.push(`Node ${node.id} has ${direction} port with missing id`);
+        continue;
+      }
+      if (seen.has(port.id)) {
+        errors.push(`Node ${node.id} has duplicate ${direction} port id: ${port.id}`);
+      }
+      seen.add(port.id);
+      if (!PORT_PAYLOAD_TYPES.includes(port.payloadType)) {
+        errors.push(`Node ${node.id} port ${port.id} has invalid payload type ${port.payloadType}`);
+      }
+    }
+  };
+  validatePorts(inputPorts, "input");
+  validatePorts(outputPorts, "output");
 
   return {
     valid: errors.length === 0,
@@ -318,14 +572,21 @@ export const validateEdgeSemantics = (edge, sourceNode, targetNode) => {
   if (!isEdgeTypeAllowedBetween(edge.type, sourceNode.type, targetNode.type)) {
     return {
       valid: false,
-      errors: [
-        `Edge type ${edge.type} is invalid for ${sourceNode.type} -> ${targetNode.type}`
-      ]
+      errors: [`Edge type ${edge.type} is invalid for ${sourceNode.type} -> ${targetNode.type}`]
     };
   }
 
   if (edge.source === edge.target && edge.type !== EDGE_TYPES.REFERENCES) {
     return { valid: false, errors: [`Self-edge is only allowed for ${EDGE_TYPES.REFERENCES}`] };
+  }
+
+  const normalizedEdge = applyEdgeContractDefaults(edge, sourceNode, targetNode);
+  const contractValidation = validateEdgeContract(normalizedEdge, sourceNode, targetNode);
+  if (!contractValidation.valid) {
+    return {
+      valid: false,
+      errors: contractValidation.errors
+    };
   }
 
   return { valid: true, errors: [] };
@@ -351,6 +612,28 @@ export const inferDefaultEdgeType = (sourceNode, targetNode) => {
   }
 
   return EDGE_TYPES.INFORMS;
+};
+
+export const getEdgeCreationPresets = (sourceNode, targetNode) => {
+  return Object.entries(EDGE_TYPE_SPECS).map(([type, spec]) => {
+    const valid = sourceNode && targetNode
+      ? isEdgeTypeAllowedBetween(type, sourceNode.type, targetNode.type)
+      : false;
+
+    const contract = sourceNode && targetNode ? getDefaultEdgeContract(type, sourceNode, targetNode) : null;
+    const reason = valid
+      ? `Valid for ${sourceNode?.type ?? "source"} -> ${targetNode?.type ?? "target"}`
+      : `Not valid for ${sourceNode?.type ?? "source"} -> ${targetNode?.type ?? "target"}`;
+
+    return {
+      type,
+      category: spec.category,
+      description: spec.description,
+      valid,
+      reason,
+      contract
+    };
+  });
 };
 
 export const edgeAffectsExecution = (edgeType) => EXECUTION_EDGE_TYPES.includes(edgeType);

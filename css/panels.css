@@ -682,6 +682,83 @@
   z-index: 7;
 }
 
+.graph-edge-chooser {
+  position: absolute;
+  z-index: 12;
+  width: 320px;
+  pointer-events: auto;
+}
+
+.graph-edge-chooser-card {
+  border: 1px solid #c4d6ea;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 38px -30px rgba(20, 44, 78, 0.8);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.graph-edge-chooser-card h4 {
+  margin: 0;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #34587b;
+}
+
+.graph-edge-chooser-meta {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #4d6786;
+  font-weight: 600;
+}
+
+.graph-edge-chooser-field {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.graph-edge-chooser-field > span {
+  font-size: 0.72rem;
+  color: #506b8a;
+}
+
+.graph-edge-chooser-field select {
+  border: 1px solid #c8d7ea;
+  border-radius: 9px;
+  padding: 0.38rem 0.45rem;
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+
+.graph-edge-chooser-help {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #3d5b7d;
+}
+
+.graph-edge-chooser-reason {
+  color: #7a4b17;
+}
+
+.graph-edge-chooser-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.graph-edge-chooser-actions button {
+  border: 1px solid #c8d7ea;
+  border-radius: 9px;
+  background: #fdfefe;
+  padding: 0.36rem 0.62rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #1e3a5a;
+  cursor: pointer;
+}
+
 .graph-edge-path {
   fill: none;
   stroke: #90a5c0;

@@ -3,7 +3,12 @@ import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { escapeHtml } from "./inspector/shared.js";
 import { EDGE_TYPE_VALUES } from "../core/types.js";
-import { getEdgeTypeSpec, validateEdgeSemantics } from "../core/graph-semantics.js";
+import {
+  applyEdgeContractDefaults,
+  getEdgeContractEndpoints,
+  getEdgeTypeSpec,
+  validateEdgeSemantics
+} from "../core/graph-semantics.js";
 import { getNodePlan } from "../runtime/execution-planner.js";
 
 const tabs = [
@@ -142,6 +147,29 @@ class InspectorPanel extends HTMLElement {
 
   #bindEdgeInspector() {
     if (!this.#selectedEdgeId || !this.#selectedEdge) return;
+    const sourceNode = graphStore.getNode(this.#selectedEdge.source);
+    const targetNode = graphStore.getNode(this.#selectedEdge.target);
+    const currentEdge = applyEdgeContractDefaults(this.#selectedEdge, sourceNode, targetNode);
+    const endpoints = getEdgeContractEndpoints(currentEdge, sourceNode, targetNode);
+    const sourceOutputs = endpoints.providerPorts;
+    const targetInputs = endpoints.consumerPorts;
+    const currentContract = currentEdge.metadata?.contract ?? {};
+
+    const publishContract = (partial = {}) => {
+      publish(EVENTS.GRAPH_EDGE_UPDATE_REQUESTED, {
+        edgeId: this.#selectedEdgeId,
+        patch: {
+          metadata: {
+            ...(currentEdge.metadata ?? {}),
+            contract: {
+              ...currentContract,
+              ...partial
+            }
+          }
+        },
+        origin: "inspector-panel"
+      });
+    };
 
     this.querySelector('[data-field="edge-type"]')?.addEventListener("change", (event) => {
       publish(EVENTS.GRAPH_EDGE_UPDATE_REQUESTED, {
@@ -157,6 +185,35 @@ class InspectorPanel extends HTMLElement {
         patch: { label: event.target.value },
         origin: "inspector-panel"
       });
+    });
+
+    this.querySelector('[data-field="edge-contract-source-port"]')?.addEventListener("change", (event) => {
+      publishContract({ sourcePort: event.target.value || null });
+    });
+
+    this.querySelector('[data-field="edge-contract-target-port"]')?.addEventListener("change", (event) => {
+      publishContract({ targetPort: event.target.value || null });
+    });
+
+    this.querySelector('[data-field="edge-contract-payload-type"]')?.addEventListener("change", (event) => {
+      publishContract({ payloadType: event.target.value || "any" });
+    });
+
+    this.querySelector('[data-field="edge-contract-required"]')?.addEventListener("change", (event) => {
+      publishContract({ required: Boolean(event.target.checked) });
+    });
+
+    this.querySelector('[data-field="edge-contract-schema"]')?.addEventListener("change", (event) => {
+      let parsed = {};
+      const raw = String(event.target.value ?? "").trim();
+      if (raw) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = { raw };
+        }
+      }
+      publishContract({ schema: parsed });
     });
 
     this.querySelector('[data-action="delete-edge"]')?.addEventListener("click", () => {
@@ -181,11 +238,19 @@ class InspectorPanel extends HTMLElement {
       const edge = this.#selectedEdge;
       const sourceNode = graphStore.getNode(edge.source);
       const targetNode = graphStore.getNode(edge.target);
+      const normalizedEdge = applyEdgeContractDefaults(edge, sourceNode, targetNode);
       const semantic = getEdgeTypeSpec(edge.type);
-      const semanticValidation = validateEdgeSemantics(edge, sourceNode, targetNode);
+      const semanticValidation = validateEdgeSemantics(normalizedEdge, sourceNode, targetNode);
       const sourceLabel = escapeHtml(sourceNode?.label ?? edge.source ?? "(unknown)");
       const targetLabel = escapeHtml(targetNode?.label ?? edge.target ?? "(unknown)");
       const label = escapeHtml(String(edge.label ?? ""));
+      const endpoints = getEdgeContractEndpoints(normalizedEdge, sourceNode, targetNode);
+      const sourcePorts = endpoints.providerPorts;
+      const targetPorts = endpoints.consumerPorts;
+      const contract = normalizedEdge.metadata?.contract ?? {};
+      const contractSchema = escapeHtml(
+        contract.schema && typeof contract.schema === "object" ? JSON.stringify(contract.schema, null, 2) : ""
+      );
 
       this.innerHTML = `
         <aside class="mg-panel mg-inspector-panel">
@@ -220,6 +285,47 @@ class InspectorPanel extends HTMLElement {
               <div class="inspector-inline-row">
                 <button type="button" data-action="delete-edge">Delete Edge</button>
               </div>
+            </section>
+            <section class="inspector-group">
+              <h4>Payload Contract</h4>
+              <label class="inspector-field">
+                <span>Payload Source Port</span>
+                <select data-field="edge-contract-source-port">
+                  ${sourcePorts
+                    .map(
+                      (port) =>
+                        `<option value="${escapeHtml(port.id)}" ${
+                          String(contract.sourcePort ?? "") === String(port.id) ? "selected" : ""
+                        }>${escapeHtml(port.label)} (${escapeHtml(port.payloadType)})</option>`
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label class="inspector-field">
+                <span>Payload Target Port</span>
+                <select data-field="edge-contract-target-port">
+                  ${targetPorts
+                    .map(
+                      (port) =>
+                        `<option value="${escapeHtml(port.id)}" ${
+                          String(contract.targetPort ?? "") === String(port.id) ? "selected" : ""
+                        }>${escapeHtml(port.label)} (${escapeHtml(port.payloadType)})</option>`
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label class="inspector-field">
+                <span>Payload Type</span>
+                <input type="text" data-field="edge-contract-payload-type" value="${escapeHtml(contract.payloadType ?? "any")}" />
+              </label>
+              <label class="inspector-field checkbox">
+                <input type="checkbox" data-field="edge-contract-required" ${contract.required !== false ? "checked" : ""} />
+                <span>Required for execution/data readiness</span>
+              </label>
+              <label class="inspector-field">
+                <span>Contract Schema (JSON)</span>
+                <textarea rows="4" data-field="edge-contract-schema">${contractSchema}</textarea>
+              </label>
             </section>
             <section class="inspector-group">
               <h4>Edge Semantics</h4>

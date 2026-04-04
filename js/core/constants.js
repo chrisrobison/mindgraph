@@ -111,7 +111,9 @@ export const PERSISTENCE = Object.freeze({
   autosaveDebounceMs: 450,
   storage: Object.freeze({
     lastSessionDocument: "mindgraph.last_session.document",
-    autosaveEnabled: "mindgraph.autosave.enabled"
+    autosaveEnabled: "mindgraph.autosave.enabled",
+    runtimeMode: "mindgraph.runtime.mode",
+    runtimeEndpoint: "mindgraph.runtime.endpoint"
   })
 });
 

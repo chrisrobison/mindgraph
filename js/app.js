@@ -9,6 +9,7 @@ import "./components/bottom-panel/messages-view.js";
 import "./components/bottom-panel/activity-log-view.js";
 import "./components/bottom-panel/task-queue-view.js";
 import "./components/bottom-panel/run-history-view.js";
+import "./components/bottom-panel/trace-view.js";
 import "./components/bottom-panel/error-view.js";
 
 import "./components/nodes/note-node.js";
@@ -27,7 +28,8 @@ import "./components/inspector/inspector-output.js";
 import "./components/inspector/inspector-automation.js";
 import "./components/inspector/inspector-permissions.js";
 import "./runtime/data-connectors.js";
-import "./runtime/mock-agent-runtime.js";
+import "./runtime/runtime-service.js";
+import "./runtime/runtime-audit-store.js";
 
 import { EVENTS } from "./core/event-constants.js";
 import { publish } from "./core/pan.js";

@@ -8,6 +8,7 @@ const tabs = [
   { key: "activity", label: "Activity Log", tag: "bottom-activity-log-view" },
   { key: "queue", label: "Task Queue", tag: "bottom-task-queue-view" },
   { key: "history", label: "Run History", tag: "bottom-run-history-view" },
+  { key: "traces", label: "Run Traces", tag: "bottom-trace-view" },
   { key: "errors", label: "Errors", tag: "bottom-error-view" }
 ];
 
@@ -122,6 +123,8 @@ class BottomActivityPanel extends HTMLElement {
       view.items = this.#runtime.taskQueue;
     } else if (this.#tab === "history") {
       view.items = this.#runtime.runHistory;
+    } else if (this.#tab === "traces") {
+      view.items = this.#runtime.traces;
     } else {
       view.items = this.#runtime.errors;
     }

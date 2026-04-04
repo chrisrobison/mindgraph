@@ -29,6 +29,7 @@ const firstValue = (value) => {
 
 export class MockAgentRuntime extends AgentRuntime {
   #taskQueue = [];
+  #cancelRequested = false;
 
   constructor(options = {}) {
     super(options);
@@ -36,6 +37,10 @@ export class MockAgentRuntime extends AgentRuntime {
   }
 
   async runNode(nodeId, context = {}) {
+    if (!context?.inBatch) {
+      this.#cancelRequested = false;
+    }
+
     const node = this.store.getNode(nodeId);
     const taskId = makeTaskId();
     const runId = makeRunId(nodeId);
@@ -112,6 +117,10 @@ export class MockAgentRuntime extends AgentRuntime {
         { progress: 0.75, label: "Computing output" },
         { progress: 0.93, label: "Recording result" }
       ]) {
+        if (this.#isCancelled(context)) {
+          this.#markCancelled(node, taskId, runId, "Execution cancelled");
+          return { ok: false, nodeId, runId, status: "cancelled", error: "Execution cancelled", cancelled: true };
+        }
         await sleep(180);
         this.#setTask(taskId, { progress: step.progress });
         this.#appendNodeActivity(nodeId, {
@@ -119,6 +128,11 @@ export class MockAgentRuntime extends AgentRuntime {
           level: "info",
           message: `${step.label} (${Math.round(step.progress * 100)}%)`
         });
+      }
+
+      if (this.#isCancelled(context)) {
+        this.#markCancelled(node, taskId, runId, "Execution cancelled");
+        return { ok: false, nodeId, runId, status: "cancelled", error: "Execution cancelled", cancelled: true };
       }
 
       const latestNode = this.store.getNode(nodeId);
@@ -223,6 +237,7 @@ export class MockAgentRuntime extends AgentRuntime {
   }
 
   async runSubtree(nodeId, context = {}) {
+    this.#cancelRequested = false;
     const root = this.store.getNode(nodeId);
     const document = this.store.getDocument();
 
@@ -261,7 +276,15 @@ export class MockAgentRuntime extends AgentRuntime {
     let failed = 0;
 
     for (const id of ids) {
-      const result = await this.runNode(id, { ...context, trigger: context.trigger ?? "manual_subtree" });
+      const result = await this.runNode(id, {
+        ...context,
+        trigger: context.trigger ?? "manual_subtree",
+        inBatch: true
+      });
+      if (result?.status === "cancelled") {
+        failed += 1;
+        break;
+      }
       if (result.ok) completed += 1;
       else failed += 1;
     }
@@ -276,6 +299,7 @@ export class MockAgentRuntime extends AgentRuntime {
   }
 
   async runAll(context = {}) {
+    this.#cancelRequested = false;
     const plan = buildExecutionPlan(this.store.getDocument());
     const nodeIds = plan.executionOrder.filter((id) => plan.nodes?.[id]?.runnable);
 
@@ -287,7 +311,15 @@ export class MockAgentRuntime extends AgentRuntime {
     let failed = 0;
 
     for (const nodeId of nodeIds) {
-      const result = await this.runNode(nodeId, { ...context, trigger: context.trigger ?? "manual_all" });
+      const result = await this.runNode(nodeId, {
+        ...context,
+        trigger: context.trigger ?? "manual_all",
+        inBatch: true
+      });
+      if (result?.status === "cancelled") {
+        failed += 1;
+        break;
+      }
       if (result.ok) completed += 1;
       else failed += 1;
     }
@@ -298,6 +330,11 @@ export class MockAgentRuntime extends AgentRuntime {
     );
 
     return { ok: failed === 0, total: nodeIds.length, completed, failed };
+  }
+
+  cancelAll(reason = "cancelled") {
+    this.#cancelRequested = true;
+    this.#appendActivity("warn", `Run cancellation requested (${reason})`, { reason });
   }
 
   async #hydrateMissingDataProviders(nodeId) {
@@ -499,6 +536,70 @@ export class MockAgentRuntime extends AgentRuntime {
       nodeId: node.id,
       runId
     });
+  }
+
+  #markCancelled(node, taskId, runId, reason) {
+    const cancelledAt = new Date().toISOString();
+    const latestNode = this.store.getNode(node.id);
+    const summary = reason || "Execution cancelled";
+
+    this.#patchNodeData(node.id, {
+      status: "cancelled",
+      lastRunSummary: summary,
+      lastRunAt: cancelledAt,
+      runHistory: [
+        {
+          runId,
+          status: "cancelled",
+          summary,
+          confidence: Number(latestNode?.data?.confidence ?? 0),
+          at: cancelledAt
+        },
+        ...toArray(latestNode?.data?.runHistory)
+      ].slice(0, 25),
+      activityHistory: [
+        {
+          at: cancelledAt,
+          level: "warn",
+          message: `Cancelled run ${runId}: ${summary}`
+        },
+        ...toArray(latestNode?.data?.activityHistory)
+      ].slice(0, 40)
+    });
+
+    this.#setTask(taskId, {
+      status: "cancelled",
+      progress: 1,
+      completedAt: cancelledAt
+    });
+
+    this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, {
+      nodeId: node.id,
+      runId,
+      reason: summary,
+      status: "cancelled"
+    });
+    this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
+      nodeId: node.id,
+      nodeLabel: node.label,
+      runId,
+      status: "cancelled",
+      summary,
+      confidence: Number(latestNode?.data?.confidence ?? 0),
+      output: { type: "cancelled", message: summary },
+      at: cancelledAt
+    });
+    this.#appendActivity("warn", `Run cancelled for ${node.label}: ${summary}`, {
+      nodeId: node.id,
+      runId
+    });
+  }
+
+  #isCancelled(context = {}) {
+    if (this.#cancelRequested) return true;
+    if (context?.abortSignal?.aborted) return true;
+    if (typeof context?.cancelSignal === "function" && context.cancelSignal()) return true;
+    return false;
   }
 
   #patchNodeData(nodeId, dataPatch) {
