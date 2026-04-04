@@ -23,25 +23,27 @@ Open [http://127.0.0.1:4173](http://127.0.0.1:4173).
 
 ## Architecture
 
-### Ownership and Mutation Discipline
+### Ownership and mutation discipline
 
-1. Components/runtime publish `*.requested` intent events.
-2. `graph-store` validates and applies canonical mutations.
-3. `graph-store` emits typed result events (`graph.node.updated`, `graph.edge.created`, etc).
-4. `graph-store` emits `graph.document.changed` with reason metadata.
-5. UI renders from store snapshots.
+1. Components publish `*.requested` intent events.
+2. Stores/services validate + execute canonical mutations.
+3. `graph-store` remains the source of truth for graph state.
+4. Components render from store snapshots and result events.
 
 No component directly mutates shared graph state.
 
-### Primary Modules
+### Primary modules
 
-- `js/store/graph-store.js`: canonical graph mutations + selection + undo/redo
-- `js/store/ui-store.js`: tool/tab/panel viewport intents
-- `js/store/persistence-store.js`: local autosave/restore
+- `js/store/graph-store.js`: canonical graph mutations + selection + undo/redo + metadata updates
+- `js/store/ui-store.js`: UI-only runtime/feed state (`activity`, `queue`, `history`, `traces`)
+- `js/store/persistence-store.js`: autosave/restore
 - `js/core/graph-document.js`: normalize + validate graph docs
 - `js/core/graph-semantics.js`: node/edge contracts and semantic rules
-- `js/runtime/execution-planner.js`: runnable order, readiness, blocking, cycles
-- `js/runtime/mock-agent-runtime.js`: planner-driven execution mock runtime
+- `js/runtime/execution-planner.js`: readiness, order, cycles, stale detection
+- `js/runtime/runtime-service.js`: request-driven runtime orchestration, retries, cancellation, propagation
+- `js/runtime/mock-agent-runtime.js`: planner-aware local runtime adapter
+- `js/runtime/http-agent-runtime.js`: external runtime adapter (`POST /run-node`)
+- `js/runtime/runtime-audit-store.js`: persists planner snapshots/run traces into graph metadata
 
 ## Graph Semantics (Implemented)
 
@@ -50,89 +52,94 @@ Full design note: [docs/graph-semantics.md](/Users/cdr/Projects/mindgraph/docs/g
 ### Node roles
 
 - `note`: reference/context only
-- `data`: structured source (non-runnable)
-- `transformer`: runnable transform step
-- `agent`: runnable reasoning/orchestration step
-- `view`: runnable presentation step
-- `action`: runnable side-effect/publish step
+- `data`: structured source/sink node (non-runnable)
+- `transformer`: runnable deterministic transform
+- `agent`: runnable reasoning/orchestration
+- `view`: runnable presentation/render
+- `action`: runnable side-effect/publish
+
+Node contracts are normalized via `normalizeNodeDataWithContract` and validated via `validateNodeContract`, including:
+- required fields by node type
+- `inputPorts` / `outputPorts`
+- runtime policy defaults (`maxAttempts`, `retryBackoffMs`, `retryBackoffFactor`, `failFast`)
 
 ### Edge roles
 
-- Execution: `depends_on`, `triggers`
-- Data/context: `feeds_data`, `reads_from`, `writes_to`, `transforms`
-- Hierarchy/scope: `parent_of`
-- Informational: `informs`, `critiques`, `reports_to`, `references`
+- Execution edges: `depends_on`, `triggers`
+- Data/context edges: `feeds_data`, `reads_from`, `writes_to`, `transforms`
+- Hierarchy edges: `parent_of`
+- Informational edges: `informs`, `critiques`, `reports_to`, `references`
 
-### Semantics alignment delivered
+Edge contracts are normalized and validated at create/update time:
+- `sourcePort`
+- `targetPort`
+- `payloadType`
+- `required`
+- `schema`
 
-- Canvas connect flow now chooses default edge type from node semantics.
-- Graph-store validates edge semantics at create/update time.
-- Graph document validation checks node contracts + edge validity.
-- Runtime planner and runtime executor use the same semantic edge model.
-- Inspector shows edge semantic category/effects and validity.
+## Planner and Execution Model
 
-## Execution Planner
-
-Planner computes:
-- runnable nodes
-- topological execution order
-- subtree scope by hierarchy edges
-- missing dependencies
+Planner answers:
+- runnable vs blocked
+- upstream dependencies
 - missing input payloads
-- missing required contract fields
-- dependency cycles
-- `ready` vs `blocked`
-- stale upstream detection (`needsRerun`)
+- missing required ports
+- cycle detection
+- subtree scope by hierarchy
+- stale dependency rerun hints
 
-Used by:
-- canvas/node readiness display
-- inspector planner status
-- runtime run-node/run-subtree/run-all
+Runtime service behavior:
+- handles `runtime.*.requested` events (`run node`, `run subtree`, `run all`, `cancel`)
+- applies retry/backoff from node runtime policy
+- supports cancellation across adapters
+- propagates upstream failures during batch plans
+- supports fail-fast per node policy
 
-## Runtime Behavior
+### Runtime modes
 
-`mock-agent-runtime` now executes all runnable node types (`transformer`, `agent`, `view`, `action`) instead of only agents.
+- `mock`: in-browser execution against planner state
+- `http`: delegates to external runtime endpoint
 
-Execution flow:
-1. Planner readiness check
-2. Optional hydration of missing data-node providers
-3. Type-specific mock execution
-4. Node state update through graph-store requests (`status`, `lastOutput`, `lastRunAt`, run history)
-
-Subtree execution:
-- scope by `parent_of`
-- order by execution edges
-- optional stale-only mode (`partial: "stale"`)
-
-## End-to-End Seed Workflow
-
-Seed graph now demonstrates a concrete operational path:
-
-`data_market_data` -> `transformer_signal_normalizer` -> `agent_strategy_synthesizer` -> `view_campaign_brief` -> `action_publish_brief`
-
-Plus:
-- `reads_from` to site config
-- `parent_of` hierarchy for subtree targeting
-- `references` note for contextual linkage
+The toolbar controls mode and HTTP endpoint. Mode/endpoint are persisted in local storage.
 
 ## UI Clarity Improvements
 
-- Edge labels/colors now reflect semantic category.
-- Edge inspector includes semantic description and effect flags.
-- Node cards show planner readiness/blocked hints.
-- Node inspector summary includes planner state and first blocking reason.
+- Connect drag now opens an edge-type chooser with semantic presets and validity hints.
+- Edge inspector shows semantic category/effects and payload contract fields.
+- Planner readiness is surfaced in node/inspector views.
+- Bottom panel now includes `Run Traces` alongside activity/history/errors.
+
+## End-to-End Workflow (Seeded)
+
+Seed graph demonstrates a real path:
+
+`data_market_data` -> `transformer_signal_normalizer` -> `agent_strategy_synthesizer` -> `view_campaign_brief` -> `action_publish_brief`
+
+With additional semantics:
+- `reads_from` for config ingestion
+- `depends_on` for execution ordering
+- `parent_of` for subtree scope
+- `references` for non-executable context links
+
+## Audit and Trace Persistence
+
+Runtime audit data is persisted in `document.metadata.executionAudit`:
+- `plannerSnapshots` (capped)
+- `runTraces` (capped)
+
+This gives replay/debug context directly in the saved graph document.
 
 ## Current Limitations
 
-- Planner is in-memory and recalculated on render; no persisted plan snapshots yet.
-- Validation is schema-like and lightweight, not full JSON Schema enforcement.
-- Runtime remains mock execution (no external provider orchestration engine).
-- Edge creation still defaults semantically (no in-drag type picker yet).
+- Port contracts are lightweight and do not enforce full JSON Schema semantics.
+- HTTP runtime adapter currently assumes a single `/run-node` contract and sequential plan execution.
+- Planner uses in-memory recomputation each render/request (no incremental diff engine yet).
+- Batch execution is currently sequential, not parallelized by independent DAG branches.
 
-## Recommended Next Steps
+## Suggested Next Steps
 
-1. Add explicit edge-type picker during connect drag with semantic presets.
-2. Add port-level input/output typing and edge-level payload contracts.
-3. Persist planner snapshots per run for traceability and debugging.
-4. Add retry/backoff policies and execution cancellation semantics.
-5. Introduce a non-mock runtime adapter behind the same planner interface.
+1. Add editable per-port schema templates in inspector (with typed presets).
+2. Add planner diff views between snapshots for run-to-run diagnosis.
+3. Add resumable run sessions with explicit run IDs and timeline filtering.
+4. Add branch-parallel execution for independent DAG segments.
+5. Expand HTTP adapter contract to support streaming outputs and structured tool traces.

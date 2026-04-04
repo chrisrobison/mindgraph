@@ -1,98 +1,142 @@
 # MindGraph Graph Semantics
 
-This document defines the operational semantics currently implemented in MindGraph AI.
+This document defines the semantic model currently implemented in MindGraph AI.
 
-## Node Types
+## 1. Node Model
 
-| Node type | Role | Runnable | Contract highlights |
-|---|---|---|---|
-| `note` | Reference/context | No | Optional tags/color only |
-| `data` | Structured data source | No | Requires `sourceType`, `sourcePath`, `refreshMode` |
-| `transformer` | Deterministic transform step | Yes | Requires `transformExpression`; requires at least 1 input source |
-| `agent` | Reasoning/orchestration step | Yes | Requires `role`, `mode`; requires at least 1 input source |
-| `view` | Presentation/render step | Yes | Requires `outputTemplate`; requires at least 1 input source |
-| `action` | Side-effect/publish step | Yes | Requires `command`; requires at least 1 input source |
+| Node type | Role | Runnable | Required data keys | Default input ports | Default output ports |
+|---|---|---|---|---|---|
+| `note` | reference/context | no | none | none | `reference:string` |
+| `data` | data source/sink | no | `sourceType`, `sourcePath`, `refreshMode` | none | `dataset:object` |
+| `transformer` | deterministic transform | yes | `transformExpression` | `input:object` (required) | `output:object` |
+| `agent` | reasoning/orchestration | yes | `role`, `mode` | `context:object` (required) | `response:object` |
+| `view` | presentation/render | yes | `outputTemplate` | `model:object` (required) | `render:object` |
+| `action` | side-effect/publish | yes | `command` | `command_input:object` (required) | `result:object` |
 
-Contract defaults are normalized in `js/core/graph-semantics.js` via `normalizeNodeDataWithContract`.
+Node contracts are normalized in `normalizeNodeDataWithContract`.
 
-## Edge Types
+Executable node contracts also include runtime defaults:
+- `status: "idle"`
+- `lastRunAt`, `lastRunSummary`, `lastOutput`
+- `runtimePolicy`: `maxAttempts`, `retryBackoffMs`, `retryBackoffFactor`, `failFast`
 
-### Execution edges
+## 2. Edge Model
 
-- `depends_on`: source must complete before target can run.
-- `triggers`: source completion requests target execution.
+### Execution edges (affect runnable order)
 
-Execution planner uses these edges for dependency ordering and cycle checks.
+- `depends_on`: target must wait for source completion
+- `triggers`: source completion requests downstream execution
 
-### Data/context edges
+### Data/context edges (affect input readiness)
 
-- `feeds_data`: source output is passed to target as structured input.
-- `reads_from`: source consumes target data-node payload.
-- `writes_to`: source writes output to target sink.
-- `transforms`: source transforms target payload/context.
+- `feeds_data`: source output becomes target input
+- `reads_from`: source consumes target data node payload
+- `writes_to`: source writes payload to target sink
+- `transforms`: source transforms target payload/context
 
-Planner uses these edges to detect missing input payloads.
+### Hierarchy edges (affect subtree scope)
 
-### Hierarchy edges
+- `parent_of`: containment/scope relation for subtree run planning
 
-- `parent_of`: containment/scope edge for subtree execution selection.
+### Informational edges (reference-only)
 
-Hierarchy edges do **not** imply execution order by themselves.
+- `informs`, `critiques`, `reports_to`, `references`
 
-### Informational edges
+These do not affect execution order or data readiness.
 
-- `informs`
-- `critiques`
-- `reports_to`
-- `references`
+## 3. Edge Contract Model
 
-These are reference-only and do not affect execution readiness.
+Every edge can carry a normalized payload contract in `edge.metadata.contract`:
 
-## Planner Rules
+- `sourcePort`
+- `targetPort`
+- `payloadType`
+- `required`
+- `schema`
 
-Implemented in `js/runtime/execution-planner.js`:
+Contract direction is semantic-aware:
+- most data edges: provider=`source`, consumer=`target`
+- `reads_from`: provider=`target`, consumer=`source`
 
-1. Build runnable set from node type contracts (`agent`, `transformer`, `view`, `action`).
-2. Build dependency graph from execution edge types (`depends_on`, `triggers`).
-3. Detect cycles among runnable nodes.
-4. Build topological order for runnable nodes (append leftovers if cycles exist).
-5. For each runnable node compute:
-   - upstream dependency ids
-   - data provider ids (data-flow edges + `allowedDataSources`)
-   - missing dependency outputs
-   - missing provider payloads
-   - missing required contract fields
-   - stale upstream dependencies (`needsRerun`)
-6. Mark node `ready` only when no blocking reasons exist.
+`validateEdgeSemantics` enforces:
+- valid edge type for source/target node types
+- endpoint existence
+- self-edge rules (`references` only)
+- contract port/type compatibility
 
-## Runtime Behavior
+## 4. Planner Rules
 
-`mock-agent-runtime` now executes all runnable node types, not only agents.
+Implemented in `js/runtime/execution-planner.js`.
 
-- `runNode`:
-  - checks planner readiness
-  - attempts to refresh missing data-node providers
-  - executes type-specific mock logic
-  - writes `status`, `lastOutput`, `lastRunAt`, run history through graph-store requests
-- `runSubtree`:
-  - scope from `parent_of`
-  - order from planner execution graph
-  - supports `partial: "stale"` mode for reruns
-- `runAll`:
-  - planner execution order across the full graph
+Planner computes, per scope:
+- runnable node set (by node contract)
+- execution graph from execution edge types
+- cycle detection and topological order
+- data provider dependencies
+- missing dependency outputs
+- missing required contract fields
+- missing required input ports
+- stale upstream dependencies (`needsRerun`)
 
-## Implemented vs Planned
+Per node, planner emits:
+- `ready` / `blocked`
+- `blockedReasons[]`
+- `upstreamDependencies[]`
+- `dataProviderIds[]`
+- `missingRequiredPorts[]`
+- `executionOrderIndex`
+
+## 5. Runtime Execution Semantics
+
+`runtime-service` owns execution orchestration and subscribes to intent events:
+- `runtime.agent.run.requested`
+- `runtime.subtree.run.requested`
+- `runtime.all.run.requested`
+- `runtime.run.cancel.requested`
+
+Behavior:
+- builds planner snapshot before batch runs
+- executes in planner order
+- retries with backoff per node runtime policy
+- respects cancellation across adapters
+- propagates upstream failures through batch skips
+- supports per-node fail-fast policy
+
+Runtime adapters currently implemented:
+- `mock-agent-runtime` (local planner-aware execution)
+- `http-agent-runtime` (`POST {endpoint}/run-node`)
+
+## 6. UI Semantic Visibility
+
+Implemented UI surfaces:
+- connect-drag edge chooser with semantic presets + validity hints
+- edge inspector semantic category/effect flags
+- edge contract editor (ports/type/required/schema)
+- planner readiness status in node/inspector
+- run traces tab for execution diagnostics
+
+## 7. Persistence and Audit
+
+`runtime-audit-store` persists runtime diagnostics into graph metadata:
+- `metadata.executionAudit.plannerSnapshots`
+- `metadata.executionAudit.runTraces`
+
+Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains canonical owner.
+
+## 8. Implemented vs Planned
 
 ### Implemented now
 
-- shared semantic definitions consumed by validation, canvas defaults, inspector, planner, and runtime
-- edge validity checks in graph-store mutations
-- planner-backed readiness/blocked state in canvas and inspector
-- end-to-end seed workflow (`data -> transformer -> agent -> view -> action`)
+- explicit node/edge semantic categories
+- connect flow aligned with runtime/planner semantics
+- port-level node IO defaults + edge payload contracts
+- request-driven runtime service with retry/cancel/failure propagation
+- HTTP adapter behind shared planner/executor interface
+- persisted planner snapshots and run traces
 
 ### Planned next
 
-- explicit edge-creation UI picker for manual type override during connect-drag
-- richer port-level typing for node IO contracts
-- persisted planner snapshots for history diffing and run diagnostics
-- executor retry/backoff and non-mock runtime adapter
+- richer schema enforcement and schema-aware port presets
+- branch-parallel planner execution
+- run-session timeline UX and snapshot diffing
+- richer HTTP adapter protocol (streaming/tool-call traces)
