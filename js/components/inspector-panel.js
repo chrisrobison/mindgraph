@@ -3,6 +3,7 @@ import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { escapeHtml } from "./inspector/shared.js";
 import { EDGE_TYPE_VALUES } from "../core/types.js";
+import { getSchemaPreset, inferSchemaPresetId, listSchemaPresets } from "../core/contract-presets.js";
 import {
   applyEdgeContractDefaults,
   getEdgeContractEndpoints,
@@ -24,6 +25,7 @@ const tabs = [
 ];
 
 const tabTagByKey = Object.fromEntries(tabs.map((tab) => [tab.key, tab.tag]));
+const edgeSchemaPresets = listSchemaPresets();
 
 const normalizeTab = (value) => (tabTagByKey[value] ? value : "overview");
 
@@ -217,6 +219,12 @@ class InspectorPanel extends HTMLElement {
       publishContract({ schema: parsed });
     });
 
+    this.querySelector('[data-field="edge-contract-schema-preset"]')?.addEventListener("change", (event) => {
+      const preset = getSchemaPreset(event.target.value);
+      if (!preset) return;
+      publishContract({ payloadType: preset.payloadType, schema: preset.schema });
+    });
+
     this.querySelector('[data-action="delete-edge"]')?.addEventListener("click", () => {
       publish(EVENTS.GRAPH_EDGE_DELETE_REQUESTED, {
         edgeId: this.#selectedEdgeId,
@@ -249,9 +257,18 @@ class InspectorPanel extends HTMLElement {
       const sourcePorts = endpoints.providerPorts;
       const targetPorts = endpoints.consumerPorts;
       const contract = normalizedEdge.metadata?.contract ?? {};
+      const selectedPresetId = inferSchemaPresetId(contract) ?? "custom";
       const contractSchema = escapeHtml(
         contract.schema && typeof contract.schema === "object" ? JSON.stringify(contract.schema, null, 2) : ""
       );
+      const schemaPresetOptions = edgeSchemaPresets
+        .map(
+          (preset) =>
+            `<option value="${escapeHtml(preset.id)}" ${
+              selectedPresetId === preset.id ? "selected" : ""
+            }>${escapeHtml(preset.label)}</option>`
+        )
+        .join("");
 
       this.innerHTML = `
         <aside class="mg-panel mg-inspector-panel">
@@ -318,6 +335,13 @@ class InspectorPanel extends HTMLElement {
               <label class="inspector-field">
                 <span>Payload Type</span>
                 <input type="text" data-field="edge-contract-payload-type" value="${escapeHtml(contract.payloadType ?? "any")}" />
+              </label>
+              <label class="inspector-field">
+                <span>Schema Preset</span>
+                <select data-field="edge-contract-schema-preset">
+                  <option value="custom" ${selectedPresetId === "custom" ? "selected" : ""}>Custom / Manual</option>
+                  ${schemaPresetOptions}
+                </select>
               </label>
               <label class="inspector-field checkbox">
                 <input type="checkbox" data-field="edge-contract-required" ${contract.required !== false ? "checked" : ""} />

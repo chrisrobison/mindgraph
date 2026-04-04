@@ -83,6 +83,7 @@ Provider proxy note: [docs/provider-proxy.md](/Users/cdr/Projects/mindgraph/docs
 Node contracts are normalized via `normalizeNodeDataWithContract` and validated via `validateNodeContract`, including:
 - required fields by node type
 - `inputPorts` / `outputPorts`
+- role-aware port presets (with schema defaults) for contract authoring
 - runtime policy defaults (`maxAttempts`, `retryBackoffMs`, `retryBackoffFactor`, `failFast`)
 
 ### Edge roles
@@ -98,6 +99,7 @@ Edge contracts are normalized and validated at create/update time:
 - `payloadType`
 - `required`
 - `schema`
+- schema presets (`text`, `object`, `array`, `dataset`, `prompt`, `report`, `command_result`) with manual override support
 
 ## Planner and Execution Model
 
@@ -129,7 +131,8 @@ Provider settings (provider/model/api key/system prompt) are available in bottom
 ## UI Clarity Improvements
 
 - Connect drag now opens an edge-type chooser with semantic presets and validity hints.
-- Edge inspector shows semantic category/effects and payload contract fields.
+- Edge inspector shows semantic category/effects, schema preset controls, and clearer compatibility errors.
+- Node overview includes role-aware input/output port preset editing plus manual schema JSON editing.
 - Planner readiness is surfaced in node/inspector views.
 - Bottom panel `Planner Diff` compares any two saved planner snapshots (status, blockers, dependencies, order, stale/rerun hints).
 - Bottom panel now includes `Run Traces` alongside activity/history/errors.
@@ -176,7 +179,7 @@ Migration authoring details: [docs/graph-schema-migrations.md](/Users/cdr/Projec
 
 ## Suggested Next Steps
 
-1. Add editable per-port schema templates in inspector (with typed presets).
+1. Expand schema preset coverage for domain-specific contracts (for example finance/event payloads).
 2. Add planner diff views between snapshots for run-to-run diagnosis.
 3. Add resumable run sessions with explicit run IDs and timeline filtering.
 4. Add richer run timeline filters and branch-level session analytics.

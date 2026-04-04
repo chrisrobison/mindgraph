@@ -1,7 +1,8 @@
+import { getDefaultPortsFromPresets } from "./contract-presets.js";
 import { EDGE_TYPES, NODE_TYPES } from "./types.js";
 
 const ALL_NODE_TYPES = Object.freeze(Object.values(NODE_TYPES));
-const PORT_PAYLOAD_TYPES = Object.freeze([
+export const PORT_PAYLOAD_TYPES = Object.freeze([
   "any",
   "object",
   "array",
@@ -95,53 +96,6 @@ const nodeTypeSpecEntries = [
     }
   ]
 ];
-
-const NODE_PORT_DEFAULTS = Object.freeze({
-  [NODE_TYPES.NOTE]: Object.freeze({
-    input: Object.freeze([]),
-    output: Object.freeze([
-      Object.freeze({ id: "reference", label: "Reference", payloadType: "string", required: false })
-    ])
-  }),
-  [NODE_TYPES.DATA]: Object.freeze({
-    input: Object.freeze([]),
-    output: Object.freeze([
-      Object.freeze({ id: "dataset", label: "Dataset", payloadType: "object", required: true })
-    ])
-  }),
-  [NODE_TYPES.TRANSFORMER]: Object.freeze({
-    input: Object.freeze([
-      Object.freeze({ id: "input", label: "Input", payloadType: "object", required: true })
-    ]),
-    output: Object.freeze([
-      Object.freeze({ id: "output", label: "Output", payloadType: "object", required: true })
-    ])
-  }),
-  [NODE_TYPES.AGENT]: Object.freeze({
-    input: Object.freeze([
-      Object.freeze({ id: "context", label: "Context", payloadType: "object", required: true })
-    ]),
-    output: Object.freeze([
-      Object.freeze({ id: "response", label: "Response", payloadType: "object", required: true })
-    ])
-  }),
-  [NODE_TYPES.VIEW]: Object.freeze({
-    input: Object.freeze([
-      Object.freeze({ id: "model", label: "Model", payloadType: "object", required: true })
-    ]),
-    output: Object.freeze([
-      Object.freeze({ id: "render", label: "Render", payloadType: "object", required: false })
-    ])
-  }),
-  [NODE_TYPES.ACTION]: Object.freeze({
-    input: Object.freeze([
-      Object.freeze({ id: "command_input", label: "Command Input", payloadType: "object", required: true })
-    ]),
-    output: Object.freeze([
-      Object.freeze({ id: "result", label: "Result", payloadType: "object", required: false })
-    ])
-  })
-});
 
 export const NODE_TYPE_SPECS = Object.freeze(Object.fromEntries(nodeTypeSpecEntries));
 
@@ -312,7 +266,7 @@ const clonePorts = (ports) =>
     .filter(Boolean);
 
 export const getDefaultPortsForNodeType = (nodeType) => {
-  const defaults = NODE_PORT_DEFAULTS[nodeType] ?? NODE_PORT_DEFAULTS[NODE_TYPES.NOTE];
+  const defaults = getDefaultPortsFromPresets(nodeType);
   return {
     input: clonePorts(defaults.input),
     output: clonePorts(defaults.output)
@@ -428,32 +382,57 @@ export const applyEdgeContractDefaults = (edge, sourceNode, targetNode) => {
 const validateEdgeContract = (edge, sourceNode, targetNode) => {
   const spec = getEdgeTypeSpec(edge.type);
   const contract = edge.metadata?.contract ?? {};
-  const { providerPorts, consumerPorts } = getEdgeContractEndpoints(edge, sourceNode, targetNode);
+  const { providerPorts, consumerPorts, providerDirection, consumerDirection } = getEdgeContractEndpoints(
+    edge,
+    sourceNode,
+    targetNode
+  );
   const errors = [];
+
+  const formatPortRef = (port) => {
+    if (!port) return "(missing)";
+    return port.label && port.label !== port.id ? `${port.label} (${port.id})` : port.id;
+  };
+
+  const availablePortsText = (ports = []) =>
+    ports.length ? ports.map((port) => formatPortRef(port)).join(", ") : "(none)";
 
   const sourcePortId = contract.sourcePort ?? null;
   const targetPortId = contract.targetPort ?? null;
-  const sourcePort = findPort(providerPorts, sourcePortId) ?? (providerPorts[0] ?? null);
-  const targetPort = findPort(consumerPorts, targetPortId) ?? (consumerPorts[0] ?? null);
+  const selectedSourcePort = findPort(providerPorts, sourcePortId);
+  const selectedTargetPort = findPort(consumerPorts, targetPortId);
+  const sourcePort = selectedSourcePort ?? (providerPorts[0] ?? null);
+  const targetPort = selectedTargetPort ?? (consumerPorts[0] ?? null);
   const payloadType = sanitizePayloadType(String(contract.payloadType ?? "any"));
 
   if (spec?.affectsDataFlow) {
+    if (sourcePortId && !selectedSourcePort) {
+      errors.push(
+        `Edge ${edge.type} references unknown ${providerDirection} output port "${sourcePortId}". Available ${providerDirection} output ports: ${availablePortsText(providerPorts)}`
+      );
+    }
+    if (targetPortId && !selectedTargetPort) {
+      errors.push(
+        `Edge ${edge.type} references unknown ${consumerDirection} input port "${targetPortId}". Available ${consumerDirection} input ports: ${availablePortsText(consumerPorts)}`
+      );
+    }
+
     if (!sourcePort) {
-      errors.push(`Edge ${edge.type} requires a source output port`);
+      errors.push(`Edge ${edge.type} requires a ${providerDirection} output port to provide payload data`);
     }
     if (!targetPort) {
-      errors.push(`Edge ${edge.type} requires a target input port`);
+      errors.push(`Edge ${edge.type} requires a ${consumerDirection} input port to receive payload data`);
     }
 
     if (sourcePort && !payloadCompatible(sourcePort.payloadType, payloadType)) {
       errors.push(
-        `Contract payload type ${payloadType} is incompatible with source port ${sourcePort.id} (${sourcePort.payloadType})`
+        `Edge ${edge.type} payload mismatch: ${providerDirection} port ${formatPortRef(sourcePort)} emits ${sourcePort.payloadType}, but contract declares ${payloadType}`
       );
     }
 
     if (targetPort && !payloadCompatible(payloadType, targetPort.payloadType)) {
       errors.push(
-        `Contract payload type ${payloadType} is incompatible with target port ${targetPort.id} (${targetPort.payloadType})`
+        `Edge ${edge.type} payload mismatch: ${consumerDirection} port ${formatPortRef(targetPort)} accepts ${targetPort.payloadType}, but contract declares ${payloadType}`
       );
     }
   }

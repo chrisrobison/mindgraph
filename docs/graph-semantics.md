@@ -14,6 +14,7 @@ This document defines the semantic model currently implemented in MindGraph AI.
 | `action` | side-effect/publish | yes | `command` | `command_input:object` (required) | `result:object` |
 
 Node contracts are normalized in `normalizeNodeDataWithContract`.
+Port defaults are sourced from reusable role-aware presets in `js/core/contract-presets.js`.
 
 Executable node contracts also include runtime defaults:
 - `status: "idle"`
@@ -53,6 +54,15 @@ Every edge can carry a normalized payload contract in `edge.metadata.contract`:
 - `payloadType`
 - `required`
 - `schema`
+
+Common schema presets are available for contract authoring:
+- `text`
+- `object`
+- `array`
+- `dataset`
+- `prompt`
+- `report`
+- `command_result`
 
 Contract direction is semantic-aware:
 - most data edges: provider=`source`, consumer=`target`
@@ -114,7 +124,8 @@ Runtime adapters currently implemented:
 Implemented UI surfaces:
 - connect-drag edge chooser with semantic presets + validity hints
 - edge inspector semantic category/effect flags
-- edge contract editor (ports/type/required/schema)
+- edge contract editor (ports/type/required/schema + schema presets + manual JSON)
+- node overview port contract editor (role-aware input/output presets + manual JSON)
 - planner readiness status in node/inspector
 - run traces tab for execution diagnostics
 - runtime settings tab for provider/model/API key configuration
@@ -134,6 +145,8 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 - explicit node/edge semantic categories
 - connect flow aligned with runtime/planner semantics
 - port-level node IO defaults + edge payload contracts
+- schema helper presets + role-aware port presets for contract authoring
+- clearer edge compatibility validation messages with endpoint context
 - request-driven runtime service with retry/cancel/failure propagation
 - branch-parallel batch scheduling for independent runnable DAG branches
 - HTTP adapter behind shared planner/executor interface with structured WebSocket realtime transport
@@ -143,5 +156,5 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 
 ### Planned next
 
-- richer schema enforcement and schema-aware port presets
+- richer schema enforcement beyond lightweight preset templates
 - run-session timeline UX and snapshot diffing

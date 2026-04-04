@@ -428,6 +428,19 @@
   margin-top: 0.42rem;
 }
 
+.inspector-port-card {
+  border: 1px dashed #d0deef;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.58rem;
+  margin-top: 0.56rem;
+}
+
+.inspector-port-card .inspector-inline-row {
+  margin-top: 0;
+  margin-bottom: 0.52rem;
+}
+
 .inspector-last-updated {
   font-size: 0.72rem;
   color: #5f7391;
@@ -1439,6 +1452,11 @@
 :root[data-theme="dark"] .inspector-group {
   border-color: #2f4564;
   background: #172537;
+}
+
+:root[data-theme="dark"] .inspector-port-card {
+  border-color: #3a5272;
+  background: #142336;
 }
 
 :root[data-theme="dark"] .inspector-tabs button {
