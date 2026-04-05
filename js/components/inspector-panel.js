@@ -2,32 +2,78 @@ import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { escapeHtml } from "./inspector/shared.js";
-import { EDGE_TYPE_VALUES } from "../core/types.js";
+import { EDGE_TYPE_VALUES, NODE_TYPES } from "../core/types.js";
 import { getSchemaPreset, inferSchemaPresetId, listSchemaPresets } from "../core/contract-presets.js";
 import {
   applyEdgeContractDefaults,
   getEdgeContractEndpoints,
   getEdgeTypeSpec,
+  isExecutableNodeType,
   validateEdgeSemantics
 } from "../core/graph-semantics.js";
 import { getNodePlan } from "../runtime/execution-planner.js";
 
 const tabs = [
-  { key: "overview", label: "Overview", tag: "inspector-overview" },
-  { key: "prompt", label: "Prompt", tag: "inspector-prompt" },
-  { key: "data", label: "Data", tag: "inspector-data" },
-  { key: "tools", label: "Tools", tag: "inspector-tools" },
-  { key: "diagnostics", label: "Diagnostics", tag: "inspector-diagnostics" },
-  { key: "activity", label: "Activity", tag: "inspector-activity" },
-  { key: "output", label: "Output", tag: "inspector-output" },
-  { key: "automation", label: "Automation", tag: "inspector-automation" },
-  { key: "permissions", label: "Permissions", tag: "inspector-permissions" }
+  { key: "overview", label: "Overview", tag: "inspector-overview", visible: () => true },
+  {
+    key: "prompt",
+    label: "Prompt",
+    tag: "inspector-prompt",
+    visible: (nodeType) => nodeType === NODE_TYPES.AGENT
+  },
+  {
+    key: "data",
+    label: "Data",
+    tag: "inspector-data",
+    visible: (nodeType) => nodeType !== NODE_TYPES.NOTE
+  },
+  {
+    key: "tools",
+    label: "Tools",
+    tag: "inspector-tools",
+    visible: (nodeType) => nodeType === NODE_TYPES.AGENT
+  },
+  { key: "diagnostics", label: "Diagnostics", tag: "inspector-diagnostics", visible: () => true },
+  {
+    key: "activity",
+    label: "Activity",
+    tag: "inspector-activity",
+    visible: (nodeType) => isExecutableNodeType(nodeType)
+  },
+  {
+    key: "output",
+    label: "Output",
+    tag: "inspector-output",
+    visible: (nodeType) => isExecutableNodeType(nodeType)
+  },
+  {
+    key: "automation",
+    label: "Automation",
+    tag: "inspector-automation",
+    visible: (nodeType) => nodeType === NODE_TYPES.AGENT
+  },
+  {
+    key: "permissions",
+    label: "Permissions",
+    tag: "inspector-permissions",
+    visible: (nodeType) => nodeType === NODE_TYPES.AGENT
+  }
 ];
 
 const tabTagByKey = Object.fromEntries(tabs.map((tab) => [tab.key, tab.tag]));
 const edgeSchemaPresets = listSchemaPresets();
 
 const normalizeTab = (value) => (tabTagByKey[value] ? value : "overview");
+const isTabVisible = (tab, nodeType) => tab.visible(nodeType);
+const getVisibleTabsForNodeType = (nodeType) => {
+  if (!nodeType) return tabs;
+  return tabs.filter((tab) => isTabVisible(tab, nodeType));
+};
+const resolveActiveTab = (tab, visibleTabs) => {
+  const normalized = normalizeTab(tab);
+  if (visibleTabs.some((entry) => entry.key === normalized)) return normalized;
+  return visibleTabs[0]?.key ?? "overview";
+};
 
 class InspectorPanel extends HTMLElement {
   #dispose = [];
@@ -384,6 +430,8 @@ class InspectorPanel extends HTMLElement {
     const plannerMeta = nodePlan?.runnable
       ? `Planner: ${nodePlan.ready ? "Ready" : "Blocked"}`
       : "Planner: Not Runnable";
+    const visibleTabs = getVisibleTabsForNodeType(node?.type);
+    const activeTab = resolveActiveTab(this.#activeTab, visibleTabs);
 
     this.innerHTML = `
       <aside class="mg-panel mg-inspector-panel">
@@ -400,11 +448,11 @@ class InspectorPanel extends HTMLElement {
             }
           </div>
           <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
-            ${tabs
+            ${visibleTabs
               .map(
                 (tab) => `<button type="button" role="tab" data-inspector-tab="${tab.key}" aria-selected="${
-                  this.#activeTab === tab.key
-                }" aria-pressed="${this.#activeTab === tab.key}">${tab.label}</button>`
+                  activeTab === tab.key
+                }" aria-pressed="${activeTab === tab.key}">${tab.label}</button>`
               )
               .join("")}
           </div>
@@ -415,7 +463,7 @@ class InspectorPanel extends HTMLElement {
 
     this.#bindTabs();
 
-    const activeTag = tabTagByKey[this.#activeTab] ?? "inspector-overview";
+    const activeTag = tabTagByKey[activeTab] ?? "inspector-overview";
     const contentEl = this.querySelector('[data-role="inspector-tab-content"]');
     if (contentEl == null) return;
 
