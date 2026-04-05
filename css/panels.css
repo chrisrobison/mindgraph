@@ -1805,6 +1805,21 @@
   color: #dbe9f9;
 }
 
+:root[data-theme="dark"] .mg-node-instance.is-connect-target .mg-node {
+  border-color: #6da9e8;
+  box-shadow: 0 0 0 3px rgba(95, 159, 231, 0.34), 0 22px 34px -26px rgba(9, 21, 36, 0.84);
+}
+
+:root[data-theme="dark"] .mg-node-instance.is-connect-target .mg-node::before {
+  border-color: rgba(111, 171, 238, 0.82);
+}
+
+:root[data-theme="dark"] .mg-node-instance.is-connect-target .mg-node::after {
+  color: #d3e7ff;
+  background: rgba(14, 32, 52, 0.96);
+  border-color: rgba(112, 169, 233, 0.46);
+}
+
 :root[data-theme="dark"] .mg-node p,
 :root[data-theme="dark"] .node-meta-grid span,
 :root[data-theme="dark"] .node-meta-inline,

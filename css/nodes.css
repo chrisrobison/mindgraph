@@ -32,8 +32,47 @@
 }
 
 .mg-node-instance.is-connect-target .mg-node {
-  border-color: #2f6ba8;
-  box-shadow: 0 0 0 2px rgba(47, 107, 168, 0.2), 0 20px 34px -26px rgba(24, 56, 98, 0.56);
+  border-color: #1f6bb4;
+  box-shadow: 0 0 0 3px rgba(31, 107, 180, 0.3), 0 22px 34px -26px rgba(24, 56, 98, 0.62);
+  transform: translateY(-2px);
+  cursor: copy;
+}
+
+.mg-node-instance.is-connect-target .mg-node::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 2px dashed rgba(31, 107, 180, 0.75);
+  border-radius: 16px;
+  pointer-events: none;
+  animation: connect-target-ring-pulse 900ms ease-in-out infinite;
+}
+
+.mg-node-instance.is-connect-target .mg-node::after {
+  content: "Release to connect";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  transform: translate(-50%, 100%);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  color: #24568c;
+  background: rgba(242, 248, 255, 0.96);
+  border: 1px solid rgba(61, 114, 171, 0.35);
+  border-radius: 999px;
+  padding: 0.12rem 0.52rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@keyframes connect-target-ring-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .mg-node h4 {
@@ -270,7 +309,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .status-running,
-  .mg-node.agent.agent-status-running {
+  .mg-node.agent.agent-status-running,
+  .mg-node-instance.is-connect-target .mg-node::before {
     animation: none;
   }
 }
