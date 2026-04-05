@@ -328,6 +328,10 @@ class GraphCanvas extends HTMLElement {
     if (this.#edgeConnectController.hasOpenEdgeChooser()) this.#edgeConnectController.closeEdgeChooser();
     this.#workspaceEl.focus();
     event.stopPropagation();
+    const isModifierConnectGesture = event.metaKey || event.ctrlKey;
+    if (isModifierConnectGesture && this.#edgeConnectController.onNodeModifierPointerDown(event, node)) {
+      return;
+    }
 
     publish(EVENTS.GRAPH_NODE_SELECT_REQUESTED, {
       nodeId: node.id,

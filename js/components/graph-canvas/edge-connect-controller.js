@@ -152,6 +152,29 @@ export const createEdgeConnectController = ({
     edgeChooserEl.querySelector('[data-field="edge-chooser-type"]')?.focus();
   };
 
+  const createDefaultEdge = (sourceNodeId, targetNodeId) => {
+    const sourceNode = getNodeById(sourceNodeId);
+    const targetNode = getNodeById(targetNodeId);
+    if (!sourceNode || !targetNode) return false;
+
+    const presets = getEdgeCreationPresets(sourceNode, targetNode);
+    const validPresets = presets.filter((preset) => preset.valid);
+    const defaultType = inferDefaultEdgeType(sourceNode, targetNode);
+    const selectedPreset =
+      validPresets.find((preset) => preset.type === defaultType) ?? validPresets[0] ?? null;
+
+    if (!selectedPreset) return false;
+
+    publishEdgeCreateRequested({
+      source: sourceNodeId,
+      target: targetNodeId,
+      type: selectedPreset.type,
+      label: formatEdgeLabel(selectedPreset.type),
+      selectAfterCreate: true
+    });
+    return true;
+  };
+
   const cancelConnectDrag = () => {
     connectDragState = null;
     connectSourceNodeId = null;
@@ -165,18 +188,30 @@ export const createEdgeConnectController = ({
 
     const targetNodeId = state.hoveredNodeId;
     if (targetNodeId && targetNodeId !== state.sourceNodeId) {
-      openEdgeChooser(
-        state.sourceNodeId,
-        targetNodeId,
-        pointerEvent?.clientX ?? null,
-        pointerEvent?.clientY ?? null
-      );
+      if (state.autoCreateOnDrop) {
+        const created = createDefaultEdge(state.sourceNodeId, targetNodeId);
+        if (!created) {
+          openEdgeChooser(
+            state.sourceNodeId,
+            targetNodeId,
+            pointerEvent?.clientX ?? null,
+            pointerEvent?.clientY ?? null
+          );
+        }
+      } else {
+        openEdgeChooser(
+          state.sourceNodeId,
+          targetNodeId,
+          pointerEvent?.clientX ?? null,
+          pointerEvent?.clientY ?? null
+        );
+      }
     }
 
     cancelConnectDrag();
   };
 
-  const onConnectHandlePointerDown = (event, node) => {
+  const beginConnectDrag = (event, node, options = {}) => {
     if (event.button !== 0) return false;
     event.preventDefault();
     event.stopPropagation();
@@ -192,7 +227,8 @@ export const createEdgeConnectController = ({
       sourcePoint,
       pointerWorld,
       hoveredNodeId: null,
-      captureEl: event.currentTarget
+      captureEl: options.captureEl ?? event.currentTarget,
+      autoCreateOnDrop: options.autoCreateOnDrop === true
     };
 
     connectDragState.captureEl?.setPointerCapture?.(event.pointerId);
@@ -201,6 +237,14 @@ export const createEdgeConnectController = ({
     onVisualStateChanged();
     return true;
   };
+
+  const onConnectHandlePointerDown = (event, node) => beginConnectDrag(event, node, { autoCreateOnDrop: false });
+
+  const onNodeModifierPointerDown = (event, node) =>
+    beginConnectDrag(event, node, {
+      autoCreateOnDrop: true,
+      captureEl: workspaceEl
+    });
 
   const handlePointerMove = (event) => {
     if (!connectDragState || event.pointerId !== connectDragState.pointerId) return false;
@@ -243,6 +287,7 @@ export const createEdgeConnectController = ({
     cancelConnectDrag,
     refreshTransientUi,
     onConnectHandlePointerDown,
+    onNodeModifierPointerDown,
     handlePointerMove,
     handlePointerUp
   };
