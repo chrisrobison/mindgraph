@@ -1,4 +1,5 @@
 import { AgentRuntime } from "./agent-runtime.js";
+import { actionExecutor } from "./action-executor.js";
 import { buildExecutionPlan } from "./execution-planner.js";
 import { dataConnectors } from "./data-connectors.js";
 
@@ -423,15 +424,18 @@ export class MockAgentRuntime extends AgentRuntime {
     }
 
     if (node.type === "action") {
-      const command = String(node.data?.command ?? "noop");
+      const actionExecution = actionExecutor.execute(node, {
+        requestedAt: inputContext.requestedAt,
+        providers: inputContext.providers,
+        dependencies: inputContext.dependencies,
+        planner: inputContext.planner
+      });
       return {
         type: "action_result",
-        summary: `${node.label} prepared action ${command} with ${inputContext.providers.length} input source(s).`,
-        command,
-        preparedPayload: {
-          providerCount: inputContext.providers.length,
-          dependencyCount: inputContext.dependencies.length
-        },
+        summary: actionExecution.summary,
+        command: actionExecution.command,
+        commandResult: actionExecution.commandResult,
+        preparedPayload: actionExecution.commandInput,
         generatedAt: inputContext.requestedAt
       };
     }
