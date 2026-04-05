@@ -10,6 +10,8 @@ It intentionally keeps:
 - `ui-store` for UI-only state
 - `persistence-store` for autosave/restore
 
+Roadmap: [ROADMAP.md](/Users/cdr/Projects/mindgraph/ROADMAP.md)
+
 ## Run Locally
 
 Use any static HTTP server (do not open with `file://`).
@@ -135,9 +137,12 @@ Provider settings (provider/model/api key/system prompt) are available in bottom
 - Node overview includes role-aware input/output port preset editing plus manual schema JSON editing.
 - Toolbar includes a demo template picker/import action with scenario descriptions.
 - Planner readiness is surfaced in node/inspector views.
+- Bottom panel `Timeline` includes all/current/selected-node filters plus optional group-by-node event rendering.
 - Bottom panel `Planner Diff` compares any two saved planner snapshots (status, blockers, dependencies, order, stale/rerun hints).
 - Bottom panel now includes `Run Traces` alongside activity/history/errors.
 - Bottom panel includes a `Runtime Settings` control panel for provider/model/API key configuration.
+- Running items are visually highlighted with status animations across task queue/history/timeline and node status badges (with `prefers-reduced-motion` fallbacks).
+- Left tool-palette SVG icons now inherit button color via inline `currentColor`, so icons automatically match light/dark themes.
 
 ## End-to-End Workflow (Seeded)
 
@@ -194,7 +199,8 @@ Migration authoring details: [docs/graph-schema-migrations.md](/Users/cdr/Projec
 
 ## Suggested Next Steps
 
-1. Expand schema preset coverage for domain-specific contracts (for example finance/event payloads).
-2. Add planner diff views between snapshots for run-to-run diagnosis.
-3. Add resumable run sessions with explicit run IDs and timeline filtering.
-4. Add richer run timeline filters and branch-level session analytics.
+1. Add stronger contract validation (optional JSON Schema validation mode, linting, and actionable fix hints).
+2. Add durable run-session continuity (explicit persisted session objects, resume markers, and replay controls).
+3. Add timeline analytics and export (event search/filter presets, branch-level metrics, JSON/CSV export).
+4. Add deeper runtime observability (per-stage timing, token/latency/cost summaries where provider data is available).
+5. Add automated UI regression coverage for theme-aware icons and runtime-status motion states.
