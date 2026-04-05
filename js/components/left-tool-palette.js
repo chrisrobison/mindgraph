@@ -14,6 +14,80 @@ const ICON_BY_TOOL = {
   connect: "assets/toolbar/connect.svg"
 };
 
+const BLACK_COLOR_PATTERN = /^(?:#000(?:000)?|black|rgb\(\s*0\s*,\s*0\s*,\s*0\s*\))$/i;
+
+const isBlackColorToken = (value) => BLACK_COLOR_PATTERN.test(String(value ?? "").trim());
+
+const replaceBlackColorTokens = (value) =>
+  String(value ?? "")
+    .replace(/#000000/gi, "currentColor")
+    .replace(/#000\b/gi, "currentColor")
+    .replace(/\bblack\b/gi, "currentColor")
+    .replace(/rgb\(\s*0\s*,\s*0\s*,\s*0\s*\)/gi, "currentColor");
+
+const ICON_MARKUP_CACHE = new Map();
+
+const normalizeToolbarIconMarkup = (rawSvgMarkup) => {
+  const parsed = new DOMParser().parseFromString(rawSvgMarkup, "image/svg+xml");
+  const svg = parsed.querySelector("svg");
+  if (!svg) return "";
+
+  svg.classList.add("palette-tool-svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.removeAttribute("width");
+  svg.removeAttribute("height");
+
+  if (!svg.hasAttribute("fill")) {
+    svg.setAttribute("fill", "currentColor");
+  } else if (isBlackColorToken(svg.getAttribute("fill"))) {
+    svg.setAttribute("fill", "currentColor");
+  }
+
+  if (svg.hasAttribute("stroke") && isBlackColorToken(svg.getAttribute("stroke"))) {
+    svg.setAttribute("stroke", "currentColor");
+  }
+
+  svg.querySelectorAll("*").forEach((node) => {
+    const fill = node.getAttribute("fill");
+    if (fill && fill.toLowerCase() !== "none" && isBlackColorToken(fill)) {
+      node.setAttribute("fill", "currentColor");
+    }
+
+    const stroke = node.getAttribute("stroke");
+    if (stroke && stroke.toLowerCase() !== "none" && isBlackColorToken(stroke)) {
+      node.setAttribute("stroke", "currentColor");
+    }
+
+    if (node.hasAttribute("style")) {
+      node.setAttribute("style", replaceBlackColorTokens(node.getAttribute("style")));
+    }
+  });
+
+  svg.querySelectorAll("style").forEach((styleNode) => {
+    styleNode.textContent = replaceBlackColorTokens(styleNode.textContent);
+  });
+
+  return svg.outerHTML;
+};
+
+const loadToolbarIconMarkup = async (iconPath) => {
+  if (!iconPath) return "";
+  if (!ICON_MARKUP_CACHE.has(iconPath)) {
+    ICON_MARKUP_CACHE.set(
+      iconPath,
+      fetch(iconPath)
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        })
+        .then((rawMarkup) => normalizeToolbarIconMarkup(rawMarkup))
+        .catch(() => "")
+    );
+  }
+  return ICON_MARKUP_CACHE.get(iconPath);
+};
+
 const TOOL_GROUPS = [
   {
     title: "Pointer",
@@ -42,9 +116,11 @@ const TOOL_GROUPS = [
 class LeftToolPalette extends HTMLElement {
   #dispose = [];
   #activeTool = "select";
+  #iconPaintVersion = 0;
 
   connectedCallback() {
     this.render();
+    void this.#paintToolIcons();
     this.#bind();
 
     this.#dispose.push(
@@ -55,6 +131,30 @@ class LeftToolPalette extends HTMLElement {
     );
 
     this.#syncPressedState();
+  }
+
+  async #paintToolIcons() {
+    const version = ++this.#iconPaintVersion;
+    const iconHosts = Array.from(this.querySelectorAll(".palette-tool-icon[data-icon-src]"));
+    if (!iconHosts.length) return;
+
+    const uniqueIconPaths = [...new Set(iconHosts.map((host) => host.dataset.iconSrc).filter(Boolean))];
+    const iconMarkupByPath = new Map();
+
+    await Promise.all(
+      uniqueIconPaths.map(async (iconPath) => {
+        const markup = await loadToolbarIconMarkup(iconPath);
+        iconMarkupByPath.set(iconPath, markup);
+      })
+    );
+
+    if (version !== this.#iconPaintVersion || !this.isConnected) return;
+
+    iconHosts.forEach((host) => {
+      const iconPath = host.dataset.iconSrc;
+      const markup = iconPath ? iconMarkupByPath.get(iconPath) : "";
+      host.innerHTML = markup || "";
+    });
   }
 
   disconnectedCallback() {
@@ -88,7 +188,7 @@ class LeftToolPalette extends HTMLElement {
         .map(
           (tool) => `
             <button class="palette-tool-btn" type="button" data-tool="${tool.id}" aria-pressed="false" title="${tool.label}" aria-label="${tool.label}">
-              <img class="palette-tool-icon" src="${ICON_BY_TOOL[tool.id] ?? ""}" alt="" aria-hidden="true" />
+              <span class="palette-tool-icon" data-icon-src="${ICON_BY_TOOL[tool.id] ?? ""}" aria-hidden="true"></span>
               <span class="palette-tool-label">${tool.label}</span>
             </button>
           `

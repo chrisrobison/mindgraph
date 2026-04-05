@@ -225,8 +225,18 @@
 .palette-tool-icon {
   width: 20px;
   height: 20px;
-  object-fit: contain;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  color: currentColor;
   pointer-events: none;
+}
+
+.palette-tool-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .palette-tool-label {
