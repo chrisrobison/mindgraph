@@ -28,6 +28,8 @@ const sanitizeSettings = (raw = {}) => {
     provider,
     model: String(raw?.model ?? providerDefaults[0] ?? "").trim() || providerDefaults[0],
     apiKey: String(raw?.apiKey ?? ""),
+    proxyToken: String(raw?.proxyToken ?? ""),
+    rememberApiKey: Boolean(raw?.rememberApiKey ?? false),
     temperature: Number.isFinite(Number(raw?.temperature)) ? Number(raw.temperature) : 0.3,
     maxTokens: Number.isFinite(Number(raw?.maxTokens)) ? Number(raw.maxTokens) : 800,
     systemPrompt: String(raw?.systemPrompt ?? "")
@@ -152,7 +154,7 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
       <section class="panel-split">
         <h4>Provider Settings</h4>
-        <p class="panel-empty">Keys stay in local browser storage and are sent only to the configured runtime proxy.</p>
+        <p class="panel-empty">Keys are session-only by default. Enable <strong>Remember Keys On This Device</strong> to persist them in local browser storage.</p>
       </section>
 
       <section class="runtime-settings-grid">
@@ -171,6 +173,16 @@ class BottomRuntimeSettingsView extends HTMLElement {
         <label class="runtime-settings-field">
           <span>API Key</span>
           <input type="password" data-field="apiKey" value="${escapeHtml(settings.apiKey)}" placeholder="sk-... / claude... / AIza..." autocomplete="off" />
+        </label>
+
+        <label class="runtime-settings-field">
+          <span>Proxy Access Token (optional)</span>
+          <input type="password" data-field="proxyToken" value="${escapeHtml(settings.proxyToken)}" placeholder="Bearer token for hosted proxy auth" autocomplete="off" />
+        </label>
+
+        <label class="runtime-settings-field">
+          <span>Remember Keys On This Device</span>
+          <input type="checkbox" data-field="rememberApiKey" ${settings.rememberApiKey ? "checked" : ""} />
         </label>
 
         <label class="runtime-settings-field">
@@ -223,6 +235,14 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
     this.querySelector('[data-field="apiKey"]')?.addEventListener("change", (event) => {
       this.#update({ apiKey: String(event.target.value ?? "").trim() });
+    });
+
+    this.querySelector('[data-field="proxyToken"]')?.addEventListener("change", (event) => {
+      this.#update({ proxyToken: String(event.target.value ?? "").trim() });
+    });
+
+    this.querySelector('[data-field="rememberApiKey"]')?.addEventListener("change", (event) => {
+      this.#update({ rememberApiKey: Boolean(event.target.checked) });
     });
 
     this.querySelector('[data-field="temperature"]')?.addEventListener("change", (event) => {

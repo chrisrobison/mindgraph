@@ -115,6 +115,7 @@ export const PERSISTENCE = Object.freeze({
     runtimeMode: "mindgraph.runtime.mode",
     runtimeEndpoint: "mindgraph.runtime.endpoint",
     runtimeProviderSettings: "mindgraph.runtime.provider.settings",
+    runtimeProviderSettingsSession: "mindgraph.runtime.provider.settings.session",
     uiTheme: "mindgraph.ui.theme",
     uiToolbarDisplay: "mindgraph.ui.toolbar.display"
   })

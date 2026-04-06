@@ -1,0 +1,16 @@
+{
+  "name": "mindgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MindGraph AI graph workbench and hosted-capable runtime proxy",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:watch": "node --test --watch tests/*.test.mjs",
+    "test:runtime": "node --test tests/execution-planner.test.mjs tests/plan-batch-runner.test.mjs tests/run-session-model.test.mjs",
+    "test:proxy": "node --test tests/server-tenancy.test.mjs tests/provider-proxy-config.test.mjs",
+    "start:proxy": "node server/provider-proxy-server.mjs"
+  }
+}

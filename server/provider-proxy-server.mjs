@@ -1,12 +1,28 @@
 import crypto from "node:crypto";
 import http from "node:http";
+import {
+  asTrimmed,
+  buildControlDbConfig,
+  buildProxyConfig,
+  buildTenancyConfig,
+  createControlStore,
+  createTenantResolver,
+  getQueryValue,
+  nowIso
+} from "./tenancy/index.mjs";
 
-const HOST = process.env.MINDGRAPH_PROXY_HOST || "127.0.0.1";
-const PORT = Number(process.env.MINDGRAPH_PROXY_PORT || 8787);
-const ALLOW_ORIGIN = process.env.MINDGRAPH_PROXY_ALLOW_ORIGIN || "*";
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 const MAX_BODY_BYTES = 1_000_000;
+const proxyConfig = buildProxyConfig(process.env);
+const tenancyConfig = buildTenancyConfig(process.env);
+const controlDbConfig = buildControlDbConfig(process.env);
+const HOST = proxyConfig.host;
+const PORT = proxyConfig.port;
+const PROXY_AUTH_TOKEN = proxyConfig.authToken;
+const REQUEST_TIMEOUT_MS = proxyConfig.requestTimeoutMs;
+const MAX_PROMPT_CHARS = proxyConfig.maxPromptChars;
+const ALLOWED_ORIGINS = proxyConfig.allowedOrigins;
 const DEFAULT_MODELS = Object.freeze({
   openai: "gpt-4.1-mini",
   anthropic: "claude-3-5-sonnet-latest",
@@ -37,19 +53,101 @@ const clamp = (value, min, max, fallback) => {
   return Math.max(min, Math.min(max, n));
 };
 
-const nowIso = () => new Date().toISOString();
+class ProxyError extends Error {
+  constructor(code, message, { status = 400, details = null } = {}) {
+    super(message);
+    this.name = "ProxyError";
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
+}
 
-const withCors = (res) => {
-  res.setHeader("Access-Control-Allow-Origin", ALLOW_ORIGIN);
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+const asErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
+const toProxyError = (error, fallbackCode = "PROXY_UNEXPECTED", fallbackStatus = 500) => {
+  if (error instanceof ProxyError) return error;
+  return new ProxyError(fallbackCode, asErrorMessage(error), { status: fallbackStatus });
 };
 
-const writeJson = (res, statusCode, payload) => {
-  withCors(res);
+const toErrorPayload = (error) => {
+  const normalized = toProxyError(error);
+  return {
+    ok: false,
+    error: {
+      code: normalized.code,
+      message: normalized.message,
+      details: normalized.details ?? null
+    },
+    at: nowIso()
+  };
+};
+
+const originAllowed = (origin) => {
+  if (ALLOWED_ORIGINS === "*") return true;
+  if (!origin) return true;
+  return Array.isArray(ALLOWED_ORIGINS) && ALLOWED_ORIGINS.includes(origin);
+};
+
+const withCors = (req, res) => {
+  const origin = asTrimmed(req?.headers?.origin, "");
+  const allowed = originAllowed(origin);
+  res.setHeader("Vary", "Origin");
+  if (origin && allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else if (ALLOWED_ORIGINS === "*") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  return allowed;
+};
+
+const writeJson = (req, res, statusCode, payload) => {
+  withCors(req, res);
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(payload));
+};
+
+const writeProxyError = (req, res, error) => {
+  const normalized = toProxyError(error);
+  writeJson(req, res, normalized.status ?? 500, toErrorPayload(normalized));
+};
+
+const readBearerToken = (req) => {
+  const authorization = asTrimmed(req?.headers?.authorization, "");
+  if (!authorization.toLowerCase().startsWith("bearer ")) return "";
+  return authorization.slice("bearer ".length).trim();
+};
+
+const validateProxyAuth = (token) => {
+  if (!PROXY_AUTH_TOKEN) return true;
+  const input = Buffer.from(String(token ?? ""), "utf8");
+  const expected = Buffer.from(PROXY_AUTH_TOKEN, "utf8");
+  if (input.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(input, expected);
+  } catch {
+    return false;
+  }
+};
+
+const requireHttpAuth = (req) => {
+  if (!PROXY_AUTH_TOKEN) return;
+  const token = readBearerToken(req);
+  if (!validateProxyAuth(token)) {
+    throw new ProxyError("PROXY_AUTH_REQUIRED", "Missing or invalid proxy bearer token", { status: 401 });
+  }
+};
+
+const requireUpgradeAuth = (req) => {
+  if (!PROXY_AUTH_TOKEN) return;
+  const bearer = readBearerToken(req);
+  const tokenFromQuery = getQueryValue(req?.url, "proxy_token");
+  const token = bearer || tokenFromQuery;
+  if (!validateProxyAuth(token)) {
+    throw new ProxyError("PROXY_AUTH_REQUIRED", "Missing or invalid proxy token for websocket upgrade", { status: 401 });
+  }
 };
 
 const readJsonBody = (req) =>
@@ -60,7 +158,7 @@ const readJsonBody = (req) =>
     req.on("data", (chunk) => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        reject(new Error("Request body too large"));
+        reject(new ProxyError("PROXY_BODY_TOO_LARGE", "Request body exceeds max size", { status: 413 }));
         req.destroy();
         return;
       }
@@ -77,12 +175,27 @@ const readJsonBody = (req) =>
         const raw = Buffer.concat(chunks).toString("utf8");
         resolve(JSON.parse(raw));
       } catch {
-        reject(new Error("Invalid JSON body"));
+        reject(new ProxyError("PROXY_INVALID_JSON", "Invalid JSON body", { status: 400 }));
       }
     });
 
     req.on("error", reject);
   });
+
+const controlStore = await createControlStore(controlDbConfig);
+await controlStore.initSchema();
+await controlStore.ensureBootstrapTenant({
+  host: tenancyConfig.bootstrapHost,
+  domain: tenancyConfig.bootstrapDomain,
+  dbClient: "sqlite",
+  dbConfig: {
+    file: `${process.cwd()}/data/mindgraph-tenant-default.sqlite`
+  }
+});
+const tenantResolver = createTenantResolver({
+  controlStore,
+  config: tenancyConfig
+});
 
 const normalizeProviderSettings = (settings = {}) => {
   const providerRaw = String(settings?.provider ?? "openai").trim().toLowerCase();
@@ -104,11 +217,12 @@ const normalizeProviderSettings = (settings = {}) => {
 const requireProviderConfig = (settings) => {
   if (!settings.apiKey) {
     const envHint = providerEnvKey[settings.provider];
-    throw new Error(`Missing API key for ${settings.provider}. Set it in UI settings or ${envHint}.`);
+    throw new ProxyError("PROVIDER_API_KEY_MISSING", `Missing API key for ${settings.provider}. Set it in UI settings or ${envHint}.`, {
+      status: 400,
+      details: { provider: settings.provider, envHint }
+    });
   }
 };
-
-const asErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
 const asString = (value) => String(value ?? "").trim();
 
 const parseJsonLike = (value) => {
@@ -260,7 +374,7 @@ const callOpenAI = async ({ apiKey, model, systemPrompt, prompt, temperature, ma
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI error: ${await parseResponseError(response)}`);
+    throw new ProxyError("PROVIDER_OPENAI_ERROR", `OpenAI error: ${await parseResponseError(response)}`, { status: 502 });
   }
 
   return extractOpenAIResult(await response.json());
@@ -285,7 +399,7 @@ const callAnthropic = async ({ apiKey, model, systemPrompt, prompt, temperature,
   });
 
   if (!response.ok) {
-    throw new Error(`Anthropic error: ${await parseResponseError(response)}`);
+    throw new ProxyError("PROVIDER_ANTHROPIC_ERROR", `Anthropic error: ${await parseResponseError(response)}`, { status: 502 });
   }
 
   return extractAnthropicResult(await response.json());
@@ -318,7 +432,7 @@ const callGemini = async ({ apiKey, model, systemPrompt, prompt, temperature, ma
   );
 
   if (!response.ok) {
-    throw new Error(`Gemini error: ${await parseResponseError(response)}`);
+    throw new ProxyError("PROVIDER_GEMINI_ERROR", `Gemini error: ${await parseResponseError(response)}`, { status: 502 });
   }
 
   return extractGeminiResult(await response.json());
@@ -347,6 +461,7 @@ const buildPrompt = ({ node, nodePlan, context }) => {
     `Upstream Dependencies: ${dependencySummary}`,
     `Data Providers: ${providerSummary}`,
     `Trigger: ${context?.trigger ?? "manual"}`,
+    `Tenant Instance: ${context?.tenancy?.instanceId ?? "unknown"}`,
     "",
     "Node data JSON:",
     JSON.stringify(node?.data ?? {}, null, 2),
@@ -392,7 +507,7 @@ const buildRuntimeResult = ({ settings, text, toolCalls = [] }) => {
   };
 };
 
-const executeRunRequest = async (payload, { progress, stream, signal } = {}) => {
+const executeRunRequest = async (payload, { progress, stream, signal, tenantContext } = {}) => {
   const settings = normalizeProviderSettings(payload?.context?.providerSettings ?? {});
   requireProviderConfig(settings);
 
@@ -424,13 +539,32 @@ const executeRunRequest = async (payload, { progress, stream, signal } = {}) => 
 
   emitStage("plan", "Planning prompt");
   const prompt = buildPrompt({ node, nodePlan, context: payload?.context ?? {} });
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    throw new ProxyError("PROXY_PROMPT_TOO_LARGE", `Prompt exceeds max length (${MAX_PROMPT_CHARS})`, {
+      status: 400,
+      details: { promptLength: prompt.length, maxPromptChars: MAX_PROMPT_CHARS }
+    });
+  }
+
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const providerSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
   emitStage("provider", `Calling ${settings.provider}/${settings.model}`);
-  const providerResult = await runProvider({
-    ...settings,
-    prompt,
-    signal
-  });
+  let providerResult = null;
+  try {
+    providerResult = await runProvider({
+      ...settings,
+      prompt,
+      signal: providerSignal
+    });
+  } catch (error) {
+    if (providerSignal?.aborted) {
+      throw new ProxyError("PROVIDER_TIMEOUT", `Provider request exceeded timeout (${REQUEST_TIMEOUT_MS}ms)`, {
+        status: 504
+      });
+    }
+    throw error;
+  }
   const text = asString(providerResult?.text);
   const toolCalls = Array.isArray(providerResult?.toolCalls) ? providerResult.toolCalls : [];
 
@@ -468,6 +602,16 @@ const executeRunRequest = async (payload, { progress, stream, signal } = {}) => 
 
   emitStage("finalize", "Formatting provider output");
   const result = buildRuntimeResult({ settings, text, toolCalls });
+  if (tenantContext?.instance?.id) {
+    result.tenant = {
+      mode: tenantContext.mode,
+      source: tenantContext.source,
+      host: tenantContext.host,
+      domain: tenantContext.domain,
+      instanceId: tenantContext.instance.id
+    };
+    result.output.tenant = { ...result.tenant };
+  }
   emitStream(STREAM_EVENT_TYPES.OUTPUT_FINAL, {
     summary: result.summary,
     confidence: result.confidence,
@@ -605,8 +749,23 @@ const handleWsMessage = async (client, message) => {
   wsRunControllers.set(key, controller);
 
   try {
-    const result = await executeRunRequest(payload, {
+    const payloadWithTenant = {
+      ...(payload ?? {}),
+      context: {
+        ...(payload?.context ?? {}),
+        tenancy: {
+          mode: client.tenantContext?.mode ?? tenancyConfig.mode,
+          source: client.tenantContext?.source ?? "ws",
+          host: client.tenantContext?.host ?? null,
+          domain: client.tenantContext?.domain ?? null,
+          instanceId: client.tenantContext?.instance?.id ?? null
+        }
+      }
+    };
+
+    const result = await executeRunRequest(payloadWithTenant, {
       signal: controller.signal,
+      tenantContext: client.tenantContext ?? null,
       progress: (entry) => {
         sendWsJson(client, {
           type: "runtime.run_node.progress",
@@ -629,27 +788,68 @@ const handleWsMessage = async (client, message) => {
       result
     });
   } catch (error) {
+    const normalized = toProxyError(error);
     sendWsJson(client, {
       type: "runtime.run_node.failed",
       requestId,
-      error: asErrorMessage(error)
+      error: normalized.message,
+      code: normalized.code,
+      details: normalized.details ?? null
     });
   } finally {
     wsRunControllers.delete(key);
   }
 };
 
-const handleUpgrade = (req, socket) => {
-  if (req.url !== "/api/mindgraph/runtime/ws") {
-    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
-    socket.destroy();
+const writeUpgradeError = (socket, statusCode, statusText, payload = null) => {
+  const body = payload ? JSON.stringify(payload) : "";
+  const lines = [
+    `HTTP/1.1 ${statusCode} ${statusText}`,
+    "Connection: close",
+    "Content-Type: application/json; charset=utf-8",
+    `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+    "\r\n"
+  ];
+  socket.write(lines.join("\r\n"));
+  if (body) socket.write(body);
+  socket.destroy();
+};
+
+const handleUpgrade = async (req, socket) => {
+  const pathname = (() => {
+    try {
+      return new URL(req.url ?? "/", "http://localhost").pathname;
+    } catch {
+      return req.url ?? "";
+    }
+  })();
+
+  if (pathname !== "/api/mindgraph/runtime/ws") {
+    writeUpgradeError(socket, 404, "Not Found", toErrorPayload(new ProxyError("PROXY_NOT_FOUND", "Not found", { status: 404 })));
+    return;
+  }
+
+  try {
+    requireUpgradeAuth(req);
+  } catch (error) {
+    writeUpgradeError(socket, 401, "Unauthorized", toErrorPayload(error));
+    return;
+  }
+
+  const tenantResolution = await tenantResolver.resolve(req);
+  if (!tenantResolution?.ok) {
+    const error = new ProxyError(
+      tenantResolution?.error?.code ?? "TENANT_RESOLUTION_FAILED",
+      tenantResolution?.error?.message ?? "Tenant resolution failed",
+      { status: tenantResolution?.error?.status ?? 400, details: tenantResolution?.error?.details ?? null }
+    );
+    writeUpgradeError(socket, error.status, "Bad Request", toErrorPayload(error));
     return;
   }
 
   const wsKey = req.headers["sec-websocket-key"];
   if (!wsKey) {
-    socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-    socket.destroy();
+    writeUpgradeError(socket, 400, "Bad Request", toErrorPayload(new ProxyError("PROXY_WS_KEY_MISSING", "Missing websocket key", { status: 400 })));
     return;
   }
 
@@ -667,7 +867,8 @@ const handleUpgrade = (req, socket) => {
   const client = {
     id: `ws_${Date.now()}_${++wsClientSeq}`,
     socket,
-    buffer: Buffer.alloc(0)
+    buffer: Buffer.alloc(0),
+    tenantContext: tenantResolution.context
   };
 
   wsClients.set(client.id, client);
@@ -687,53 +888,111 @@ const handleUpgrade = (req, socket) => {
 };
 
 const server = http.createServer(async (req, res) => {
+  const pathname = (() => {
+    try {
+      return new URL(req.url ?? "/", "http://localhost").pathname;
+    } catch {
+      return req.url ?? "";
+    }
+  })();
+
+  const requestOrigin = asTrimmed(req?.headers?.origin, "");
+  if (requestOrigin && !originAllowed(requestOrigin)) {
+    writeProxyError(req, res, new ProxyError("PROXY_ORIGIN_NOT_ALLOWED", "Request origin is not allowed", { status: 403 }));
+    return;
+  }
+
   if (req.method === "OPTIONS") {
-    withCors(res);
+    const allowed = withCors(req, res);
+    if (!allowed) {
+      writeProxyError(req, res, new ProxyError("PROXY_ORIGIN_NOT_ALLOWED", "Request origin is not allowed", { status: 403 }));
+      return;
+    }
     res.statusCode = 204;
     res.end();
     return;
   }
 
-  if (req.method === "GET" && req.url === "/api/mindgraph/health") {
-    writeJson(res, 200, {
+  if (req.method === "GET" && pathname === "/api/mindgraph/health") {
+    writeJson(req, res, 200, {
       ok: true,
       service: "mindgraph-provider-proxy",
       now: nowIso(),
-      wsClients: wsClients.size
+      wsClients: wsClients.size,
+      tenancyMode: tenancyConfig.mode,
+      strictHostMatch: tenancyConfig.strictHostMatch
     });
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/mindgraph/runtime/run-node") {
+  if (req.method === "POST" && pathname === "/api/mindgraph/runtime/run-node") {
     try {
+      requireHttpAuth(req);
+      const tenantResolution = await tenantResolver.resolve(req);
+      if (!tenantResolution?.ok) {
+        throw new ProxyError(
+          tenantResolution?.error?.code ?? "TENANT_RESOLUTION_FAILED",
+          tenantResolution?.error?.message ?? "Tenant resolution failed",
+          { status: tenantResolution?.error?.status ?? 400, details: tenantResolution?.error?.details ?? null }
+        );
+      }
+
       const payload = await readJsonBody(req);
-      const result = await executeRunRequest(payload);
-      writeJson(res, 200, result);
-    } catch (error) {
-      writeJson(res, 400, {
-        ok: false,
-        error: asErrorMessage(error),
-        at: nowIso()
+      const payloadWithTenant = {
+        ...(payload ?? {}),
+        context: {
+          ...(payload?.context ?? {}),
+          tenancy: {
+            mode: tenantResolution.context.mode,
+            source: tenantResolution.context.source,
+            host: tenantResolution.context.host,
+            domain: tenantResolution.context.domain,
+            instanceId: tenantResolution.context.instance.id
+          }
+        }
+      };
+      const result = await executeRunRequest(payloadWithTenant, {
+        tenantContext: tenantResolution.context
       });
+      writeJson(req, res, 200, result);
+    } catch (error) {
+      writeProxyError(req, res, error);
     }
     return;
   }
 
-  writeJson(res, 404, {
-    ok: false,
-    error: "Not found"
-  });
+  writeProxyError(req, res, new ProxyError("PROXY_NOT_FOUND", "Not found", { status: 404 }));
 });
 
 server.on("upgrade", (req, socket) => {
-  try {
-    handleUpgrade(req, socket);
-  } catch {
+  void handleUpgrade(req, socket).catch(() => {
     socket.destroy();
-  }
+  });
 });
 
 server.listen(PORT, HOST, () => {
   console.log(`[mindgraph-proxy] listening on http://${HOST}:${PORT}`);
   console.log("[mindgraph-proxy] routes: POST /api/mindgraph/runtime/run-node, WS /api/mindgraph/runtime/ws");
+  console.log(
+    `[mindgraph-proxy] tenancy mode=${tenancyConfig.mode} strictHostMatch=${String(tenancyConfig.strictHostMatch)}`
+  );
+  console.log(
+    `[mindgraph-proxy] control db client=${controlStore.client} file=${controlDbConfig.file ?? "(n/a)"}`
+  );
+});
+
+const shutdown = async () => {
+  try {
+    await controlStore.close();
+  } catch {
+    // noop
+  }
+  process.exit(0);
+};
+
+process.on("SIGINT", () => {
+  void shutdown();
+});
+process.on("SIGTERM", () => {
+  void shutdown();
 });
