@@ -1,5 +1,12 @@
+// @ts-check
+
 import { getDefaultPortsFromPresets } from "./contract-presets.js";
 import { EDGE_TYPES, NODE_TYPES } from "./types.js";
+
+/** @typedef {import("./jsdoc-types.js").GraphNode} GraphNode */
+/** @typedef {import("./jsdoc-types.js").GraphEdge} GraphEdge */
+/** @typedef {import("./jsdoc-types.js").PortContract} PortContract */
+/** @typedef {import("./jsdoc-types.js").PayloadType} PayloadType */
 
 const ALL_NODE_TYPES = Object.freeze(Object.values(NODE_TYPES));
 export const PORT_PAYLOAD_TYPES = Object.freeze([
@@ -248,8 +255,17 @@ const edgeTypeSpecEntries = [
 export const EDGE_TYPE_SPECS = Object.freeze(Object.fromEntries(edgeTypeSpecEntries));
 
 const hasType = (value, allowed = []) => allowed.includes(value);
-const sanitizePayloadType = (value) => (PORT_PAYLOAD_TYPES.includes(value) ? value : "any");
+/**
+ * @param {string} value
+ * @returns {PayloadType}
+ */
+const sanitizePayloadType = (value) =>
+  /** @type {PayloadType} */ (PORT_PAYLOAD_TYPES.includes(value) ? value : "any");
 
+/**
+ * @param {unknown} ports
+ * @returns {PortContract[]}
+ */
 const clonePorts = (ports) =>
   (Array.isArray(ports) ? ports : [])
     .map((port, index) => {
@@ -265,6 +281,10 @@ const clonePorts = (ports) =>
     })
     .filter(Boolean);
 
+/**
+ * @param {string} nodeType
+ * @returns {{ input: PortContract[], output: PortContract[] }}
+ */
 export const getDefaultPortsForNodeType = (nodeType) => {
   const defaults = getDefaultPortsFromPresets(nodeType);
   return {
@@ -273,11 +293,19 @@ export const getDefaultPortsForNodeType = (nodeType) => {
   };
 };
 
+/** @param {string} nodeType */
 export const getNodeTypeSpec = (nodeType) => NODE_TYPE_SPECS[nodeType] ?? NODE_TYPE_SPECS[NODE_TYPES.NOTE];
+/** @param {string} edgeType */
 export const getEdgeTypeSpec = (edgeType) => EDGE_TYPE_SPECS[edgeType] ?? null;
 
+/** @param {string} nodeType */
 export const isExecutableNodeType = (nodeType) => Boolean(getNodeTypeSpec(nodeType)?.executable);
 
+/**
+ * @param {GraphNode | null | undefined} nodeLike
+ * @param {"input" | "output"} [direction]
+ * @returns {PortContract[]}
+ */
 export const getNodePorts = (nodeLike, direction = "input") => {
   const nodeType = nodeLike?.type ?? NODE_TYPES.NOTE;
   const fallback = getDefaultPortsForNodeType(nodeType);
@@ -315,6 +343,11 @@ const resolveContractEndpoints = (edgeType, sourceNode, targetNode) => {
   };
 };
 
+/**
+ * @param {{ type?: string } | null | undefined} edge
+ * @param {GraphNode | null | undefined} sourceNode
+ * @param {GraphNode | null | undefined} targetNode
+ */
 export const getEdgeContractEndpoints = (edge, sourceNode, targetNode) => {
   const { providerNode, consumerNode, providerDirection, consumerDirection } = resolveContractEndpoints(
     edge?.type,
@@ -334,6 +367,11 @@ export const getEdgeContractEndpoints = (edge, sourceNode, targetNode) => {
   };
 };
 
+/**
+ * @param {string} edgeType
+ * @param {GraphNode | null | undefined} sourceNode
+ * @param {GraphNode | null | undefined} targetNode
+ */
 export const getDefaultEdgeContract = (edgeType, sourceNode, targetNode) => {
   const spec = getEdgeTypeSpec(edgeType);
   const { providerPorts, consumerPorts } = getEdgeContractEndpoints(
@@ -360,6 +398,11 @@ export const getDefaultEdgeContract = (edgeType, sourceNode, targetNode) => {
   };
 };
 
+/**
+ * @param {GraphEdge | null | undefined} edge
+ * @param {GraphNode | null | undefined} sourceNode
+ * @param {GraphNode | null | undefined} targetNode
+ */
 export const applyEdgeContractDefaults = (edge, sourceNode, targetNode) => {
   if (!edge) return edge;
   const defaults = getDefaultEdgeContract(edge.type, sourceNode, targetNode);
@@ -440,6 +483,11 @@ const validateEdgeContract = (edge, sourceNode, targetNode) => {
   return { valid: errors.length === 0, errors };
 };
 
+/**
+ * @param {string} nodeType
+ * @param {Record<string, unknown>} [data]
+ * @returns {Record<string, unknown>}
+ */
 export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
   const spec = getNodeTypeSpec(nodeType);
   const next = { ...(data ?? {}) };
@@ -492,6 +540,10 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
   return next;
 };
 
+/**
+ * @param {GraphNode | null | undefined} node
+ * @returns {{ valid: boolean, errors: string[], missingDataKeys: string[], spec?: unknown }}
+ */
 export const validateNodeContract = (node) => {
   if (!node) return { valid: false, errors: ["Node is missing"], missingDataKeys: [] };
 
@@ -536,6 +588,12 @@ export const isEdgeTypeAllowedBetween = (edgeType, sourceNodeType, targetNodeTyp
   return hasType(sourceNodeType, spec.validSourceTypes) && hasType(targetNodeType, spec.validTargetTypes);
 };
 
+/**
+ * @param {GraphEdge | null | undefined} edge
+ * @param {GraphNode | null | undefined} sourceNode
+ * @param {GraphNode | null | undefined} targetNode
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
 export const validateEdgeSemantics = (edge, sourceNode, targetNode) => {
   if (!edge) return { valid: false, errors: ["Edge is missing"] };
   const spec = getEdgeTypeSpec(edge.type);

@@ -1,8 +1,18 @@
+// @ts-check
+
 import { EDGE_TYPE_VALUES, NODE_TYPE_VALUES } from "./types.js";
 import { clone, uid } from "./utils.js";
 import { normalizeNodeDataWithContract, validateEdgeSemantics, validateNodeContract } from "./graph-semantics.js";
 import { CURRENT_GRAPH_SCHEMA_VERSION } from "./graph-migrations.js";
 
+/** @typedef {import("./jsdoc-types.js").GraphDocument} GraphDocument */
+/** @typedef {import("./jsdoc-types.js").GraphNode} GraphNode */
+/** @typedef {import("./jsdoc-types.js").GraphEdge} GraphEdge */
+
+/**
+ * @param {Partial<GraphNode>} [partial]
+ * @returns {GraphNode}
+ */
 export const createNode = (partial = {}) => ({
   id: partial.id ?? uid("node"),
   type: NODE_TYPE_VALUES.includes(partial.type) ? partial.type : "note",
@@ -16,6 +26,10 @@ export const createNode = (partial = {}) => ({
   metadata: partial.metadata ?? {}
 });
 
+/**
+ * @param {Partial<GraphEdge>} [partial]
+ * @returns {GraphEdge}
+ */
 export const createEdge = (partial = {}) => ({
   id: partial.id ?? uid("edge"),
   type: EDGE_TYPE_VALUES.includes(partial.type) ? partial.type : "depends_on",
@@ -25,6 +39,10 @@ export const createEdge = (partial = {}) => ({
   metadata: partial.metadata ?? {}
 });
 
+/**
+ * @param {Partial<GraphDocument>} [options]
+ * @returns {GraphDocument}
+ */
 export const createGraphDocument = ({
   id = uid("graph"),
   title = "Untitled MindGraph",
@@ -45,6 +63,10 @@ export const createGraphDocument = ({
   metadata
 });
 
+/**
+ * @param {Partial<GraphDocument>} [rawDocument]
+ * @returns {GraphDocument}
+ */
 export const normalizeGraphDocument = (rawDocument = {}) =>
   createGraphDocument({
     ...rawDocument,
@@ -52,6 +74,10 @@ export const normalizeGraphDocument = (rawDocument = {}) =>
     edges: Array.isArray(rawDocument.edges) ? rawDocument.edges : []
   });
 
+/**
+ * @param {GraphDocument | null | undefined} document
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
 export const validateGraphDocument = (document) => {
   if (!document || typeof document !== "object") {
     return { valid: false, errors: ["Document must be an object"] };
@@ -91,14 +117,30 @@ export const validateGraphDocument = (document) => {
   return { valid: errors.length === 0, errors };
 };
 
+/**
+ * @param {GraphDocument} document
+ * @param {string} nodeId
+ * @param {Partial<GraphNode>} patch
+ * @returns {GraphDocument}
+ */
 export const updateNode = (document, nodeId, patch) => {
   const next = clone(document);
   next.nodes = next.nodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node));
   return next;
 };
 
+/**
+ * @param {GraphDocument} document
+ * @param {string} nodeId
+ * @returns {GraphNode | null}
+ */
 export const findNodeById = (document, nodeId) =>
   (document.nodes ?? []).find((node) => node.id === nodeId) ?? null;
 
+/**
+ * @param {GraphDocument} document
+ * @param {string} edgeId
+ * @returns {GraphEdge | null}
+ */
 export const findEdgeById = (document, edgeId) =>
   (document.edges ?? []).find((edge) => edge.id === edgeId) ?? null;

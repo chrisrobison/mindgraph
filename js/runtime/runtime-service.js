@@ -1,3 +1,5 @@
+// @ts-check
+
 import { PERSISTENCE } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
@@ -7,76 +9,17 @@ import { buildExecutionPlan } from "./execution-planner.js";
 import { HttpAgentRuntime } from "./http-agent-runtime.js";
 import { mockAgentRuntime } from "./mock-agent-runtime.js";
 import { resolveBatchConcurrencyLimit, runPlanWithBranchParallelism } from "./plan-batch-runner.js";
-
-const clampInt = (value, fallback, min = 1, max = 6) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, Math.round(n)));
-};
-
-const clampNum = (value, fallback, min = 0, max = Number.POSITIVE_INFINITY) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-};
-
-const nowIso = () => new Date().toISOString();
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const toArray = (value) => (Array.isArray(value) ? value : []);
-const unique = (value) => [...new Set(toArray(value).filter(Boolean))];
-
-const defaultPolicy = Object.freeze({
-  maxAttempts: 2,
-  retryBackoffMs: 350,
-  retryBackoffFactor: 1.7,
-  failFast: false
-});
-const defaultBatchConcurrencyLimit = 2;
-
-const isNonRetryable = (result) => {
-  const outputType = result?.output?.type ?? "";
-  const message = String(result?.error ?? "").toLowerCase();
-  if (result?.status === "cancelled") return true;
-  if (outputType === "validation_error" || outputType === "planner_blocked") return true;
-  if (result?.blockedReasons?.length) return true;
-  if (message.includes("validation") || message.includes("planner")) return true;
-  return false;
-};
-
-const snapshotNodePlan = (nodePlan = {}) => ({
-  nodeId: nodePlan.nodeId ?? null,
-  runnable: Boolean(nodePlan.runnable),
-  ready: Boolean(nodePlan.ready),
-  blocked: Boolean(nodePlan.blocked),
-  blockedReasons: unique(nodePlan.blockedReasons),
-  missingRequiredPorts: unique(nodePlan.missingRequiredPorts),
-  upstreamDependencies: unique(nodePlan.upstreamDependencies),
-  dataProviderIds: unique(nodePlan.dataProviderIds),
-  staleDependencies: unique(nodePlan.staleDependencies),
-  needsRerun: Boolean(nodePlan.needsRerun),
-  executionOrderIndex: Number.isInteger(nodePlan.executionOrderIndex) ? nodePlan.executionOrderIndex : -1
-});
-
-const buildPlannerSnapshotTrace = (plan, { at, mode }) => {
-  const snapshotId = `planner_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-  const nodeEntries = Object.entries(plan?.nodes ?? {}).map(([nodeId, nodePlan]) => [
-    nodeId,
-    snapshotNodePlan({ ...(nodePlan ?? {}), nodeId })
-  ]);
-
-  return {
-    kind: "planner_snapshot",
-    snapshotId,
-    at,
-    mode,
-    rootNodeId: plan?.rootNodeId ?? null,
-    executionOrder: [...(plan?.executionOrder ?? [])],
-    readyNodeIds: [...(plan?.readyNodeIds ?? [])],
-    blockedNodeIds: [...(plan?.blockedNodeIds ?? [])],
-    cycles: [...(plan?.cycles ?? [])],
-    nodes: Object.fromEntries(nodeEntries)
-  };
-};
+import {
+  buildPlannerSnapshotTrace,
+  clampInt,
+  clampNum,
+  defaultBatchConcurrencyLimit,
+  defaultPolicy,
+  isNonRetryable,
+  nowIso,
+  sleep,
+  unique
+} from "./runtime-service-helpers.js";
 
 class RuntimeService {
   #mode = "mock";
@@ -86,6 +29,8 @@ class RuntimeService {
   };
   #activeControllers = new Set();
   #cancelRequested = false;
+  #planCacheRevision = -1;
+  #planCacheByRoot = new Map();
 
   constructor() {
     this.#mode = this.#readMode();
@@ -322,7 +267,7 @@ class RuntimeService {
   }
 
   async runSubtree(rootNodeId, context = {}) {
-    const plan = buildExecutionPlan(graphStore.getDocument(), { rootNodeId });
+    const plan = this.#getPlan(rootNodeId);
     return this.#runPlan(plan, {
       ...context,
       trigger: context.trigger ?? "runtime_subtree"
@@ -330,7 +275,7 @@ class RuntimeService {
   }
 
   async runAll(context = {}) {
-    const plan = buildExecutionPlan(graphStore.getDocument());
+    const plan = this.#getPlan(null);
     return this.#runPlan(plan, {
       ...context,
       trigger: context.trigger ?? "runtime_all"
@@ -471,6 +416,34 @@ class RuntimeService {
 
   #getAdapter() {
     return this.#adapters[this.#mode] ?? this.#adapters.mock;
+  }
+
+  #getPlan(rootNodeId = null) {
+    const revision =
+      typeof graphStore.getRevision === "function" ? Number(graphStore.getRevision()) : Number.NaN;
+    const normalizedRevision = Number.isFinite(revision) ? revision : -1;
+
+    if (normalizedRevision !== this.#planCacheRevision) {
+      this.#planCacheByRoot.clear();
+      this.#planCacheRevision = normalizedRevision;
+    }
+
+    const scopeKey = rootNodeId ?? "__all__";
+    const cached = this.#planCacheByRoot.get(scopeKey);
+    if (cached) return cached;
+
+    const document = graphStore.getDocument();
+    const plan = rootNodeId
+      ? buildExecutionPlan(document, { rootNodeId })
+      : buildExecutionPlan(document);
+    this.#planCacheByRoot.set(scopeKey, plan);
+
+    if (this.#planCacheByRoot.size > 16) {
+      const firstKey = this.#planCacheByRoot.keys().next().value;
+      if (firstKey != null) this.#planCacheByRoot.delete(firstKey);
+    }
+
+    return plan;
   }
 
   #storage() {

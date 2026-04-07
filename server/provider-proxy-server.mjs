@@ -10,6 +10,7 @@ import {
   getQueryValue,
   nowIso
 } from "./tenancy/index.mjs";
+import { decodeWsFrames, encodeWsPongFrame, encodeWsTextFrame } from "./runtime/ws-protocol.mjs";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -620,97 +621,46 @@ const executeRunRequest = async (payload, { progress, stream, signal, tenantCont
   return result;
 };
 
-const sendWsFrame = (socket, data) => {
-  const payload = Buffer.from(data, "utf8");
-  let header = null;
-
-  if (payload.length < 126) {
-    header = Buffer.from([0x81, payload.length]);
-  } else if (payload.length < 65536) {
-    header = Buffer.alloc(4);
-    header[0] = 0x81;
-    header[1] = 126;
-    header.writeUInt16BE(payload.length, 2);
-  } else {
-    header = Buffer.alloc(10);
-    header[0] = 0x81;
-    header[1] = 127;
-    header.writeUInt32BE(0, 2);
-    header.writeUInt32BE(payload.length, 6);
-  }
-
-  socket.write(Buffer.concat([header, payload]));
-};
-
 const sendWsJson = (client, message) => {
   try {
-    sendWsFrame(client.socket, JSON.stringify(message));
+    client.socket.write(encodeWsTextFrame(JSON.stringify(message)));
   } catch {
     // noop
   }
 };
 
 const parseWsFrames = (client, chunk) => {
-  client.buffer = Buffer.concat([client.buffer, chunk]);
+  const mergedBuffer = Buffer.concat([client.buffer, chunk]);
+  const parsed = decodeWsFrames(mergedBuffer, {
+    requireMasked: true,
+    maxPayloadBytes: MAX_BODY_BYTES
+  });
 
-  while (client.buffer.length >= 2) {
-    const first = client.buffer[0];
-    const second = client.buffer[1];
-    const opcode = first & 0x0f;
-    const masked = Boolean(second & 0x80);
-    let length = second & 0x7f;
-    let offset = 2;
+  if (parsed.protocolError) {
+    client.socket.destroy();
+    return;
+  }
 
-    if (length === 126) {
-      if (client.buffer.length < offset + 2) return;
-      length = client.buffer.readUInt16BE(offset);
-      offset += 2;
-    } else if (length === 127) {
-      if (client.buffer.length < offset + 8) return;
-      const high = client.buffer.readUInt32BE(offset);
-      const low = client.buffer.readUInt32BE(offset + 4);
-      if (high !== 0) {
-        client.socket.destroy();
-        return;
-      }
-      length = low;
-      offset += 8;
-    }
+  client.buffer = parsed.remaining;
 
-    if (!masked) {
-      client.socket.destroy();
-      return;
-    }
-
-    if (client.buffer.length < offset + 4 + length) return;
-
-    const mask = client.buffer.subarray(offset, offset + 4);
-    offset += 4;
-
-    const payload = client.buffer.subarray(offset, offset + length);
-    for (let index = 0; index < payload.length; index += 1) {
-      payload[index] ^= mask[index % 4];
-    }
-
-    client.buffer = client.buffer.subarray(offset + length);
-
-    if (opcode === 0x8) {
+  for (const frame of parsed.frames) {
+    if (frame.opcode === 0x8) {
       client.socket.end();
       return;
     }
 
-    if (opcode === 0x9) {
-      client.socket.write(Buffer.from([0x8a, 0x00]));
+    if (frame.opcode === 0x9) {
+      client.socket.write(encodeWsPongFrame(frame.payload));
       continue;
     }
 
-    if (opcode !== 0x1) {
+    if (frame.opcode !== 0x1) {
       continue;
     }
 
     let message = null;
     try {
-      message = JSON.parse(payload.toString("utf8"));
+      message = JSON.parse(frame.payload.toString("utf8"));
     } catch {
       continue;
     }

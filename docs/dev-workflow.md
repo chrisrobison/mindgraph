@@ -4,6 +4,7 @@
 
 - Node.js 22+
 - Python 3 (only if you use `python3 -m http.server` for local static hosting)
+- No build toolchain is required for core development
 
 ## Install
 
@@ -11,6 +12,13 @@
 cd /Users/cdr/Projects/mindgraph
 npm install
 ```
+
+## Editor Type Hints (No Build)
+
+The repository includes `jsconfig.json` with `checkJs` enabled to provide IDE type checking and autocomplete via JSDoc.
+
+- JavaScript remains the source language.
+- No transpile/build step is required.
 
 ## Run App (UI)
 

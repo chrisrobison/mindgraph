@@ -1,3 +1,5 @@
+// @ts-check
+
 import {
   getEdgeContractEndpoints,
   getNodePorts,
@@ -9,8 +11,16 @@ import {
   SEMANTIC_EDGE_GROUPS
 } from "../core/graph-semantics.js";
 
+/** @typedef {import("../core/jsdoc-types.js").GraphDocument} GraphDocument */
+/** @typedef {import("../core/jsdoc-types.js").GraphNode} GraphNode */
+/** @typedef {import("../core/jsdoc-types.js").ExecutionPlan} ExecutionPlan */
+
 const toArray = (value) => (Array.isArray(value) ? value : []);
 
+/**
+ * @param {GraphNode | null | undefined} node
+ * @returns {number}
+ */
 const latestRunAt = (node) => {
   if (!node) return 0;
   const explicit = Date.parse(node.data?.lastRunAt ?? "");
@@ -25,12 +35,21 @@ const latestRunAt = (node) => {
   return 0;
 };
 
+/**
+ * @param {GraphNode | null | undefined} node
+ * @returns {boolean}
+ */
 const hasMaterializedOutput = (node) => {
   if (!node) return false;
   if (node.type === "data") return node.data?.cachedData != null;
   return node.data?.lastOutput != null;
 };
 
+/**
+ * @param {{ type?: string, source?: string, target?: string }[]} edges
+ * @param {string | null | undefined} rootNodeId
+ * @returns {Set<string> | null}
+ */
 const buildHierarchyScope = (edges, rootNodeId) => {
   if (!rootNodeId) return null;
 
@@ -52,6 +71,11 @@ const buildHierarchyScope = (edges, rootNodeId) => {
   return scope;
 };
 
+/**
+ * @param {string[]} nodeIds
+ * @param {Map<string, string[]>} incomingByNode
+ * @returns {string[][]}
+ */
 const detectCycles = (nodeIds, incomingByNode) => {
   const inScope = new Set(nodeIds);
   const state = new Map();
@@ -90,6 +114,12 @@ const detectCycles = (nodeIds, incomingByNode) => {
   return cycles.map(({ path }) => path);
 };
 
+/**
+ * @param {string[]} nodeIds
+ * @param {Map<string, string[]>} incomingByNode
+ * @param {Map<string, string[]>} outgoingByNode
+ * @returns {string[]}
+ */
 const buildTopologicalOrder = (nodeIds, incomingByNode, outgoingByNode) => {
   const inScope = new Set(nodeIds);
   const indegree = new Map(nodeIds.map((id) => [id, 0]));
@@ -120,6 +150,9 @@ const buildTopologicalOrder = (nodeIds, incomingByNode, outgoingByNode) => {
   return [...order, ...leftovers];
 };
 
+/**
+ * @param {Partial<ExecutionPlan>} [plan]
+ */
 export const buildRunnableDependencyGraph = (plan = {}) => {
   const runnableNodeIds = toArray(plan?.executionOrder).filter((nodeId) => Boolean(plan?.nodes?.[nodeId]?.runnable));
   const runnableSet = new Set(runnableNodeIds);
@@ -149,6 +182,11 @@ export const buildRunnableDependencyGraph = (plan = {}) => {
   };
 };
 
+/**
+ * @param {GraphDocument | null | undefined} document
+ * @param {{ rootNodeId?: string | null }} [options]
+ * @returns {ExecutionPlan}
+ */
 export const buildExecutionPlan = (document, options = {}) => {
   const nodes = toArray(document?.nodes);
   const edges = toArray(document?.edges);
@@ -311,4 +349,9 @@ export const buildExecutionPlan = (document, options = {}) => {
   };
 };
 
+/**
+ * @param {GraphDocument | null | undefined} document
+ * @param {string} nodeId
+ * @param {{ rootNodeId?: string | null }} [options]
+ */
 export const getNodePlan = (document, nodeId, options = {}) => buildExecutionPlan(document, options).nodes?.[nodeId] ?? null;

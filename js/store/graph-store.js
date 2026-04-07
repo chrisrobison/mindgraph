@@ -1,3 +1,5 @@
+// @ts-check
+
 import { HISTORY_LIMITS } from "../core/constants.js";
 import { EVENTS } from "../core/event-constants.js";
 import * as graphDocument from "../core/graph-document.js";
@@ -10,12 +12,20 @@ import { clone } from "../core/utils.js";
 import { publish, subscribe } from "../core/pan.js";
 import {
   applyEdgeContractDefaults,
-  normalizeNodeDataWithContract,
   validateEdgeSemantics,
   validateNodeContract
 } from "../core/graph-semantics.js";
+import {
+  findEdgeByIdCompat,
+  isDuplicateEdge,
+  normalizeNodePatch,
+  uniqueIds
+} from "./graph-store-helpers.js";
 
-const unique = (items) => [...new Set((Array.isArray(items) ? items : []).filter(Boolean))];
+/** @typedef {import("../core/jsdoc-types.js").GraphDocument} GraphDocument */
+/** @typedef {import("../core/jsdoc-types.js").GraphNode} GraphNode */
+/** @typedef {import("../core/jsdoc-types.js").GraphEdge} GraphEdge */
+
 const {
   createEdge,
   createNode,
@@ -26,10 +36,11 @@ const {
 } = graphDocument;
 const findEdgeById =
   graphDocument.findEdgeById ??
-  ((document, edgeId) => (document?.edges ?? []).find((edge) => edge.id === edgeId) ?? null);
+  findEdgeByIdCompat;
 
 class GraphStore {
   #document = null;
+  #revision = 0;
   #selectedNodeIds = [];
   #selectedEdgeId = null;
   #undoStack = [];
@@ -83,7 +94,7 @@ class GraphStore {
     });
 
     subscribe(EVENTS.GRAPH_SELECTION_SET_REQUESTED, ({ payload }) => {
-      this.setSelection(unique(payload?.nodeIds));
+      this.setSelection(uniqueIds(payload?.nodeIds));
     });
 
     subscribe(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, ({ payload }) => {
@@ -104,7 +115,7 @@ class GraphStore {
     });
 
     subscribe(EVENTS.GRAPH_NODE_DELETE_REQUESTED, ({ payload }) => {
-      const ids = unique(payload?.nodeIds ?? [payload?.nodeId]);
+      const ids = uniqueIds(payload?.nodeIds ?? [payload?.nodeId]);
       ids.forEach((nodeId) => this.removeNode(nodeId));
     });
 
@@ -158,6 +169,7 @@ class GraphStore {
     this.#document = normalized;
     this.#syncSelectionFromDocument();
     this.#persistSelectionToDocument();
+    this.#touchRevision();
     this.#emitHistoryState();
 
     const snapshot = this.getDocument();
@@ -189,6 +201,7 @@ class GraphStore {
     this.#document = clone(previous);
     this.#syncSelectionFromDocument();
     this.#persistSelectionToDocument();
+    this.#touchRevision();
     this.#emitHistoryState();
 
     const snapshot = this.getDocument();
@@ -218,6 +231,7 @@ class GraphStore {
     this.#document = clone(next);
     this.#syncSelectionFromDocument();
     this.#persistSelectionToDocument();
+    this.#touchRevision();
     this.#emitHistoryState();
 
     const snapshot = this.getDocument();
@@ -255,6 +269,10 @@ class GraphStore {
       undoCount: this.#undoStack.length,
       redoCount: this.#redoStack.length
     };
+  }
+
+  getRevision() {
+    return this.#revision;
   }
 
   getDocument() {
@@ -335,7 +353,7 @@ class GraphStore {
     if (!this.#document) return;
 
     this.clearSelectedEdge({ emitChange: false });
-    const validIds = unique(nodeIds).filter((nodeId) => Boolean(findNodeById(this.#document, nodeId)));
+    const validIds = uniqueIds(nodeIds).filter((nodeId) => Boolean(findNodeById(this.#document, nodeId)));
     this.#selectedNodeIds = validIds;
     this.#persistSelectionToDocument();
 
@@ -455,23 +473,7 @@ class GraphStore {
     const existing = findNodeById(this.#document, nodeId);
     if (!existing) return null;
 
-    const normalizedPatch = { ...patch };
-    if (normalizedPatch.type && normalizedPatch.type !== existing.type) {
-      normalizedPatch.data = normalizeNodeDataWithContract(normalizedPatch.type, normalizedPatch.data ?? {});
-    }
-    if (normalizedPatch.position) {
-      normalizedPatch.position = {
-        x: Number(normalizedPatch.position.x ?? existing.position?.x ?? 0),
-        y: Number(normalizedPatch.position.y ?? existing.position?.y ?? 0)
-      };
-    }
-    if (normalizedPatch.data) {
-      const nextType = normalizedPatch.type ?? existing.type;
-      normalizedPatch.data = normalizeNodeDataWithContract(nextType, {
-        ...(existing.data ?? {}),
-        ...(normalizedPatch.data ?? {})
-      });
-    }
+    const normalizedPatch = normalizeNodePatch(existing, patch);
 
     this.#applyMutation(() => {
       this.#document = patchGraphNode(this.#document, nodeId, normalizedPatch);
@@ -606,14 +608,7 @@ class GraphStore {
       return null;
     }
 
-    const duplicate = (this.#document.edges ?? []).some(
-      (entry) =>
-        entry.id === edge.id ||
-        (entry.source === edge.source &&
-          entry.target === edge.target &&
-          entry.type === edge.type &&
-          String(entry.label ?? "") === String(edge.label ?? ""))
-    );
+    const duplicate = isDuplicateEdge(this.#document.edges ?? [], edge);
     if (duplicate) return null;
 
     this.#applyMutation(() => {
@@ -715,9 +710,14 @@ class GraphStore {
     }
     run();
     this.#persistSelectionToDocument();
+    this.#touchRevision();
     if (recordHistory) {
       this.#emitHistoryState();
     }
+  }
+
+  #touchRevision() {
+    this.#revision += 1;
   }
 
   #pushUndo(document) {
@@ -778,7 +778,7 @@ class GraphStore {
     const selected = this.#document?.metadata?.selection;
 
     if (Array.isArray(selected) && selected.length) {
-      this.#selectedNodeIds = unique(selected).filter((nodeId) => Boolean(findNodeById(this.#document, nodeId)));
+      this.#selectedNodeIds = uniqueIds(selected).filter((nodeId) => Boolean(findNodeById(this.#document, nodeId)));
       this.#selectedEdgeId = null;
       return;
     }
