@@ -149,6 +149,7 @@ class BottomActivityPanel extends HTMLElement {
       view.settings = this.#runtime.providerSettings;
       view.runtimeMode = this.#runtime.runtimeMode;
       view.uiSettings = this.#runtime.uiSettings;
+      view.bridgeStatus = this.#runtime.u2osBridge;
       const document = graphStore.getDocument();
       view.documentTitle = document?.title ?? "";
       view.documentDescription = document?.description ?? "";

@@ -1,5 +1,5 @@
 import { uiStore } from "../../store/ui-store.js";
-import { escapeHtml } from "./shared.js";
+import { escapeHtml, formatDateTime } from "./shared.js";
 
 const PROVIDERS = Object.freeze([
   {
@@ -29,10 +29,30 @@ const sanitizeSettings = (raw = {}) => {
     model: String(raw?.model ?? providerDefaults[0] ?? "").trim() || providerDefaults[0],
     apiKey: String(raw?.apiKey ?? ""),
     proxyToken: String(raw?.proxyToken ?? ""),
+    bridgeEnabled: Boolean(raw?.bridgeEnabled ?? false),
+    bridgeEndpoint: String(raw?.bridgeEndpoint ?? ""),
+    bridgeSecret: String(raw?.bridgeSecret ?? ""),
     rememberApiKey: Boolean(raw?.rememberApiKey ?? false),
     temperature: Number.isFinite(Number(raw?.temperature)) ? Number(raw.temperature) : 0.3,
     maxTokens: Number.isFinite(Number(raw?.maxTokens)) ? Number(raw.maxTokens) : 800,
     systemPrompt: String(raw?.systemPrompt ?? "")
+  };
+};
+
+const sanitizeBridgeStatus = (raw = {}) => {
+  const state = String(raw?.connectionState ?? "disconnected").trim().toLowerCase();
+  return {
+    enabled: Boolean(raw?.enabled ?? false),
+    connectionState: state === "connected" || state === "connecting" ? state : "disconnected",
+    receivedCount: Number.isFinite(Number(raw?.receivedCount)) ? Math.max(0, Math.round(Number(raw.receivedCount))) : 0,
+    lastEventName: String(raw?.lastEventName ?? ""),
+    lastEventAt: String(raw?.lastEventAt ?? ""),
+    lastError: String(raw?.lastError ?? ""),
+    reconnectAttempt: Number.isFinite(Number(raw?.reconnectAttempt))
+      ? Math.max(0, Math.round(Number(raw.reconnectAttempt)))
+      : 0,
+    endpoint: String(raw?.endpoint ?? ""),
+    tenantId: String(raw?.tenantId ?? "")
   };
 };
 
@@ -57,6 +77,7 @@ class BottomRuntimeSettingsView extends HTMLElement {
   #settings = sanitizeSettings();
   #runtimeMode = "mock";
   #uiSettings = sanitizeUiSettings();
+  #bridgeStatus = sanitizeBridgeStatus();
   #documentTitle = "";
   #documentDescription = "";
 
@@ -72,6 +93,11 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
   set uiSettings(value) {
     this.#uiSettings = sanitizeUiSettings(value ?? {});
+    if (this.isConnected) this.render();
+  }
+
+  set bridgeStatus(value) {
+    this.#bridgeStatus = sanitizeBridgeStatus(value ?? {});
     if (this.isConnected) this.render();
   }
 
@@ -105,9 +131,26 @@ class BottomRuntimeSettingsView extends HTMLElement {
     const settings = this.#settings;
     const provider = providerByKey[settings.provider] ?? providerByKey.openai;
     const uiSettings = this.#uiSettings;
+    const bridge = this.#bridgeStatus;
     const modelOptions = provider.models
       .map((model) => `<option value="${escapeHtml(model)}" ${settings.model === model ? "selected" : ""}>${escapeHtml(model)}</option>`)
       .join("");
+    const bridgeConnectionState = settings.bridgeEnabled ? bridge.connectionState : "disconnected";
+    const bridgeStateLabel =
+      !settings.bridgeEnabled
+        ? "Disabled"
+        : bridgeConnectionState === "connected"
+          ? "Connected"
+          : bridgeConnectionState === "connecting"
+            ? "Connecting"
+            : "Disconnected";
+    const bridgeLastEventLabel = bridge.lastEventName
+      ? `${bridge.lastEventName} at ${formatDateTime(bridge.lastEventAt)}`
+      : "No bridge events received yet";
+    const bridgeAttemptLabel =
+      bridgeConnectionState === "connecting" && bridge.reconnectAttempt > 0
+        ? `Reconnect attempt ${bridge.reconnectAttempt}`
+        : "No reconnect in progress";
 
     this.innerHTML = `
       <section class="panel-split">
@@ -202,6 +245,40 @@ class BottomRuntimeSettingsView extends HTMLElement {
       </section>
 
       <section class="panel-split">
+        <h4>U2OS Bridge</h4>
+        <p class="panel-empty">Enable this bridge to stream U2OS domain events into PAN and forward selected MindGraph completion events back to U2OS.</p>
+      </section>
+
+      <section class="runtime-settings-grid">
+        <label class="runtime-settings-field">
+          <span>Enable U2OS Bridge</span>
+          <input type="checkbox" data-field="bridgeEnabled" ${settings.bridgeEnabled ? "checked" : ""} />
+        </label>
+
+        <label class="runtime-settings-field runtime-settings-field-wide">
+          <span>Bridge Endpoint</span>
+          <input type="url" data-field="bridgeEndpoint" value="${escapeHtml(settings.bridgeEndpoint)}" placeholder="ws://localhost:8788" />
+        </label>
+
+        <label class="runtime-settings-field runtime-settings-field-wide">
+          <span>Bridge Shared Secret</span>
+          <input type="password" data-field="bridgeSecret" value="${escapeHtml(settings.bridgeSecret)}" placeholder="Matches MINDGRAPH_BRIDGE_SECRET in U2OS" autocomplete="off" />
+        </label>
+
+        <div class="runtime-settings-field runtime-settings-field-wide">
+          <span>Bridge Status</span>
+          <div class="runtime-bridge-status" data-connection-state="${escapeHtml(bridgeConnectionState)}">
+            <span class="runtime-bridge-head"><span class="runtime-bridge-dot" aria-hidden="true"></span><span class="runtime-bridge-label">${escapeHtml(bridgeStateLabel)}</span></span>
+            <span class="row-meta">Received ${escapeHtml(String(bridge.receivedCount))} event(s)</span>
+            <span class="row-meta">${escapeHtml(bridgeLastEventLabel)}</span>
+            <span class="row-meta">${escapeHtml(bridgeAttemptLabel)}</span>
+            ${bridge.tenantId ? `<span class="row-meta">Tenant: ${escapeHtml(bridge.tenantId)}</span>` : ""}
+            ${bridge.lastError ? `<span class="row-meta">Last error: ${escapeHtml(bridge.lastError)}</span>` : ""}
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-split">
         <h4>Transport</h4>
         <p class="panel-empty">Current runtime mode: <strong>${escapeHtml(this.#runtimeMode)}</strong>. Use <strong>HTTP Runtime</strong> in the top toolbar to route runs through the proxy server via WebSocket (with HTTP fallback).</p>
       </section>
@@ -255,6 +332,18 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
     this.querySelector('[data-field="systemPrompt"]')?.addEventListener("change", (event) => {
       this.#update({ systemPrompt: String(event.target.value ?? "") });
+    });
+
+    this.querySelector('[data-field="bridgeEnabled"]')?.addEventListener("change", (event) => {
+      this.#update({ bridgeEnabled: Boolean(event.target.checked) });
+    });
+
+    this.querySelector('[data-field="bridgeEndpoint"]')?.addEventListener("change", (event) => {
+      this.#update({ bridgeEndpoint: String(event.target.value ?? "").trim() });
+    });
+
+    this.querySelector('[data-field="bridgeSecret"]')?.addEventListener("change", (event) => {
+      this.#update({ bridgeSecret: String(event.target.value ?? "").trim() });
     });
   }
 }

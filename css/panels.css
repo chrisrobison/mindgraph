@@ -1216,6 +1216,45 @@
   grid-column: 1 / -1;
 }
 
+.runtime-bridge-status {
+  border: 1px solid #c9d8eb;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.5rem 0.58rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.runtime-bridge-head {
+  display: flex;
+  align-items: center;
+}
+
+.runtime-bridge-label {
+  font-weight: 700;
+  color: #1e3a5a;
+}
+
+.runtime-bridge-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  display: inline-block;
+  background: #c04545;
+  margin-right: 0.32rem;
+  box-shadow: 0 0 0 2px rgba(192, 69, 69, 0.14);
+}
+
+.runtime-bridge-status[data-connection-state="connected"] .runtime-bridge-dot {
+  background: #2a9158;
+  box-shadow: 0 0 0 2px rgba(42, 145, 88, 0.16);
+}
+
+.runtime-bridge-status[data-connection-state="connecting"] .runtime-bridge-dot {
+  background: #bb8a00;
+  box-shadow: 0 0 0 2px rgba(187, 138, 0, 0.16);
+}
+
 .pan-console {
   display: grid;
   gap: 0.46rem;
@@ -1727,6 +1766,15 @@
 :root[data-theme="dark"] .chip {
   border-color: #355070;
   background: #213751;
+}
+
+:root[data-theme="dark"] .runtime-bridge-status {
+  border-color: #3b5473;
+  background: #122033;
+}
+
+:root[data-theme="dark"] .runtime-bridge-label {
+  color: #d6e7fb;
 }
 
 :root[data-theme="dark"] .chip-status-running {

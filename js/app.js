@@ -34,6 +34,7 @@ import "./components/inspector/inspector-permissions.js";
 import "./runtime/data-connectors.js";
 import "./runtime/runtime-service.js";
 import "./runtime/runtime-audit-store.js";
+import "./runtime/u2os-bridge-client.js";
 
 import { EVENTS } from "./core/event-constants.js";
 import { publish } from "./core/pan.js";

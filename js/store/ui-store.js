@@ -36,7 +36,10 @@ const sanitizeProviderSettings = (raw = {}) => {
   const model = String(raw?.model ?? defaultModelForProvider(provider)).trim() || defaultModelForProvider(provider);
   const apiKey = String(raw?.apiKey ?? "").trim();
   const proxyToken = String(raw?.proxyToken ?? "").trim();
+  const bridgeEndpoint = String(raw?.bridgeEndpoint ?? "").trim();
+  const bridgeSecret = String(raw?.bridgeSecret ?? "").trim();
   const rememberApiKey = Boolean(raw?.rememberApiKey ?? false);
+  const bridgeEnabled = Boolean(raw?.bridgeEnabled ?? false);
   const temperatureValue = Number(raw?.temperature);
   const maxTokensValue = Number(raw?.maxTokens);
   return {
@@ -44,12 +47,36 @@ const sanitizeProviderSettings = (raw = {}) => {
     model,
     apiKey,
     proxyToken,
+    bridgeEndpoint,
+    bridgeSecret,
     rememberApiKey,
+    bridgeEnabled,
     temperature: Number.isFinite(temperatureValue) ? Math.min(2, Math.max(0, temperatureValue)) : 0.3,
     maxTokens: Number.isFinite(maxTokensValue) ? Math.min(8192, Math.max(64, Math.round(maxTokensValue))) : 800,
     systemPrompt: String(raw?.systemPrompt ?? "").trim()
   };
 };
+
+const toFiniteInt = (value, fallback = 0) => {
+  const next = Number(value);
+  return Number.isFinite(next) ? Math.max(0, Math.round(next)) : fallback;
+};
+
+const createBridgeRuntimeState = (settings = {}) => ({
+  enabled: Boolean(settings?.bridgeEnabled),
+  endpoint: String(settings?.bridgeEndpoint ?? "").trim(),
+  connectionState: "disconnected",
+  reconnectAttempt: 0,
+  nextRetryMs: 0,
+  receivedCount: 0,
+  lastEventName: "",
+  lastEventAt: "",
+  lastError: "",
+  tenantId: "",
+  connectedAt: "",
+  disconnectedAt: "",
+  lastDisconnectReason: ""
+});
 
 const readProviderSettings = () => {
   try {
@@ -97,23 +124,27 @@ const readUiSettings = () => {
 class UiStore {
   #systemThemeMedia = null;
   #systemThemeListener = null;
-  #state = {
-    selectedNodeId: null,
-    selectedNodeIds: [],
-    selectedTool: "select",
-    viewportZoom: 1,
-    inspectorTab: "overview",
-    bottomTab: "messages",
-    devConsoleVisible: true,
-    runtimeMode: readRuntimeMode(),
-    runtimeProviderSettings: readProviderSettings(),
-    uiSettings: readUiSettings(),
-    activityItems: [],
-    taskQueue: [],
-    runHistory: [],
-    traces: [],
-    errors: []
-  };
+  #state = (() => {
+    const runtimeProviderSettings = readProviderSettings();
+    return {
+      selectedNodeId: null,
+      selectedNodeIds: [],
+      selectedTool: "select",
+      viewportZoom: 1,
+      inspectorTab: "overview",
+      bottomTab: "messages",
+      devConsoleVisible: true,
+      runtimeMode: readRuntimeMode(),
+      runtimeProviderSettings,
+      uiSettings: readUiSettings(),
+      u2osBridge: createBridgeRuntimeState(runtimeProviderSettings),
+      activityItems: [],
+      taskQueue: [],
+      runHistory: [],
+      traces: [],
+      errors: []
+    };
+  })();
 
   constructor() {
     this.#applyUiSettings(this.#state.uiSettings);
@@ -171,11 +202,67 @@ class UiStore {
         ...(patch ?? {})
       });
       this.#state.runtimeProviderSettings = next;
+      this.#state.u2osBridge = {
+        ...this.#state.u2osBridge,
+        enabled: Boolean(next.bridgeEnabled),
+        endpoint: next.bridgeEndpoint,
+        connectionState: next.bridgeEnabled ? this.#state.u2osBridge.connectionState : "disconnected",
+        reconnectAttempt: next.bridgeEnabled ? this.#state.u2osBridge.reconnectAttempt : 0,
+        nextRetryMs: next.bridgeEnabled ? this.#state.u2osBridge.nextRetryMs : 0
+      };
       this.#persistProviderSettings(next);
       publish(EVENTS.RUNTIME_PROVIDER_SETTINGS_CHANGED, {
         settings: { ...next },
         origin: payload?.origin ?? "ui-store"
       });
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.U2OS_BRIDGE_CONNECTED, ({ payload }) => {
+      this.#state.u2osBridge = {
+        ...this.#state.u2osBridge,
+        enabled: true,
+        endpoint: String(payload?.endpoint ?? this.#state.u2osBridge.endpoint ?? ""),
+        tenantId: String(payload?.tenantId ?? this.#state.u2osBridge.tenantId ?? ""),
+        connectionState: "connected",
+        reconnectAttempt: 0,
+        nextRetryMs: 0,
+        connectedAt: payload?.at ?? nowIso(),
+        disconnectedAt: "",
+        lastDisconnectReason: "",
+        lastError: ""
+      };
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.U2OS_BRIDGE_DISCONNECTED, ({ payload }) => {
+      const connectionState = payload?.status === "connecting" ? "connecting" : "disconnected";
+      this.#state.u2osBridge = {
+        ...this.#state.u2osBridge,
+        connectionState,
+        reconnectAttempt: toFiniteInt(payload?.attempt, this.#state.u2osBridge.reconnectAttempt ?? 0),
+        nextRetryMs: toFiniteInt(payload?.nextRetryMs, 0),
+        disconnectedAt: payload?.at ?? nowIso(),
+        lastDisconnectReason: String(payload?.reason ?? "")
+      };
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.U2OS_BRIDGE_EVENT_RECEIVED, ({ payload }) => {
+      this.#state.u2osBridge = {
+        ...this.#state.u2osBridge,
+        receivedCount: toFiniteInt(this.#state.u2osBridge.receivedCount, 0) + 1,
+        lastEventName: String(payload?.eventName ?? ""),
+        lastEventAt: payload?.at ?? nowIso()
+      };
+      this.#emitRuntimeState();
+    });
+
+    subscribe(EVENTS.U2OS_BRIDGE_ERROR, ({ payload }) => {
+      this.#state.u2osBridge = {
+        ...this.#state.u2osBridge,
+        lastError: String(payload?.message ?? "Unknown bridge error")
+      };
       this.#emitRuntimeState();
     });
 
@@ -297,11 +384,14 @@ class UiStore {
       temperature: safe.temperature,
       maxTokens: safe.maxTokens,
       systemPrompt: safe.systemPrompt,
-      rememberApiKey: safe.rememberApiKey
+      rememberApiKey: safe.rememberApiKey,
+      bridgeEnabled: safe.bridgeEnabled,
+      bridgeEndpoint: safe.bridgeEndpoint
     };
     const secrets = {
       apiKey: safe.apiKey,
-      proxyToken: safe.proxyToken
+      proxyToken: safe.proxyToken,
+      bridgeSecret: safe.bridgeSecret
     };
 
     try {
@@ -397,7 +487,8 @@ class UiStore {
       traces: [...this.#state.traces],
       errors: [...this.#state.errors],
       runtimeProviderSettings: { ...(this.#state.runtimeProviderSettings ?? {}) },
-      uiSettings: { ...(this.#state.uiSettings ?? {}) }
+      uiSettings: { ...(this.#state.uiSettings ?? {}) },
+      u2osBridge: { ...(this.#state.u2osBridge ?? {}) }
     };
   }
 
@@ -411,7 +502,8 @@ class UiStore {
       providerSettings: { ...(this.#state.runtimeProviderSettings ?? {}) },
       runtimeMode: this.#state.runtimeMode,
       devConsoleVisible: this.#state.devConsoleVisible,
-      uiSettings: { ...(this.#state.uiSettings ?? {}) }
+      uiSettings: { ...(this.#state.uiSettings ?? {}) },
+      u2osBridge: { ...(this.#state.u2osBridge ?? {}) }
     };
   }
 
