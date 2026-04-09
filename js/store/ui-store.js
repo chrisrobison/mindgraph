@@ -35,12 +35,16 @@ const sanitizeProviderSettings = (raw = {}) => {
   const provider = sanitizeProvider(raw?.provider);
   const model = String(raw?.model ?? defaultModelForProvider(provider)).trim() || defaultModelForProvider(provider);
   const apiKey = String(raw?.apiKey ?? "").trim();
+  const proxyToken = String(raw?.proxyToken ?? "").trim();
+  const rememberApiKey = Boolean(raw?.rememberApiKey ?? false);
   const temperatureValue = Number(raw?.temperature);
   const maxTokensValue = Number(raw?.maxTokens);
   return {
     provider,
     model,
     apiKey,
+    proxyToken,
+    rememberApiKey,
     temperature: Number.isFinite(temperatureValue) ? Math.min(2, Math.max(0, temperatureValue)) : 0.3,
     maxTokens: Number.isFinite(maxTokensValue) ? Math.min(8192, Math.max(64, Math.round(maxTokensValue))) : 800,
     systemPrompt: String(raw?.systemPrompt ?? "").trim()
@@ -49,9 +53,14 @@ const sanitizeProviderSettings = (raw = {}) => {
 
 const readProviderSettings = () => {
   try {
-    const raw = window.localStorage.getItem(PERSISTENCE.storage.runtimeProviderSettings);
-    if (!raw) return sanitizeProviderSettings();
-    return sanitizeProviderSettings(JSON.parse(raw));
+    const rawPersistent = window.localStorage.getItem(PERSISTENCE.storage.runtimeProviderSettings);
+    const rawSession = window.sessionStorage.getItem(PERSISTENCE.storage.runtimeProviderSettingsSession);
+    const persistent = rawPersistent ? JSON.parse(rawPersistent) : {};
+    const session = rawSession ? JSON.parse(rawSession) : {};
+    return sanitizeProviderSettings({
+      ...(persistent ?? {}),
+      ...(session ?? {})
+    });
   } catch {
     return sanitizeProviderSettings();
   }
@@ -281,8 +290,39 @@ class UiStore {
   }
 
   #persistProviderSettings(settings) {
+    const safe = sanitizeProviderSettings(settings ?? {});
+    const shared = {
+      provider: safe.provider,
+      model: safe.model,
+      temperature: safe.temperature,
+      maxTokens: safe.maxTokens,
+      systemPrompt: safe.systemPrompt,
+      rememberApiKey: safe.rememberApiKey
+    };
+    const secrets = {
+      apiKey: safe.apiKey,
+      proxyToken: safe.proxyToken
+    };
+
     try {
-      window.localStorage.setItem(PERSISTENCE.storage.runtimeProviderSettings, JSON.stringify(settings));
+      if (safe.rememberApiKey) {
+        window.localStorage.setItem(
+          PERSISTENCE.storage.runtimeProviderSettings,
+          JSON.stringify({
+            ...shared,
+            ...secrets
+          })
+        );
+        window.sessionStorage.removeItem(PERSISTENCE.storage.runtimeProviderSettingsSession);
+      } else {
+        window.localStorage.setItem(PERSISTENCE.storage.runtimeProviderSettings, JSON.stringify(shared));
+        window.sessionStorage.setItem(
+          PERSISTENCE.storage.runtimeProviderSettingsSession,
+          JSON.stringify({
+            ...secrets
+          })
+        );
+      }
     } catch {
       // noop
     }

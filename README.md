@@ -36,11 +36,13 @@ Proxy defaults:
 - HTTP health: `http://127.0.0.1:8787/api/mindgraph/health`
 - Runtime HTTP endpoint: `http://127.0.0.1:8787/api/mindgraph/runtime`
 - Runtime WebSocket endpoint: `ws://127.0.0.1:8787/api/mindgraph/runtime/ws`
+- Tenancy mode: `local` (default bootstrap tenant/domain is `localhost`)
+- Control DB: `./data/mindgraph-control.sqlite` (default)
 
 Then in the app:
 1. Set runtime mode to `HTTP Runtime` in the top toolbar.
 2. Set runtime endpoint to `http://127.0.0.1:8787/api/mindgraph/runtime`.
-3. Open `Provider Settings` and configure provider, model, and API key.
+3. Open `Provider Settings` and configure provider, model, API key, and (optionally) proxy token.
 
 ## Architecture
 
@@ -66,7 +68,8 @@ No component directly mutates shared graph state.
 - `js/runtime/mock-agent-runtime.js`: planner-aware local runtime adapter
 - `js/runtime/http-agent-runtime.js`: external runtime adapter (WebSocket first, HTTP fallback)
 - `js/runtime/runtime-audit-store.js`: persists planner snapshots/run traces into graph metadata
-- `server/provider-proxy-server.mjs`: provider proxy for OpenAI/Anthropic/Gemini (HTTP + WS)
+- `server/provider-proxy-server.mjs`: hosted-capable provider proxy with tenant host/domain resolution (HTTP + WS)
+- `server/tenancy/*`: control-plane tenant registry, pluggable DB adapter, and host-based tenant resolver
 
 ## Graph Semantics (Implemented)
 
@@ -193,7 +196,7 @@ Migration authoring details: [docs/graph-schema-migrations.md](/Users/cdr/Projec
 
 - Port contracts are lightweight and do not enforce full JSON Schema semantics.
 - Proxy server currently supports single-node execution requests (`run-node`) and WebSocket structured runtime stream events (plan orchestration remains client-side).
-- API keys are stored in browser local storage for local development convenience.
+- API keys are session-only by default; persistence requires explicit opt-in (`Remember Keys On This Device`).
 - Planner uses in-memory recomputation each render/request (no incremental diff engine yet).
 - Batch execution parallelism is intentionally bounded by a configurable concurrency limit (`metadata.runtimePolicy.batchConcurrencyLimit` or `runtimePolicy.concurrencyLimit` override).
 

@@ -14,23 +14,35 @@ const asText = (value, fallback = "") => {
 const toObject = (value) => (value && typeof value === "object" ? value : {});
 const compactText = (value, max = 420) => asText(value).replace(/\s+/g, " ").slice(0, max);
 
-const resolveWsUrl = (endpoint) => {
+const resolveWsUrl = (endpoint, proxyToken = "") => {
   const base = String(endpoint ?? "").trim().replace(/\/$/, "");
   if (!base) return "";
 
+  const withToken = (rawUrl) => {
+    const token = asText(proxyToken);
+    if (!token) return rawUrl;
+    try {
+      const parsed = new URL(rawUrl);
+      parsed.searchParams.set("proxy_token", token);
+      return parsed.toString();
+    } catch {
+      return rawUrl;
+    }
+  };
+
   if (base.startsWith("ws://") || base.startsWith("wss://")) {
-    return `${base}/ws`;
+    return withToken(`${base}/ws`);
   }
 
   if (typeof window !== "undefined") {
     const url = new URL(base, window.location.origin);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.pathname = `${url.pathname.replace(/\/$/, "")}/ws`;
-    return url.toString();
+    return withToken(url.toString());
   }
 
-  if (base.startsWith("http://")) return `ws://${base.slice("http://".length)}/ws`;
-  if (base.startsWith("https://")) return `wss://${base.slice("https://".length)}/ws`;
+  if (base.startsWith("http://")) return withToken(`ws://${base.slice("http://".length)}/ws`);
+  if (base.startsWith("https://")) return withToken(`wss://${base.slice("https://".length)}/ws`);
   return "";
 };
 
@@ -38,6 +50,7 @@ export class HttpAgentRuntime extends AgentRuntime {
   #endpoint = "/api/mindgraph/runtime";
   #socket = null;
   #socketOpenPromise = null;
+  #socketProxyToken = "";
   #pendingSocketRuns = new Map();
   #streamStateByRequest = new Map();
   #requestSeq = 0;
@@ -122,6 +135,13 @@ export class HttpAgentRuntime extends AgentRuntime {
       };
     }
 
+    const providerSettings = {
+      ...(context?.providerSettings ?? {})
+    };
+    const proxyToken = asText(providerSettings?.proxyToken);
+    delete providerSettings.proxyToken;
+    delete providerSettings.rememberApiKey;
+
     const requestPayload = {
       runId,
       trigger,
@@ -129,16 +149,14 @@ export class HttpAgentRuntime extends AgentRuntime {
       nodePlan,
       context: {
         ...(context ?? {}),
-        providerSettings: {
-          ...(context?.providerSettings ?? {})
-        }
+        providerSettings
       }
     };
 
     this.publish(this.events.RUNTIME_AGENT_RUN_STARTED, { nodeId, runId, trigger, context, mode: "http" });
 
     try {
-      const payload = await this.#executeRemoteRun(requestPayload, context?.abortSignal);
+      const payload = await this.#executeRemoteRun(requestPayload, context?.abortSignal, { proxyToken });
       const output = payload?.output ?? {
         type: "http_runtime_output",
         summary: payload?.summary ?? `${node.label} completed via HTTP runtime`,
@@ -314,9 +332,9 @@ export class HttpAgentRuntime extends AgentRuntime {
     return { ok: failed === 0, completed, failed, total: nodeIds.length };
   }
 
-  async #executeRemoteRun(payload, abortSignal) {
+  async #executeRemoteRun(payload, abortSignal, options = {}) {
     try {
-      return await this.#runNodeViaSocket(payload, abortSignal);
+      return await this.#runNodeViaSocket(payload, abortSignal, options);
     } catch (socketError) {
       if (socketError?.noHttpFallback) {
         throw socketError;
@@ -329,17 +347,23 @@ export class HttpAgentRuntime extends AgentRuntime {
         mode: "http",
         error: asMessage(socketError)
       });
-      return this.#runNodeViaHttp(payload, abortSignal);
+      return this.#runNodeViaHttp(payload, abortSignal, options);
     }
   }
 
-  async #runNodeViaHttp(payload, abortSignal) {
+  async #runNodeViaHttp(payload, abortSignal, options = {}) {
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    };
+    const proxyToken = asText(options?.proxyToken);
+    if (proxyToken) {
+      headers.Authorization = `Bearer ${proxyToken}`;
+    }
+
     const response = await fetch(`${this.#endpoint.replace(/\/$/, "")}/run-node`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
+      headers,
       body: JSON.stringify(payload),
       signal: abortSignal
     });
@@ -351,12 +375,17 @@ export class HttpAgentRuntime extends AgentRuntime {
     return response.json();
   }
 
-  async #runNodeViaSocket(payload, abortSignal) {
+  async #runNodeViaSocket(payload, abortSignal, options = {}) {
     if (typeof WebSocket === "undefined") {
       throw new Error("WebSocket is not available in this browser");
     }
 
-    const socket = await this.#ensureSocket();
+    const proxyToken = asText(options?.proxyToken);
+    if (this.#socket && this.#socketProxyToken !== proxyToken) {
+      this.#disconnectSocket();
+    }
+
+    const socket = await this.#ensureSocket(options);
     const requestId = `req_${Date.now()}_${++this.#requestSeq}`;
 
     return new Promise((resolve, reject) => {
@@ -412,11 +441,11 @@ export class HttpAgentRuntime extends AgentRuntime {
     });
   }
 
-  async #ensureSocket() {
+  async #ensureSocket(options = {}) {
     if (this.#socket?.readyState === WebSocket.OPEN) return this.#socket;
     if (this.#socketOpenPromise) return this.#socketOpenPromise;
 
-    const wsUrl = resolveWsUrl(this.#endpoint);
+    const wsUrl = resolveWsUrl(this.#endpoint, options?.proxyToken);
     if (!wsUrl) {
       throw new Error("Runtime endpoint cannot be converted to a WebSocket URL");
     }
@@ -424,6 +453,7 @@ export class HttpAgentRuntime extends AgentRuntime {
     this.#socketOpenPromise = new Promise((resolve, reject) => {
       const socket = new WebSocket(wsUrl);
       this.#socket = socket;
+      this.#socketProxyToken = asText(options?.proxyToken);
 
       const cleanup = () => {
         socket.removeEventListener("open", onOpen);
@@ -735,6 +765,7 @@ export class HttpAgentRuntime extends AgentRuntime {
     });
     this.#socket = null;
     this.#socketOpenPromise = null;
+    this.#socketProxyToken = "";
   }
 
   #disconnectSocket() {
@@ -746,5 +777,6 @@ export class HttpAgentRuntime extends AgentRuntime {
     }
     this.#socket = null;
     this.#socketOpenPromise = null;
+    this.#socketProxyToken = "";
   }
 }
