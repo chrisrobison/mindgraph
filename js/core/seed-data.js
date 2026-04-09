@@ -38,6 +38,23 @@ export const seedDocument = createGraphDocument({
       }
     },
     {
+      id: "trigger_order_created",
+      type: NODE_TYPES.U2OS_TRIGGER,
+      label: "Order Created Trigger",
+      description: "Starts workflow when U2OS publishes an order.created event.",
+      position: { x: 180, y: 300 },
+      data: {
+        eventName: "order.created",
+        filterExpression: "",
+        cachedData: null,
+        cachedSchema: null,
+        lastUpdated: "",
+        lastReceivedAt: "",
+        lastReceivedPayloadPreview: "",
+        lastReceivedMetadata: null
+      }
+    },
+    {
       id: "data_site_config",
       type: NODE_TYPES.DATA,
       label: "site_config.json",
@@ -137,6 +154,13 @@ export const seedDocument = createGraphDocument({
       label: "references"
     },
     {
+      id: "edge_trigger_to_transformer",
+      type: EDGE_TYPES.FEEDS_DATA,
+      source: "trigger_order_created",
+      target: "transformer_signal_normalizer",
+      label: "feeds_data"
+    },
+    {
       id: "edge_data_to_transformer",
       type: EDGE_TYPES.FEEDS_DATA,
       source: "data_market_data",
@@ -214,6 +238,6 @@ export const seedDocument = createGraphDocument({
   },
   metadata: {
     createdBy: "mindgraph-seed",
-    description: "Pipeline seed graph with explicit semantics and planner-compatible execution edges"
+    description: "Pipeline seed graph with U2OS trigger entry, explicit semantics, and planner-compatible execution edges"
   }
 });

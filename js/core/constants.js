@@ -19,6 +19,7 @@ export const NODE_SIZE_BY_TYPE = Object.freeze({
   note: Object.freeze({ width: 250, height: 140 }),
   agent: Object.freeze({ width: 290, height: 180 }),
   data: Object.freeze({ width: 260, height: 138 }),
+  u2os_trigger: Object.freeze({ width: 280, height: 164 }),
   transformer: Object.freeze({ width: 210, height: 104 }),
   view: Object.freeze({ width: 210, height: 104 }),
   action: Object.freeze({ width: 210, height: 104 })
@@ -63,6 +64,19 @@ export const NODE_TEMPLATES = Object.freeze({
       cachedData: null,
       cachedSchema: null,
       lastUpdated: ""
+    })
+  }),
+  u2os_trigger: Object.freeze({
+    label: "U2OS Event Trigger",
+    description: "Activates when a U2OS event is received",
+    data: Object.freeze({
+      eventName: "",
+      filterExpression: "",
+      cachedData: null,
+      lastUpdated: "",
+      lastReceivedAt: "",
+      lastReceivedPayloadPreview: "",
+      lastReceivedMetadata: null
     })
   }),
   transformer: Object.freeze({

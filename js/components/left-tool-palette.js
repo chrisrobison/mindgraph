@@ -8,6 +8,7 @@ const ICON_BY_TOOL = {
   "create:note": "assets/toolbar/note2.svg",
   "create:agent": "assets/toolbar/agent.svg",
   "create:data": "assets/toolbar/data.svg",
+  "create:u2os_trigger": "assets/toolbar/data.svg",
   "create:transformer": "assets/toolbar/transform.svg",
   "create:view": "assets/toolbar/view.svg",
   "create:action": "assets/toolbar/action.svg",
@@ -106,6 +107,10 @@ const TOOL_GROUPS = [
       { id: "create:view", label: "View Node" },
       { id: "create:action", label: "Action Node" }
     ]
+  },
+  {
+    title: "Triggers & Connectors",
+    tools: [{ id: "create:u2os_trigger", label: "U2OS Trigger Node" }]
   },
   {
     title: "Structure",

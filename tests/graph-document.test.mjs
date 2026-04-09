@@ -65,6 +65,11 @@ test("createNode({ type: 'agent' }) data has 'role' and 'mode' fields", () => {
   assert.ok(node.data.mode !== undefined, "Expected data.mode to be present");
 });
 
+test("createNode({ type: 'u2os_trigger' }) data has eventName field", () => {
+  const node = createNode({ type: NODE_TYPES.U2OS_TRIGGER });
+  assert.ok(node.data.eventName !== undefined, "Expected data.eventName to be present");
+});
+
 // ---------------------------------------------------------------------------
 // createEdge
 // ---------------------------------------------------------------------------

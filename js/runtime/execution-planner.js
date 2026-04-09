@@ -41,7 +41,10 @@ const latestRunAt = (node) => {
  */
 const hasMaterializedOutput = (node) => {
   if (!node) return false;
-  if (node.type === "data") return node.data?.cachedData != null;
+  const spec = getNodeTypeSpec(node.type);
+  if (spec?.outputField) {
+    return node.data?.[spec.outputField] != null;
+  }
   return node.data?.lastOutput != null;
 };
 

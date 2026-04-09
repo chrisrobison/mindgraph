@@ -501,6 +501,7 @@ class U2OSBridgeClient {
       eventName: normalized.envelope.eventName,
       tenantId: normalized.envelope.tenantId,
       traceId: normalized.envelope.traceId,
+      sourceChannel: normalized.envelope.sourceSystem || "u2os_bridge",
       at: normalized.envelope.publishedAt
     });
 

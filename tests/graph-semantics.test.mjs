@@ -45,8 +45,8 @@ const makeEdge = (type, source, target) => ({
 // NODE_TYPE_SPECS
 // ---------------------------------------------------------------------------
 
-test("NODE_TYPE_SPECS has keys for all six node types", () => {
-  const expected = ["note", "data", "transformer", "agent", "view", "action"];
+test("NODE_TYPE_SPECS has keys for all seven node types", () => {
+  const expected = ["note", "data", "u2os_trigger", "transformer", "agent", "view", "action"];
   for (const key of expected) {
     assert.ok(key in NODE_TYPE_SPECS, `Expected NODE_TYPE_SPECS to have key "${key}"`);
   }
@@ -64,6 +64,10 @@ test("NODE_TYPE_SPECS.data.executable is false", () => {
   assert.equal(NODE_TYPE_SPECS.data.executable, false);
 });
 
+test("NODE_TYPE_SPECS.u2os_trigger.executable is false", () => {
+  assert.equal(NODE_TYPE_SPECS.u2os_trigger.executable, false);
+});
+
 // ---------------------------------------------------------------------------
 // isExecutableNodeType
 // ---------------------------------------------------------------------------
@@ -78,6 +82,10 @@ test("isExecutableNodeType('note') returns false", () => {
 
 test("isExecutableNodeType('data') returns false", () => {
   assert.equal(isExecutableNodeType("data"), false);
+});
+
+test("isExecutableNodeType('u2os_trigger') returns false", () => {
+  assert.equal(isExecutableNodeType("u2os_trigger"), false);
 });
 
 test("isExecutableNodeType('transformer') returns true", () => {
@@ -254,6 +262,15 @@ test("getDefaultPortsForNodeType('agent') returns input ports and output ports",
   assert.ok(ports.output.length >= 1, "Agent should have at least 1 output port");
 });
 
+test("getDefaultPortsForNodeType('u2os_trigger') returns payload output as default", () => {
+  const ports = getDefaultPortsForNodeType("u2os_trigger");
+  assert.equal(ports.input.length, 0);
+  assert.ok(ports.output.length >= 1);
+  assert.equal(ports.output[0].id, "payload");
+  assert.equal(ports.output[0].payloadType, "object");
+  assert.equal(ports.output.some((port) => port.id === "metadata"), true);
+});
+
 // ---------------------------------------------------------------------------
 // validateEdgeSemantics
 // ---------------------------------------------------------------------------
@@ -302,6 +319,12 @@ test("inferDefaultEdgeType(dataNode, agentNode) returns 'feeds_data'", () => {
   const dataNode = makeNode("data");
   const agentNode = makeNode("agent");
   assert.equal(inferDefaultEdgeType(dataNode, agentNode), "feeds_data");
+});
+
+test("inferDefaultEdgeType(triggerNode, agentNode) returns 'feeds_data'", () => {
+  const triggerNode = makeNode("u2os_trigger", { eventName: "order.created" });
+  const agentNode = makeNode("agent");
+  assert.equal(inferDefaultEdgeType(triggerNode, agentNode), "feeds_data");
 });
 
 test("inferDefaultEdgeType(agentNode, dataNode) returns 'reads_from'", () => {

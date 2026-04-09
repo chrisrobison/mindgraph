@@ -1,5 +1,6 @@
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
+import { NODE_TYPES } from "../core/types.js";
 import { graphStore } from "../store/graph-store.js";
 import { inferSchema } from "./schema-inference.js";
 
@@ -7,6 +8,7 @@ const DEFAULT_JSON_PATH = "/data/sample/site_config.json";
 const MIN_PERIODIC_INTERVAL_MS = 5_000;
 const DEFAULT_PERIODIC_INTERVAL_MS = 60_000;
 const DEFAULT_CACHE_TTL_MS = 30_000;
+const TRIGGER_ENVELOPE_STALE_MS = 10_000;
 
 const embeddedSamples = Object.freeze({
   site_config: {
@@ -104,6 +106,67 @@ const normalizeSourceType = (value) => {
   return "json";
 };
 
+const normalizeFilterExpression = (value) => String(value ?? "").trim();
+
+const parseFilterValue = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (
+    (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
+    (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
+  ) {
+    return raw.slice(1, -1);
+  }
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (raw === "null") return null;
+  const asNumber = Number(raw);
+  if (Number.isFinite(asNumber) && raw !== "") return asNumber;
+  return raw;
+};
+
+const valueLooksPresent = (value) => {
+  if (value == null) return false;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return Boolean(value);
+};
+
+const matchesTriggerFilter = (payload, filterExpression) => {
+  const filter = normalizeFilterExpression(filterExpression);
+  if (!filter) return true;
+
+  const separatorIndex = filter.indexOf("=");
+  if (separatorIndex >= 0) {
+    const keyPath = filter.slice(0, separatorIndex).trim();
+    const expectedRaw = filter.slice(separatorIndex + 1).trim();
+    const actual = applyJsonPath(payload, keyPath);
+    const expected = parseFilterValue(expectedRaw);
+
+    if (actual === expected) return true;
+    if (actual == null || expected == null) return actual === expected;
+    return String(actual).trim() === String(expected).trim();
+  }
+
+  return valueLooksPresent(applyJsonPath(payload, filter));
+};
+
+const buildPayloadPreview = (payload, maxLength = 80) => {
+  if (payload == null) return "(none)";
+  const text = typeof payload === "string" ? payload : JSON.stringify(payload);
+  return String(text ?? "").slice(0, maxLength);
+};
+
+const normalizeIso = (value, fallback = "") => {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed.toISOString();
+};
+
 const toIntervalMs = (secondsValue) => {
   const seconds = Number(secondsValue);
   if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_PERIODIC_INTERVAL_MS;
@@ -119,6 +182,8 @@ const formatRefreshMessage = ({ label, sourceType, fromCache, reason }) => {
 class DataConnectors {
   #cache = new Map();
   #timers = new Map();
+  #triggerEventSubscriptions = new Map();
+  #latestTriggerEnvelopeByEvent = new Map();
   #dispose = [];
 
   constructor() {
@@ -126,21 +191,24 @@ class DataConnectors {
       subscribe(EVENTS.GRAPH_DOCUMENT_LOADED, ({ payload }) => {
         this.#syncPeriodicRefresh(payload?.document?.nodes ?? []);
         this.#syncAgentLinkedDataCounts();
+        this.#syncU2osTriggerSubscriptions(payload?.document?.nodes ?? []);
       })
     );
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
         const node = payload?.node ?? (payload?.nodeId ? graphStore.getNode(payload.nodeId) : null);
-        if (!node || node.type !== "data") return;
-        this.#syncPeriodicRefresh();
+        if (!node) return;
+        if (node.type === NODE_TYPES.DATA) this.#syncPeriodicRefresh();
+        this.#syncU2osTriggerSubscriptions();
       })
     );
 
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_NODE_CREATED, ({ payload }) => {
-        if (payload?.node?.type !== "data") return;
-        this.#syncPeriodicRefresh();
+        const nodeType = payload?.node?.type;
+        if (nodeType === NODE_TYPES.DATA) this.#syncPeriodicRefresh();
+        this.#syncU2osTriggerSubscriptions();
       })
     );
 
@@ -168,6 +236,24 @@ class DataConnectors {
         this.#clearTimer(payload.nodeId);
         this.#cache.delete(payload.nodeId);
         this.#syncPeriodicRefresh();
+        this.#syncU2osTriggerSubscriptions();
+      })
+    );
+
+    this.#dispose.push(
+      subscribe(EVENTS.U2OS_BRIDGE_EVENT_RECEIVED, ({ payload, timestamp }) => {
+        const eventName = String(payload?.eventName ?? "").trim();
+        if (!eventName) return;
+
+        const fallbackIso = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : new Date().toISOString();
+        const receivedAt = normalizeIso(payload?.at, fallbackIso) || fallbackIso;
+        this.#latestTriggerEnvelopeByEvent.set(eventName, {
+          tenantId: String(payload?.tenantId ?? ""),
+          receivedAt,
+          traceId: String(payload?.traceId ?? ""),
+          sourceChannel: String(payload?.sourceChannel ?? "u2os_bridge"),
+          capturedAtMs: Date.now()
+        });
       })
     );
   }
@@ -293,6 +379,77 @@ class DataConnectors {
             ...(node.data ?? {}),
             allowedDataSources: validIds,
             linkedDataCount: nextCount
+          }
+        },
+        origin: "data-connectors"
+      });
+    });
+  }
+
+  #syncU2osTriggerSubscriptions(nodes = null) {
+    const allNodes = Array.isArray(nodes) ? nodes : graphStore.getNodes();
+    const triggerNodes = allNodes.filter((node) => node.type === NODE_TYPES.U2OS_TRIGGER);
+    const eventNames = new Set(
+      triggerNodes
+        .map((node) => String(node.data?.eventName ?? "").trim())
+        .filter(Boolean)
+    );
+
+    for (const eventName of eventNames) {
+      if (this.#triggerEventSubscriptions.has(eventName)) continue;
+      const unsubscribe = subscribe(eventName, (detail) => this.#handleU2osTriggerEvent(eventName, detail));
+      this.#triggerEventSubscriptions.set(eventName, unsubscribe);
+    }
+
+    for (const [eventName, unsubscribe] of this.#triggerEventSubscriptions.entries()) {
+      if (eventNames.has(eventName)) continue;
+      unsubscribe();
+      this.#triggerEventSubscriptions.delete(eventName);
+      this.#latestTriggerEnvelopeByEvent.delete(eventName);
+    }
+  }
+
+  #normalizeTriggerEnvelope(eventName, detail = {}) {
+    const fromBridge = this.#latestTriggerEnvelopeByEvent.get(eventName);
+    const timestamp = Number(detail?.timestamp);
+    const receivedAtFallback = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : new Date().toISOString();
+    const fromBridgeFresh = fromBridge && Date.now() - Number(fromBridge.capturedAtMs ?? 0) <= TRIGGER_ENVELOPE_STALE_MS;
+    return {
+      tenantId: String(fromBridgeFresh ? fromBridge?.tenantId : ""),
+      receivedAt: String(fromBridgeFresh ? fromBridge?.receivedAt : receivedAtFallback),
+      traceId: String(fromBridgeFresh ? fromBridge?.traceId : ""),
+      sourceChannel: String(fromBridgeFresh ? fromBridge?.sourceChannel : "pan")
+    };
+  }
+
+  #handleU2osTriggerEvent(eventName, detail = {}) {
+    const payload = detail?.payload;
+    const nowIso = new Date().toISOString();
+    const envelopeMetadata = this.#normalizeTriggerEnvelope(eventName, detail);
+
+    const triggerNodes = graphStore
+      .getNodes()
+      .filter(
+        (node) =>
+          node.type === NODE_TYPES.U2OS_TRIGGER &&
+          String(node.data?.eventName ?? "").trim() === eventName
+      );
+
+    triggerNodes.forEach((node) => {
+      const filterExpression = normalizeFilterExpression(node.data?.filterExpression);
+      if (!matchesTriggerFilter(payload, filterExpression)) return;
+
+      publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
+        nodeId: node.id,
+        patch: {
+          data: {
+            ...(node.data ?? {}),
+            cachedData: deepClone(payload ?? {}),
+            cachedSchema: inferSchema(payload ?? {}),
+            lastUpdated: envelopeMetadata.receivedAt || nowIso,
+            lastReceivedAt: envelopeMetadata.receivedAt || nowIso,
+            lastReceivedPayloadPreview: buildPayloadPreview(payload ?? {}),
+            lastReceivedMetadata: envelopeMetadata
           }
         },
         origin: "data-connectors"

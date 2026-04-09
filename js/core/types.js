@@ -2,6 +2,7 @@ export const NODE_TYPES = Object.freeze({
   NOTE: "note",
   AGENT: "agent",
   DATA: "data",
+  U2OS_TRIGGER: "u2os_trigger",
   TRANSFORMER: "transformer",
   VIEW: "view",
   ACTION: "action"

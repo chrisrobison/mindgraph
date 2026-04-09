@@ -33,18 +33,13 @@
     },
     {
       "id": "data_event_ingest",
-      "type": "data",
-      "label": "Raw Event Stream",
-      "description": "Primary ingest node for upstream ad/event telemetry.",
+      "type": "u2os_trigger",
+      "label": "U2OS Telemetry Trigger",
+      "description": "Activates pipeline normalization when upstream telemetry events arrive from U2OS.",
       "position": { "x": 112, "y": 274 },
       "data": {
-        "source": "mock",
-        "sourceType": "mock",
-        "sourcePath": "ads_api_mock.json",
-        "sourceUrl": "",
-        "jsonPath": "",
-        "refreshMode": "periodic",
-        "refreshInterval": 30,
+        "eventName": "event.created",
+        "filterExpression": "",
         "cachedData": {
           "rows": [
             { "campaign": "spring_launch", "impressions": 120000, "clicks": 3400, "spend": 9200 },
@@ -55,30 +50,46 @@
         },
         "cachedSchema": null,
         "lastUpdated": "2026-04-04T16:05:00.000Z",
-        "readonly": true,
+        "lastReceivedAt": "2026-04-04T16:05:00.000Z",
+        "lastReceivedPayloadPreview": "{\"rows\":[{\"campaign\":\"spring_launch\",\"impressions\":120000,\"clicks\":3400,\"spend\":9200}",
+        "lastReceivedMetadata": {
+          "tenantId": "demo-analytics",
+          "receivedAt": "2026-04-04T16:05:00.000Z",
+          "traceId": "trace_demo_event_ingest",
+          "sourceChannel": "u2os_bridge"
+        },
         "inputPorts": [],
         "outputPorts": [
           {
-            "id": "dataset",
-            "label": "Dataset",
+            "id": "payload",
+            "label": "Payload",
             "payloadType": "object",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["rows"],
+              "additionalProperties": true
+            }
+          },
+          {
+            "id": "metadata",
+            "label": "Metadata",
+            "payloadType": "object",
+            "required": false,
+            "schema": {
+              "type": "object",
               "properties": {
-                "rows": {
-                  "type": "array",
-                  "items": { "type": "object", "additionalProperties": true }
-                }
+                "tenantId": { "type": "string" },
+                "receivedAt": { "type": "string" },
+                "traceId": { "type": "string" },
+                "sourceChannel": { "type": "string" }
               }
             }
           }
         ]
       },
       "metadata": {
-        "lane": "ingest",
-        "owner": "data-eng"
+        "lane": "trigger",
+        "owner": "integrations"
       }
     },
     {
@@ -304,7 +315,7 @@
       "label": "feeds_data",
       "metadata": {
         "contract": {
-          "sourcePort": "dataset",
+          "sourcePort": "payload",
           "targetPort": "input",
           "payloadType": "object",
           "required": true,

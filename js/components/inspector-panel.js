@@ -28,6 +28,12 @@ const tabs = [
     visible: (nodeType) => nodeType !== NODE_TYPES.NOTE
   },
   {
+    key: "u2os-trigger",
+    label: "Trigger",
+    tag: "inspector-u2os-trigger",
+    visible: (nodeType) => nodeType === NODE_TYPES.U2OS_TRIGGER
+  },
+  {
     key: "tools",
     label: "Tools",
     tag: "inspector-tools",

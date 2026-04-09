@@ -59,6 +59,17 @@ const nodeTypeSpecEntries = [
     }
   ],
   [
+    NODE_TYPES.U2OS_TRIGGER,
+    {
+      role: "trigger",
+      executable: false,
+      requiredDataKeys: ["eventName"],
+      requiredInputSources: 0,
+      outputField: "cachedData",
+      description: "Event-driven trigger source that emits U2OS payload envelopes."
+    }
+  ],
+  [
     NODE_TYPES.TRANSFORMER,
     {
       role: "transform",
@@ -155,7 +166,14 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: false,
       description: "Source output is available as structured input to target.",
-      validSourceTypes: [NODE_TYPES.DATA, NODE_TYPES.TRANSFORMER, NODE_TYPES.AGENT, NODE_TYPES.VIEW, NODE_TYPES.ACTION],
+      validSourceTypes: [
+        NODE_TYPES.DATA,
+        NODE_TYPES.U2OS_TRIGGER,
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.AGENT,
+        NODE_TYPES.VIEW,
+        NODE_TYPES.ACTION
+      ],
       validTargetTypes: [NODE_TYPES.TRANSFORMER, NODE_TYPES.AGENT, NODE_TYPES.VIEW, NODE_TYPES.ACTION]
     }
   ],
@@ -169,7 +187,7 @@ const edgeTypeSpecEntries = [
       informationalOnly: false,
       description: "Source consumes the target data source.",
       validSourceTypes: [NODE_TYPES.TRANSFORMER, NODE_TYPES.AGENT, NODE_TYPES.VIEW, NODE_TYPES.ACTION],
-      validTargetTypes: [NODE_TYPES.DATA]
+      validTargetTypes: [NODE_TYPES.DATA, NODE_TYPES.U2OS_TRIGGER]
     }
   ],
   [
@@ -510,6 +528,14 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
     next[spec.outputField] = null;
   }
 
+  if (nodeType === NODE_TYPES.U2OS_TRIGGER) {
+    if (next.filterExpression === undefined) next.filterExpression = "";
+    if (next.lastUpdated === undefined) next.lastUpdated = "";
+    if (next.lastReceivedAt === undefined) next.lastReceivedAt = "";
+    if (next.lastReceivedPayloadPreview === undefined) next.lastReceivedPayloadPreview = "";
+    if (next.lastReceivedMetadata === undefined) next.lastReceivedMetadata = null;
+  }
+
   if (next.lastRunAt === undefined && spec.executable) {
     next.lastRunAt = "";
   }
@@ -632,11 +658,17 @@ export const validateEdgeSemantics = (edge, sourceNode, targetNode) => {
 export const inferDefaultEdgeType = (sourceNode, targetNode) => {
   if (!sourceNode || !targetNode) return EDGE_TYPES.DEPENDS_ON;
 
-  if (sourceNode.type === NODE_TYPES.DATA && isExecutableNodeType(targetNode.type)) {
+  if (
+    (sourceNode.type === NODE_TYPES.DATA || sourceNode.type === NODE_TYPES.U2OS_TRIGGER) &&
+    isExecutableNodeType(targetNode.type)
+  ) {
     return EDGE_TYPES.FEEDS_DATA;
   }
 
-  if (isExecutableNodeType(sourceNode.type) && targetNode.type === NODE_TYPES.DATA) {
+  if (
+    isExecutableNodeType(sourceNode.type) &&
+    (targetNode.type === NODE_TYPES.DATA || targetNode.type === NODE_TYPES.U2OS_TRIGGER)
+  ) {
     return EDGE_TYPES.READS_FROM;
   }
 

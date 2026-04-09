@@ -1935,6 +1935,17 @@
   color: #9ce3cb;
 }
 
+:root[data-theme="dark"] .node-trigger-event-badge {
+  background: #1d3c34;
+  border-color: #2f6a5a;
+  color: #9ce3cb;
+}
+
+:root[data-theme="dark"] .node-trigger-preview {
+  border-top-color: #2d5d4b;
+  color: #9bcab8;
+}
+
 :root[data-theme="dark"] .node-connect-handle {
   border-color: #6289b6;
   background: #3b648f;

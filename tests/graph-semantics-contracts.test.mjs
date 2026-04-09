@@ -32,6 +32,14 @@ test("node default ports stay backward compatible while carrying preset schema",
   assert.equal(dataDefaults.output[0].required, true);
   assert.equal(dataDefaults.output[0].schema.type, "object");
   assert.deepEqual(dataDefaults.output[0].schema.required, ["rows"]);
+
+  const triggerDefaults = getDefaultPortsForNodeType(NODE_TYPES.U2OS_TRIGGER);
+  assert.equal(triggerDefaults.input.length, 0);
+  assert.equal(triggerDefaults.output.length, 2);
+  assert.equal(triggerDefaults.output[0].id, "payload");
+  assert.equal(triggerDefaults.output[0].payloadType, "object");
+  assert.equal(triggerDefaults.output[1].id, "metadata");
+  assert.equal(triggerDefaults.output[1].payloadType, "object");
 });
 
 test("port presets are role-aware and infer correctly", () => {

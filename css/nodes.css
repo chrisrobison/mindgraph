@@ -201,6 +201,30 @@
   color: #1d6a56;
 }
 
+.node-trigger-event-badge {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+  background: #eaf7ef;
+  border-color: #b8ddc8;
+  color: #1a6b3c;
+}
+
+.node-trigger-preview {
+  margin-top: 0.56rem;
+  padding-top: 0.42rem;
+  border-top: 1px dashed #cfe3d8;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #325247;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .compact-title {
   margin-bottom: 0.32rem;
   font-size: 0.66rem;
@@ -262,6 +286,11 @@
 .mg-node.data {
   width: 260px;
   border-left: 4px solid #0f8a72;
+}
+
+.mg-node.u2os-trigger {
+  width: 280px;
+  border-left: 4px solid #1a6b3c;
 }
 
 .mg-node.compact {

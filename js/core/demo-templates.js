@@ -10,7 +10,7 @@ export const DEMO_TEMPLATES = Object.freeze([
     id: "data-ingest-normalize-analyze-dashboard",
     title: "Ingest -> Normalize -> Analyze -> Dashboard",
     description:
-      "Telemetry ingest is normalized, analyzed with business dimensions, then rendered into a KPI dashboard model.",
+      "A U2OS trigger activates telemetry ingest, which is normalized, analyzed with business dimensions, then rendered into a KPI dashboard model.",
     fileName: "data-ingest-normalize-analyze-dashboard.json"
   },
   {

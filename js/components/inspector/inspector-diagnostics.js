@@ -1,4 +1,5 @@
 import { EVENTS } from "../../core/event-constants.js";
+import { getNodeTypeSpec } from "../../core/graph-semantics.js";
 import { publish } from "../../core/pan.js";
 import { buildExecutionPlan } from "../../runtime/execution-planner.js";
 import { graphStore } from "../../store/graph-store.js";
@@ -21,7 +22,8 @@ const toTitle = (value) =>
 
 const hasMaterializedOutput = (node) => {
   if (!node) return false;
-  if (node.type === "data") return node.data?.cachedData != null;
+  const spec = getNodeTypeSpec(node.type);
+  if (spec?.outputField) return node.data?.[spec.outputField] != null;
   return node.data?.lastOutput != null;
 };
 

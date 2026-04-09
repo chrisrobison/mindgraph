@@ -4,6 +4,7 @@ const nodeTagByType = {
   note: "note-node",
   agent: "agent-node",
   data: "data-node",
+  u2os_trigger: "u2os-trigger-node",
   transformer: "transformer-node",
   view: "view-node",
   action: "action-node"

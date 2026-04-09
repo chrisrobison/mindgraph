@@ -267,6 +267,25 @@ const PORT_PRESETS_BY_NODE_TYPE = Object.freeze({
       })
     ])
   }),
+  [NODE_TYPES.U2OS_TRIGGER]: Object.freeze({
+    input: Object.freeze([]),
+    output: Object.freeze([
+      createPortPreset({
+        id: "payload",
+        label: "Payload",
+        schemaPreset: "object",
+        required: true,
+        description: "U2OS event payload emitted by trigger activation."
+      }),
+      createPortPreset({
+        id: "metadata",
+        label: "Metadata",
+        schemaPreset: "object",
+        required: false,
+        description: "Event envelope metadata (tenantId, receivedAt, traceId, sourceChannel)."
+      })
+    ])
+  }),
   [NODE_TYPES.TRANSFORMER]: Object.freeze({
     input: Object.freeze([
       createPortPreset({
@@ -497,9 +516,14 @@ export const inferPortPresetId = (nodeType, direction, portLike = {}) => {
 export const getDefaultPortsFromPresets = (nodeType) => {
   const inputPresets = listPortPresetsForNodeType(nodeType, "input");
   const outputPresets = listPortPresetsForNodeType(nodeType, "output");
+  const includeAllOutputPresets = nodeType === NODE_TYPES.U2OS_TRIGGER;
 
   return {
     input: inputPresets.length ? [clonePresetPort(inputPresets[0].port)] : [],
-    output: outputPresets.length ? [clonePresetPort(outputPresets[0].port)] : []
+    output: outputPresets.length
+      ? includeAllOutputPresets
+        ? outputPresets.map((preset) => clonePresetPort(preset.port))
+        : [clonePresetPort(outputPresets[0].port)]
+      : []
   };
 };
