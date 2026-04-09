@@ -20,6 +20,9 @@ export const NODE_SIZE_BY_TYPE = Object.freeze({
   agent: Object.freeze({ width: 290, height: 180 }),
   data: Object.freeze({ width: 260, height: 138 }),
   u2os_trigger: Object.freeze({ width: 280, height: 164 }),
+  u2os_query: Object.freeze({ width: 280, height: 164 }),
+  u2os_mutate: Object.freeze({ width: 210, height: 104 }),
+  u2os_emit: Object.freeze({ width: 210, height: 104 }),
   transformer: Object.freeze({ width: 210, height: 104 }),
   view: Object.freeze({ width: 210, height: 104 }),
   action: Object.freeze({ width: 210, height: 104 })
@@ -77,6 +80,47 @@ export const NODE_TEMPLATES = Object.freeze({
       lastReceivedAt: "",
       lastReceivedPayloadPreview: "",
       lastReceivedMetadata: null
+    })
+  }),
+  u2os_query: Object.freeze({
+    label: "U2OS Query",
+    description: "Loads U2OS entity records through the bridge connection.",
+    data: Object.freeze({
+      entity: "reservation",
+      operation: "list",
+      filter: "",
+      limit: 50,
+      includeRelations: [],
+      refreshMode: "manual",
+      refreshInterval: 60,
+      cachedData: null,
+      cachedSchema: null,
+      lastUpdated: ""
+    })
+  }),
+  u2os_mutate: Object.freeze({
+    label: "U2OS Mutate",
+    description: "Creates, updates, or deletes a U2OS business entity.",
+    data: Object.freeze({
+      entity: "reservation",
+      operation: "create",
+      mapInputs: [],
+      status: "idle",
+      lastOutput: null,
+      lastRunAt: "",
+      lastRunSummary: ""
+    })
+  }),
+  u2os_emit: Object.freeze({
+    label: "U2OS Emit",
+    description: "Emits a named U2OS event payload over the bridge.",
+    data: Object.freeze({
+      eventName: "",
+      payloadMapping: [],
+      status: "idle",
+      lastOutput: null,
+      lastRunAt: "",
+      lastRunSummary: ""
     })
   }),
   transformer: Object.freeze({

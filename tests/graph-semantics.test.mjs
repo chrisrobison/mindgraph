@@ -45,8 +45,19 @@ const makeEdge = (type, source, target) => ({
 // NODE_TYPE_SPECS
 // ---------------------------------------------------------------------------
 
-test("NODE_TYPE_SPECS has keys for all seven node types", () => {
-  const expected = ["note", "data", "u2os_trigger", "transformer", "agent", "view", "action"];
+test("NODE_TYPE_SPECS has keys for all node types", () => {
+  const expected = [
+    "note",
+    "data",
+    "u2os_trigger",
+    "u2os_query",
+    "u2os_mutate",
+    "u2os_emit",
+    "transformer",
+    "agent",
+    "view",
+    "action"
+  ];
   for (const key of expected) {
     assert.ok(key in NODE_TYPE_SPECS, `Expected NODE_TYPE_SPECS to have key "${key}"`);
   }
@@ -68,6 +79,18 @@ test("NODE_TYPE_SPECS.u2os_trigger.executable is false", () => {
   assert.equal(NODE_TYPE_SPECS.u2os_trigger.executable, false);
 });
 
+test("NODE_TYPE_SPECS.u2os_query.executable is false", () => {
+  assert.equal(NODE_TYPE_SPECS.u2os_query.executable, false);
+});
+
+test("NODE_TYPE_SPECS.u2os_mutate.executable is true", () => {
+  assert.equal(NODE_TYPE_SPECS.u2os_mutate.executable, true);
+});
+
+test("NODE_TYPE_SPECS.u2os_emit.executable is true", () => {
+  assert.equal(NODE_TYPE_SPECS.u2os_emit.executable, true);
+});
+
 // ---------------------------------------------------------------------------
 // isExecutableNodeType
 // ---------------------------------------------------------------------------
@@ -86,6 +109,18 @@ test("isExecutableNodeType('data') returns false", () => {
 
 test("isExecutableNodeType('u2os_trigger') returns false", () => {
   assert.equal(isExecutableNodeType("u2os_trigger"), false);
+});
+
+test("isExecutableNodeType('u2os_query') returns false", () => {
+  assert.equal(isExecutableNodeType("u2os_query"), false);
+});
+
+test("isExecutableNodeType('u2os_mutate') returns true", () => {
+  assert.equal(isExecutableNodeType("u2os_mutate"), true);
+});
+
+test("isExecutableNodeType('u2os_emit') returns true", () => {
+  assert.equal(isExecutableNodeType("u2os_emit"), true);
 });
 
 test("isExecutableNodeType('transformer') returns true", () => {
@@ -271,6 +306,30 @@ test("getDefaultPortsForNodeType('u2os_trigger') returns payload output as defau
   assert.equal(ports.output.some((port) => port.id === "metadata"), true);
 });
 
+test("getDefaultPortsForNodeType('u2os_query') returns results/count/meta outputs", () => {
+  const ports = getDefaultPortsForNodeType("u2os_query");
+  assert.equal(ports.input.length, 0);
+  assert.equal(ports.output.some((port) => port.id === "results"), true);
+  assert.equal(ports.output.some((port) => port.id === "count"), true);
+  assert.equal(ports.output.some((port) => port.id === "meta"), true);
+});
+
+test("getDefaultPortsForNodeType('u2os_mutate') returns payload/entityId inputs and result/status outputs", () => {
+  const ports = getDefaultPortsForNodeType("u2os_mutate");
+  assert.equal(ports.input.some((port) => port.id === "payload"), true);
+  assert.equal(ports.input.some((port) => port.id === "entityId"), true);
+  assert.equal(ports.output.some((port) => port.id === "result"), true);
+  assert.equal(ports.output.some((port) => port.id === "status"), true);
+});
+
+test("getDefaultPortsForNodeType('u2os_emit') returns payload input and confirmation output", () => {
+  const ports = getDefaultPortsForNodeType("u2os_emit");
+  assert.equal(ports.input.length, 1);
+  assert.equal(ports.input[0].id, "payload");
+  assert.equal(ports.output.length, 1);
+  assert.equal(ports.output[0].id, "confirmation");
+});
+
 // ---------------------------------------------------------------------------
 // validateEdgeSemantics
 // ---------------------------------------------------------------------------
@@ -325,6 +384,12 @@ test("inferDefaultEdgeType(triggerNode, agentNode) returns 'feeds_data'", () => 
   const triggerNode = makeNode("u2os_trigger", { eventName: "order.created" });
   const agentNode = makeNode("agent");
   assert.equal(inferDefaultEdgeType(triggerNode, agentNode), "feeds_data");
+});
+
+test("inferDefaultEdgeType(u2os_query, agentNode) returns 'feeds_data'", () => {
+  const queryNode = makeNode("u2os_query", { entity: "customer", operation: "search" });
+  const agentNode = makeNode("agent");
+  assert.equal(inferDefaultEdgeType(queryNode, agentNode), "feeds_data");
 });
 
 test("inferDefaultEdgeType(agentNode, dataNode) returns 'reads_from'", () => {

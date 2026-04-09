@@ -70,6 +70,23 @@ test("createNode({ type: 'u2os_trigger' }) data has eventName field", () => {
   assert.ok(node.data.eventName !== undefined, "Expected data.eventName to be present");
 });
 
+test("createNode({ type: 'u2os_query' }) data has entity/operation fields", () => {
+  const node = createNode({ type: NODE_TYPES.U2OS_QUERY });
+  assert.ok(node.data.entity !== undefined, "Expected data.entity to be present");
+  assert.ok(node.data.operation !== undefined, "Expected data.operation to be present");
+});
+
+test("createNode({ type: 'u2os_mutate' }) data has entity/operation fields", () => {
+  const node = createNode({ type: NODE_TYPES.U2OS_MUTATE });
+  assert.ok(node.data.entity !== undefined, "Expected data.entity to be present");
+  assert.ok(node.data.operation !== undefined, "Expected data.operation to be present");
+});
+
+test("createNode({ type: 'u2os_emit' }) data has eventName field", () => {
+  const node = createNode({ type: NODE_TYPES.U2OS_EMIT });
+  assert.ok(node.data.eventName !== undefined, "Expected data.eventName to be present");
+});
+
 // ---------------------------------------------------------------------------
 // createEdge
 // ---------------------------------------------------------------------------

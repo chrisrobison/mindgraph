@@ -1,18 +1,18 @@
 {
-  "id": "graph_template_research_synthesize_brief_publish",
-  "title": "Template: Research -> Synthesize -> Brief -> Publish",
+  "id": "graph_template_reservation_intake_and_mutate",
+  "title": "Template: Reservation Intake -> Validate -> Mutate",
   "version": "1.0.0",
   "schemaVersion": 3,
   "nodes": [
     {
-      "id": "note_campaign_goal",
+      "id": "note_reservation_policy",
       "type": "note",
-      "label": "Campaign Goal + Audience Constraints",
-      "description": "High-level campaign objective and non-negotiable messaging constraints.",
-      "position": { "x": 500, "y": 86 },
+      "label": "Reservation Policy",
+      "description": "Business rules for creating or updating reservations.",
+      "position": { "x": 520, "y": 90 },
       "data": {
         "color": "#f4f9ff",
-        "tags": ["context", "campaign"],
+        "tags": ["reservation", "policy"],
         "inputPorts": [],
         "outputPorts": [
           {
@@ -20,129 +20,98 @@
             "label": "Reference",
             "payloadType": "string",
             "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "schema": { "type": "string", "minLength": 1 }
           }
         ]
       },
-      "metadata": {
-        "lane": "context",
-        "demo": "Provides non-executable context into synthesis and drafting stages."
-      }
+      "metadata": { "lane": "context" }
     },
     {
-      "id": "data_market_research",
-      "type": "data",
-      "label": "Market Research Feed",
-      "description": "External market trends and competitive signals ingested as a dataset.",
-      "position": { "x": 116, "y": 262 },
+      "id": "trigger_reservation_requested",
+      "type": "u2os_trigger",
+      "label": "Reservation Requested",
+      "description": "Starts flow when a reservation request event arrives.",
+      "position": { "x": 120, "y": 280 },
       "data": {
-        "source": "json",
-        "sourceType": "json",
-        "sourcePath": "market_data.json",
-        "sourceUrl": "",
-        "jsonPath": "",
-        "refreshMode": "periodic",
-        "refreshInterval": 45,
+        "eventName": "appointment.booked",
+        "filterExpression": "",
         "cachedData": {
-          "rows": [
-            { "segment": "SMB", "growth": 0.18, "intent": "automation" },
-            { "segment": "enterprise", "growth": 0.11, "intent": "governance" }
-          ],
-          "columns": ["segment", "growth", "intent"],
-          "rowCount": 2
+          "customerId": "cust_demo_1",
+          "serviceCode": "SRV-HAIRCUT",
+          "requestedAt": "2026-04-04T16:00:00.000Z"
         },
         "cachedSchema": null,
         "lastUpdated": "2026-04-04T16:00:00.000Z",
-        "readonly": true,
+        "lastReceivedAt": "2026-04-04T16:00:00.000Z",
+        "lastReceivedPayloadPreview": "{\"customerId\":\"cust_demo_1\",\"serviceCode\":\"SRV-HAIRCUT\"}",
+        "lastReceivedMetadata": {
+          "tenantId": "demo-reservations",
+          "receivedAt": "2026-04-04T16:00:00.000Z",
+          "traceId": "trace_reservation_trigger",
+          "sourceChannel": "u2os_bridge"
+        },
         "inputPorts": [],
         "outputPorts": [
           {
-            "id": "dataset",
-            "label": "Dataset",
+            "id": "payload",
+            "label": "Payload",
             "payloadType": "object",
             "required": true,
-            "schema": {
-              "type": "object",
-              "required": ["rows"],
-              "properties": {
-                "rows": {
-                  "type": "array",
-                  "items": { "type": "object", "additionalProperties": true }
-                }
-              }
-            }
+            "schema": { "type": "object", "additionalProperties": true }
+          },
+          {
+            "id": "metadata",
+            "label": "Metadata",
+            "payloadType": "object",
+            "required": false,
+            "schema": { "type": "object", "additionalProperties": true }
           }
         ]
       },
-      "metadata": {
-        "lane": "ingest",
-        "owner": "research-ops"
-      }
+      "metadata": { "lane": "trigger" }
     },
     {
-      "id": "data_brand_policy",
-      "type": "data",
-      "label": "Brand Voice Policy",
-      "description": "Editorial and legal guardrails consulted during brief generation.",
-      "position": { "x": 116, "y": 536 },
+      "id": "query_customer_context",
+      "type": "u2os_query",
+      "label": "Load Customer Context",
+      "description": "Queries U2OS customer records needed for reservation mutation.",
+      "position": { "x": 120, "y": 520 },
       "data": {
-        "source": "json",
-        "sourceType": "json",
-        "sourcePath": "site_config.json",
-        "sourceUrl": "",
-        "jsonPath": "",
-        "refreshMode": "onOpen",
-        "refreshInterval": 120,
+        "entity": "customer",
+        "operation": "search",
+        "filter": "q=emma",
+        "limit": 10,
+        "includeRelations": ["reservation"],
+        "refreshMode": "manual",
+        "refreshInterval": 60,
         "cachedData": {
-          "voice": "clear, confident, factual",
-          "requiredClaims": ["include GDPR positioning", "avoid unsupported ROI claims"],
-          "forbiddenPhrases": ["guaranteed outcome"]
+          "results": [
+            { "id": "cust_demo_1", "name": "Emma Stone", "phone": "+15555550111" }
+          ],
+          "count": 1,
+          "meta": {
+            "executedAt": "2026-04-04T16:00:00.000Z",
+            "queryId": "u2osq_demo_1",
+            "tenantId": "demo-reservations"
+          }
         },
         "cachedSchema": null,
-        "lastUpdated": "2026-04-04T15:58:00.000Z",
-        "readonly": true,
-        "inputPorts": [],
-        "outputPorts": [
-          {
-            "id": "record",
-            "label": "Record",
-            "payloadType": "object",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "additionalProperties": true
-            }
-          }
-        ]
+        "lastUpdated": "2026-04-04T16:00:00.000Z"
       },
-      "metadata": {
-        "lane": "policy",
-        "owner": "brand-team"
-      }
+      "metadata": { "lane": "lookup" }
     },
     {
-      "id": "transform_research_synthesis",
+      "id": "transform_reservation_payload",
       "type": "transformer",
-      "label": "Synthesize Evidence",
-      "description": "Normalizes raw research into ranked insights for downstream reasoning.",
-      "position": { "x": 532, "y": 270 },
+      "label": "Build Reservation Payload",
+      "description": "Builds an API-ready payload from event + query context.",
+      "position": { "x": 540, "y": 340 },
       "data": {
-        "transformExpression": "rank_market_signals_v2",
-        "inputSchema": {},
-        "outputSchema": {},
+        "transformExpression": "compose_reservation_payload",
         "status": "idle",
         "lastOutput": null,
         "lastRunAt": "",
         "lastRunSummary": "",
-        "runtimePolicy": {
-          "maxAttempts": 2,
-          "retryBackoffMs": 300,
-          "retryBackoffFactor": 1.6,
-          "failFast": false
-        },
         "inputPorts": [
           {
             "id": "input",
@@ -162,133 +131,40 @@
           }
         ]
       },
-      "metadata": {
-        "lane": "synthesis",
-        "stage": "research"
-      }
+      "metadata": { "lane": "prepare" }
     },
     {
-      "id": "agent_brief_drafter",
-      "type": "agent",
-      "label": "Draft Executive Brief",
-      "description": "Creates a concise launch brief from synthesized signals and policy context.",
-      "position": { "x": 944, "y": 270 },
+      "id": "mutate_reservation_record",
+      "type": "u2os_mutate",
+      "label": "Write Reservation",
+      "description": "Terminal write node that mutates reservation state in U2OS.",
+      "position": { "x": 980, "y": 340 },
       "data": {
-        "role": "Product Marketing Strategist",
-        "mode": "synthesize",
-        "objective": "Produce a decision-ready brief with positioning, risks, and launch recommendations.",
-        "status": "idle",
-        "confidence": 0.55,
-        "lastRunSummary": "",
-        "lastOutput": null,
-        "lastRunAt": "",
-        "inputSchema": {},
-        "outputSchema": {},
-        "runHistory": [],
-        "activityHistory": [],
-        "allowedDataSources": ["data_brand_policy"],
-        "linkedDataCount": 1,
-        "runtimePolicy": {
-          "maxAttempts": 2,
-          "retryBackoffMs": 350,
-          "retryBackoffFactor": 1.7,
-          "failFast": false
-        },
-        "inputPorts": [
-          {
-            "id": "context",
-            "label": "Context",
-            "payloadType": "object",
-            "required": true,
-            "schema": { "type": "object", "additionalProperties": true }
-          }
+        "entity": "reservation",
+        "operation": "create",
+        "mapInputs": [
+          { "from": "output.customerId", "to": "reservation.customer_id" },
+          { "from": "output.serviceCode", "to": "reservation.service_code" },
+          { "from": "output.requestedAt", "to": "reservation.requested_at" }
         ],
-        "outputPorts": [
-          {
-            "id": "response",
-            "label": "Response",
-            "payloadType": "object",
-            "required": true,
-            "schema": { "type": "object", "additionalProperties": true }
-          }
-        ]
-      },
-      "metadata": {
-        "lane": "briefing",
-        "owner": "pmm"
-      }
-    },
-    {
-      "id": "view_exec_brief",
-      "type": "view",
-      "label": "Render Brief Packet",
-      "description": "Renders an executive-facing brief packet artifact.",
-      "position": { "x": 1342, "y": 270 },
-      "data": {
-        "outputTemplate": "executive_brief_packet",
         "status": "idle",
         "lastOutput": null,
         "lastRunAt": "",
         "lastRunSummary": "",
-        "runtimePolicy": {
-          "maxAttempts": 1,
-          "retryBackoffMs": 250,
-          "retryBackoffFactor": 1.5,
-          "failFast": true
-        },
         "inputPorts": [
           {
-            "id": "model",
-            "label": "Model",
+            "id": "payload",
+            "label": "Payload",
             "payloadType": "object",
             "required": true,
             "schema": { "type": "object", "additionalProperties": true }
-          }
-        ],
-        "outputPorts": [
+          },
           {
-            "id": "render",
-            "label": "Render",
-            "payloadType": "object",
+            "id": "entityId",
+            "label": "Entity ID",
+            "payloadType": "string",
             "required": false,
-            "schema": { "type": "object", "additionalProperties": true }
-          }
-        ]
-      },
-      "metadata": {
-        "lane": "presentation",
-        "audience": "executive"
-      }
-    },
-    {
-      "id": "action_publish_brief",
-      "type": "action",
-      "label": "Publish to CMS Queue",
-      "description": "Publishes the approved brief packet to downstream launch operations.",
-      "position": { "x": 1736, "y": 270 },
-      "data": {
-        "command": "enqueue_campaign_brief",
-        "config": {
-          "channel": "launch_ops_queue",
-          "priority": "high"
-        },
-        "status": "idle",
-        "lastOutput": null,
-        "lastRunAt": "",
-        "lastRunSummary": "",
-        "runtimePolicy": {
-          "maxAttempts": 2,
-          "retryBackoffMs": 500,
-          "retryBackoffFactor": 2,
-          "failFast": false
-        },
-        "inputPorts": [
-          {
-            "id": "command_input",
-            "label": "Command Input",
-            "payloadType": "object",
-            "required": true,
-            "schema": { "type": "object", "additionalProperties": true }
+            "schema": { "type": "string" }
           }
         ],
         "outputPorts": [
@@ -298,21 +174,32 @@
             "payloadType": "object",
             "required": false,
             "schema": { "type": "object", "additionalProperties": true }
+          },
+          {
+            "id": "entityId",
+            "label": "Entity ID",
+            "payloadType": "string",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "id": "status",
+            "label": "Status",
+            "payloadType": "object",
+            "required": true,
+            "schema": { "type": "object", "additionalProperties": true }
           }
         ]
       },
-      "metadata": {
-        "lane": "publish",
-        "owner": "launch-ops"
-      }
+      "metadata": { "lane": "mutate" }
     }
   ],
   "edges": [
     {
-      "id": "edge_note_references_brief",
+      "id": "edge_note_references_mutate",
       "type": "references",
-      "source": "note_campaign_goal",
-      "target": "agent_brief_drafter",
+      "source": "note_reservation_policy",
+      "target": "mutate_reservation_record",
       "label": "references",
       "metadata": {
         "contract": {
@@ -325,29 +212,42 @@
       }
     },
     {
-      "id": "edge_market_to_synthesis",
+      "id": "edge_trigger_to_transform",
       "type": "feeds_data",
-      "source": "data_market_research",
-      "target": "transform_research_synthesis",
+      "source": "trigger_reservation_requested",
+      "target": "transform_reservation_payload",
       "label": "feeds_data",
       "metadata": {
         "contract": {
-          "sourcePort": "dataset",
+          "sourcePort": "payload",
           "targetPort": "input",
           "payloadType": "object",
           "required": true,
-          "schema": {
-            "type": "object",
-            "required": ["rows"]
-          }
+          "schema": { "type": "object", "additionalProperties": true }
         }
       }
     },
     {
-      "id": "edge_dep_synthesis_to_brief",
+      "id": "edge_query_to_transform",
+      "type": "feeds_data",
+      "source": "query_customer_context",
+      "target": "transform_reservation_payload",
+      "label": "feeds_data",
+      "metadata": {
+        "contract": {
+          "sourcePort": "meta",
+          "targetPort": "input",
+          "payloadType": "object",
+          "required": true,
+          "schema": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    {
+      "id": "edge_dep_transform_to_mutate",
       "type": "depends_on",
-      "source": "transform_research_synthesis",
-      "target": "agent_brief_drafter",
+      "source": "transform_reservation_payload",
+      "target": "mutate_reservation_record",
       "label": "depends_on",
       "metadata": {
         "contract": {
@@ -360,195 +260,25 @@
       }
     },
     {
-      "id": "edge_synthesis_to_brief",
+      "id": "edge_transform_to_mutate_payload",
       "type": "feeds_data",
-      "source": "transform_research_synthesis",
-      "target": "agent_brief_drafter",
+      "source": "transform_reservation_payload",
+      "target": "mutate_reservation_record",
       "label": "feeds_data",
       "metadata": {
         "contract": {
           "sourcePort": "output",
-          "targetPort": "context",
+          "targetPort": "payload",
           "payloadType": "object",
           "required": true,
-          "schema": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      }
-    },
-    {
-      "id": "edge_brief_reads_brand_policy",
-      "type": "reads_from",
-      "source": "agent_brief_drafter",
-      "target": "data_brand_policy",
-      "label": "reads_from",
-      "metadata": {
-        "contract": {
-          "sourcePort": "record",
-          "targetPort": "context",
-          "payloadType": "object",
-          "required": true,
-          "schema": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      }
-    },
-    {
-      "id": "edge_dep_brief_to_view",
-      "type": "depends_on",
-      "source": "agent_brief_drafter",
-      "target": "view_exec_brief",
-      "label": "depends_on",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": true,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_brief_to_view",
-      "type": "feeds_data",
-      "source": "agent_brief_drafter",
-      "target": "view_exec_brief",
-      "label": "feeds_data",
-      "metadata": {
-        "contract": {
-          "sourcePort": "response",
-          "targetPort": "model",
-          "payloadType": "object",
-          "required": true,
-          "schema": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      }
-    },
-    {
-      "id": "edge_dep_view_to_publish",
-      "type": "depends_on",
-      "source": "view_exec_brief",
-      "target": "action_publish_brief",
-      "label": "depends_on",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": true,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_view_to_publish",
-      "type": "feeds_data",
-      "source": "view_exec_brief",
-      "target": "action_publish_brief",
-      "label": "feeds_data",
-      "metadata": {
-        "contract": {
-          "sourcePort": "render",
-          "targetPort": "command_input",
-          "payloadType": "object",
-          "required": true,
-          "schema": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      }
-    },
-    {
-      "id": "edge_parent_goal_to_synthesis",
-      "type": "parent_of",
-      "source": "note_campaign_goal",
-      "target": "transform_research_synthesis",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_parent_goal_to_brief",
-      "type": "parent_of",
-      "source": "note_campaign_goal",
-      "target": "agent_brief_drafter",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_parent_goal_to_view",
-      "type": "parent_of",
-      "source": "note_campaign_goal",
-      "target": "view_exec_brief",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_parent_goal_to_publish",
-      "type": "parent_of",
-      "source": "note_campaign_goal",
-      "target": "action_publish_brief",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
+          "schema": { "type": "object", "additionalProperties": true }
         }
       }
     }
   ],
-  "viewport": {
-    "x": -42,
-    "y": -48,
-    "zoom": 0.9
-  },
+  "viewport": { "x": -40, "y": -60, "zoom": 1 },
   "metadata": {
     "createdBy": "mindgraph-demo-template",
-    "templateId": "research-synthesize-brief-publish",
-    "description": "Research-to-publish pipeline emphasizing semantic contracts and runnable staging.",
-    "demoFocus": [
-      "data contracts",
-      "planner dependency ordering",
-      "runtime publish handoff"
-    ],
-    "plannerHints": {
-      "expectedFirstReady": ["transform_research_synthesis"],
-      "likelyBlockedBeforeRun": ["agent_brief_drafter", "view_exec_brief", "action_publish_brief"]
-    }
+    "description": "Reservation intake flow ending in a U2OS mutate terminal node."
   }
 }

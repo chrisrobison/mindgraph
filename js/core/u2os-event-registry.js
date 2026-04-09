@@ -663,6 +663,18 @@ export const EVENT_PAYLOAD_TYPEDEFS = Object.freeze({
   'transportation.trip.completed': 'TransportationTripCompletedPayload',
 });
 
+// MindGraph U2OS-native node entity set.
+// Kept here so event naming + node configuration stay aligned.
+export const MINDGRAPH_U2OS_ENTITIES = Object.freeze([
+  "reservation",
+  "customer",
+  "driver",
+  "invoice",
+  "schedule",
+  "vehicle",
+  "document"
+]);
+
 export const ENTITY_EVENT_DOMAINS = Object.freeze({
   users: EVENTS.USER,
   organizations: EVENTS.ORGANIZATION,
@@ -715,4 +727,3 @@ function collectEventNames(node, bucket = []) {
 }
 
 export const EVENT_NAMES = Object.freeze(collectEventNames(EVENTS));
-

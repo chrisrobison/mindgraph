@@ -1,16 +1,16 @@
 export const DEMO_TEMPLATES = Object.freeze([
   {
     id: "research-synthesize-brief-publish",
-    title: "Research -> Brief -> Publish",
+    title: "Reservation Intake -> Mutate",
     description:
-      "Market research and policy context flow into synthesis, executive brief generation, and CMS publish action.",
+      "A reservation request trigger and customer query feed a payload builder, then terminate in a U2OS mutate write operation.",
     fileName: "research-synthesize-brief-publish.json"
   },
   {
     id: "data-ingest-normalize-analyze-dashboard",
-    title: "Ingest -> Normalize -> Analyze -> Dashboard",
+    title: "Customer Notification -> Emit",
     description:
-      "A U2OS trigger activates telemetry ingest, which is normalized, analyzed with business dimensions, then rendered into a KPI dashboard model.",
+      "Customer update + reservation context feed a composed payload that terminates in a U2OS emit event action.",
     fileName: "data-ingest-normalize-analyze-dashboard.json"
   },
   {

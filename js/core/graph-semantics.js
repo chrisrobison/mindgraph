@@ -70,6 +70,17 @@ const nodeTypeSpecEntries = [
     }
   ],
   [
+    NODE_TYPES.U2OS_QUERY,
+    {
+      role: "data_source",
+      executable: false,
+      requiredDataKeys: ["entity", "operation"],
+      requiredInputSources: 0,
+      outputField: "cachedData",
+      description: "U2OS API data source that resolves entity queries via bridge configuration."
+    }
+  ],
+  [
     NODE_TYPES.TRANSFORMER,
     {
       role: "transform",
@@ -112,6 +123,28 @@ const nodeTypeSpecEntries = [
       outputField: "lastOutput",
       description: "Side-effect node that executes an operation using upstream context."
     }
+  ],
+  [
+    NODE_TYPES.U2OS_MUTATE,
+    {
+      role: "side_effect",
+      executable: true,
+      requiredDataKeys: ["entity", "operation"],
+      requiredInputSources: 1,
+      outputField: "lastOutput",
+      description: "U2OS write operation node for create/update/patch/delete entity requests."
+    }
+  ],
+  [
+    NODE_TYPES.U2OS_EMIT,
+    {
+      role: "side_effect",
+      executable: true,
+      requiredDataKeys: ["eventName"],
+      requiredInputSources: 1,
+      outputField: "lastOutput",
+      description: "U2OS event emitter node that publishes named events to the bridge."
+    }
   ]
 ];
 
@@ -128,7 +161,14 @@ const edgeTypeSpecEntries = [
       informationalOnly: false,
       description: "Target cannot execute until source completes successfully.",
       validSourceTypes: ALL_NODE_TYPES,
-      validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.TRANSFORMER, NODE_TYPES.VIEW, NODE_TYPES.ACTION]
+      validTargetTypes: [
+        NODE_TYPES.AGENT,
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.VIEW,
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
+      ]
     }
   ],
   [
@@ -140,8 +180,8 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: false,
       description: "Source completion requests target execution.",
-      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION],
-      validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION]
+      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT],
+      validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT]
     }
   ],
   [
@@ -153,7 +193,15 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: true,
       informationalOnly: false,
       description: "Containment/scope relationship used for subtree selection.",
-      validSourceTypes: [NODE_TYPES.NOTE, NODE_TYPES.AGENT, NODE_TYPES.TRANSFORMER, NODE_TYPES.VIEW, NODE_TYPES.ACTION],
+      validSourceTypes: [
+        NODE_TYPES.NOTE,
+        NODE_TYPES.AGENT,
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.VIEW,
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
+      ],
       validTargetTypes: ALL_NODE_TYPES
     }
   ],
@@ -169,12 +217,22 @@ const edgeTypeSpecEntries = [
       validSourceTypes: [
         NODE_TYPES.DATA,
         NODE_TYPES.U2OS_TRIGGER,
+        NODE_TYPES.U2OS_QUERY,
         NODE_TYPES.TRANSFORMER,
         NODE_TYPES.AGENT,
         NODE_TYPES.VIEW,
-        NODE_TYPES.ACTION
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
       ],
-      validTargetTypes: [NODE_TYPES.TRANSFORMER, NODE_TYPES.AGENT, NODE_TYPES.VIEW, NODE_TYPES.ACTION]
+      validTargetTypes: [
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.AGENT,
+        NODE_TYPES.VIEW,
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
+      ]
     }
   ],
   [
@@ -186,8 +244,15 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: false,
       description: "Source consumes the target data source.",
-      validSourceTypes: [NODE_TYPES.TRANSFORMER, NODE_TYPES.AGENT, NODE_TYPES.VIEW, NODE_TYPES.ACTION],
-      validTargetTypes: [NODE_TYPES.DATA, NODE_TYPES.U2OS_TRIGGER]
+      validSourceTypes: [
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.AGENT,
+        NODE_TYPES.VIEW,
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
+      ],
+      validTargetTypes: [NODE_TYPES.DATA, NODE_TYPES.U2OS_TRIGGER, NODE_TYPES.U2OS_QUERY]
     }
   ],
   [
@@ -199,7 +264,13 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: false,
       description: "Source persists output to target sink.",
-      validSourceTypes: [NODE_TYPES.TRANSFORMER, NODE_TYPES.AGENT, NODE_TYPES.ACTION],
+      validSourceTypes: [
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.AGENT,
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
+      ],
       validTargetTypes: [NODE_TYPES.DATA, NODE_TYPES.VIEW]
     }
   ],
@@ -213,7 +284,7 @@ const edgeTypeSpecEntries = [
       informationalOnly: false,
       description: "Source transforms target payload or context.",
       validSourceTypes: [NODE_TYPES.TRANSFORMER],
-      validTargetTypes: [NODE_TYPES.DATA, NODE_TYPES.AGENT, NODE_TYPES.VIEW]
+      validTargetTypes: [NODE_TYPES.DATA, NODE_TYPES.U2OS_QUERY, NODE_TYPES.AGENT, NODE_TYPES.VIEW]
     }
   ],
   [
@@ -239,7 +310,14 @@ const edgeTypeSpecEntries = [
       informationalOnly: true,
       description: "Quality review or feedback relation.",
       validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.NOTE],
-      validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.TRANSFORMER, NODE_TYPES.VIEW, NODE_TYPES.ACTION]
+      validTargetTypes: [
+        NODE_TYPES.AGENT,
+        NODE_TYPES.TRANSFORMER,
+        NODE_TYPES.VIEW,
+        NODE_TYPES.ACTION,
+        NODE_TYPES.U2OS_MUTATE,
+        NODE_TYPES.U2OS_EMIT
+      ]
     }
   ],
   [
@@ -251,7 +329,7 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: true,
       description: "Organizational reporting relation.",
-      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.VIEW],
+      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT, NODE_TYPES.VIEW],
       validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.NOTE]
     }
   ],
@@ -520,6 +598,10 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
       else if (key === "mode") next[key] = "orchestrate";
       else if (key === "outputTemplate") next[key] = "summary_card";
       else if (key === "command") next[key] = "noop";
+      else if (key === "entity") next[key] = "reservation";
+      else if (key === "operation" && nodeType === NODE_TYPES.U2OS_QUERY) next[key] = "list";
+      else if (key === "operation" && nodeType === NODE_TYPES.U2OS_MUTATE) next[key] = "create";
+      else if (key === "eventName" && nodeType === NODE_TYPES.U2OS_EMIT) next[key] = "";
       else next[key] = "";
     }
   }
@@ -534,6 +616,24 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
     if (next.lastReceivedAt === undefined) next.lastReceivedAt = "";
     if (next.lastReceivedPayloadPreview === undefined) next.lastReceivedPayloadPreview = "";
     if (next.lastReceivedMetadata === undefined) next.lastReceivedMetadata = null;
+  }
+
+  if (nodeType === NODE_TYPES.U2OS_QUERY) {
+    if (next.filter === undefined) next.filter = "";
+    if (next.limit === undefined) next.limit = 50;
+    if (!Number.isFinite(Number(next.limit)) || Number(next.limit) <= 0) next.limit = 50;
+    if (!Array.isArray(next.includeRelations)) next.includeRelations = [];
+    if (next.refreshMode === undefined) next.refreshMode = "manual";
+    if (next.refreshInterval === undefined) next.refreshInterval = 60;
+    if (next.lastUpdated === undefined) next.lastUpdated = "";
+  }
+
+  if (nodeType === NODE_TYPES.U2OS_MUTATE) {
+    if (!Array.isArray(next.mapInputs)) next.mapInputs = [];
+  }
+
+  if (nodeType === NODE_TYPES.U2OS_EMIT) {
+    if (!Array.isArray(next.payloadMapping)) next.payloadMapping = [];
   }
 
   if (next.lastRunAt === undefined && spec.executable) {
@@ -659,7 +759,11 @@ export const inferDefaultEdgeType = (sourceNode, targetNode) => {
   if (!sourceNode || !targetNode) return EDGE_TYPES.DEPENDS_ON;
 
   if (
-    (sourceNode.type === NODE_TYPES.DATA || sourceNode.type === NODE_TYPES.U2OS_TRIGGER) &&
+    (
+      sourceNode.type === NODE_TYPES.DATA ||
+      sourceNode.type === NODE_TYPES.U2OS_TRIGGER ||
+      sourceNode.type === NODE_TYPES.U2OS_QUERY
+    ) &&
     isExecutableNodeType(targetNode.type)
   ) {
     return EDGE_TYPES.FEEDS_DATA;
@@ -667,7 +771,11 @@ export const inferDefaultEdgeType = (sourceNode, targetNode) => {
 
   if (
     isExecutableNodeType(sourceNode.type) &&
-    (targetNode.type === NODE_TYPES.DATA || targetNode.type === NODE_TYPES.U2OS_TRIGGER)
+    (
+      targetNode.type === NODE_TYPES.DATA ||
+      targetNode.type === NODE_TYPES.U2OS_TRIGGER ||
+      targetNode.type === NODE_TYPES.U2OS_QUERY
+    )
   ) {
     return EDGE_TYPES.READS_FROM;
   }

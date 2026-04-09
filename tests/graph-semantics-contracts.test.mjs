@@ -40,6 +40,23 @@ test("node default ports stay backward compatible while carrying preset schema",
   assert.equal(triggerDefaults.output[0].payloadType, "object");
   assert.equal(triggerDefaults.output[1].id, "metadata");
   assert.equal(triggerDefaults.output[1].payloadType, "object");
+
+  const queryDefaults = getDefaultPortsForNodeType(NODE_TYPES.U2OS_QUERY);
+  assert.equal(queryDefaults.input.length, 0);
+  assert.equal(queryDefaults.output.some((port) => port.id === "results"), true);
+  assert.equal(queryDefaults.output.some((port) => port.id === "count"), true);
+  assert.equal(queryDefaults.output.some((port) => port.id === "meta"), true);
+
+  const mutateDefaults = getDefaultPortsForNodeType(NODE_TYPES.U2OS_MUTATE);
+  assert.equal(mutateDefaults.input.some((port) => port.id === "payload"), true);
+  assert.equal(mutateDefaults.input.some((port) => port.id === "entityId"), true);
+  assert.equal(mutateDefaults.output.some((port) => port.id === "status"), true);
+
+  const emitDefaults = getDefaultPortsForNodeType(NODE_TYPES.U2OS_EMIT);
+  assert.equal(emitDefaults.input.length, 1);
+  assert.equal(emitDefaults.input[0].id, "payload");
+  assert.equal(emitDefaults.output.length, 1);
+  assert.equal(emitDefaults.output[0].id, "confirmation");
 });
 
 test("port presets are role-aware and infer correctly", () => {

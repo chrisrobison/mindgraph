@@ -9,6 +9,9 @@ const ICON_BY_TOOL = {
   "create:agent": "assets/toolbar/agent.svg",
   "create:data": "assets/toolbar/data.svg",
   "create:u2os_trigger": "assets/toolbar/data.svg",
+  "create:u2os_query": "assets/toolbar/data.svg",
+  "create:u2os_mutate": "assets/toolbar/action.svg",
+  "create:u2os_emit": "assets/toolbar/transform.svg",
   "create:transformer": "assets/toolbar/transform.svg",
   "create:view": "assets/toolbar/view.svg",
   "create:action": "assets/toolbar/action.svg",
@@ -110,7 +113,12 @@ const TOOL_GROUPS = [
   },
   {
     title: "Triggers & Connectors",
-    tools: [{ id: "create:u2os_trigger", label: "U2OS Trigger Node" }]
+    tools: [
+      { id: "create:u2os_trigger", label: "U2OS Trigger Node" },
+      { id: "create:u2os_query", label: "U2OS Query Node" },
+      { id: "create:u2os_mutate", label: "U2OS Mutate Node" },
+      { id: "create:u2os_emit", label: "U2OS Emit Node" }
+    ]
   },
   {
     title: "Structure",

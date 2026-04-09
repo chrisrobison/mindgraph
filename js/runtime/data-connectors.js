@@ -1,8 +1,10 @@
 import { EVENTS } from "../core/event-constants.js";
 import { publish, subscribe } from "../core/pan.js";
 import { NODE_TYPES } from "../core/types.js";
+import { getU2osEntityResource } from "../core/u2os-node-catalog.js";
 import { graphStore } from "../store/graph-store.js";
 import { inferSchema } from "./schema-inference.js";
+import { bridgeClient } from "./u2os-bridge-client.js";
 
 const DEFAULT_JSON_PATH = "/data/sample/site_config.json";
 const MIN_PERIODIC_INTERVAL_MS = 5_000;
@@ -106,6 +108,82 @@ const normalizeSourceType = (value) => {
   return "json";
 };
 
+const normalizeU2osQueryOperation = (value) => {
+  const op = String(value ?? "list").trim().toLowerCase();
+  if (op === "get" || op === "search") return op;
+  return "list";
+};
+
+const normalizePositiveInt = (value, fallback = 50, max = 500) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(Math.round(parsed), max);
+};
+
+const splitFilterPairs = (raw) =>
+  String(raw ?? "")
+    .split(/[,&\n]+/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const filterToParams = (rawFilter) => {
+  const raw = String(rawFilter ?? "").trim();
+  if (!raw) return { params: {}, jsonPath: "", keyword: "" };
+
+  if (raw.startsWith("$")) {
+    return { params: {}, jsonPath: raw, keyword: "" };
+  }
+
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const params = {};
+        Object.entries(parsed).forEach(([key, value]) => {
+          params[key] = value == null ? "" : String(value);
+        });
+        return { params, jsonPath: "", keyword: "" };
+      }
+    } catch {
+      // fall through to pair/keyword parsing
+    }
+  }
+
+  const pairEntries = splitFilterPairs(raw);
+  const pairParams = {};
+  let sawPair = false;
+  pairEntries.forEach((entry) => {
+    const separatorIndex = entry.indexOf("=");
+    if (separatorIndex < 0) return;
+    sawPair = true;
+    const key = entry.slice(0, separatorIndex).trim();
+    const value = entry.slice(separatorIndex + 1).trim();
+    if (!key) return;
+    pairParams[key] = value;
+  });
+
+  if (sawPair) return { params: pairParams, jsonPath: "", keyword: "" };
+  return { params: {}, jsonPath: "", keyword: raw };
+};
+
+const resolveIdentifierFromFilter = (operation, filter) => {
+  if (operation !== "get") return "";
+  if (filter && typeof filter === "object" && !Array.isArray(filter)) {
+    const identifier = filter.id ?? filter.entityId ?? filter.identifier ?? filter.public_id ?? "";
+    return String(identifier ?? "").trim();
+  }
+
+  const raw = String(filter ?? "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("$")) return "";
+  if (raw.includes("=")) {
+    const params = filterToParams(raw).params;
+    return String(params.id ?? params.entityId ?? params.identifier ?? params.public_id ?? "").trim();
+  }
+
+  return raw;
+};
+
 const normalizeFilterExpression = (value) => String(value ?? "").trim();
 
 const parseFilterValue = (value) => {
@@ -199,7 +277,7 @@ class DataConnectors {
       subscribe(EVENTS.GRAPH_NODE_UPDATED, ({ payload }) => {
         const node = payload?.node ?? (payload?.nodeId ? graphStore.getNode(payload.nodeId) : null);
         if (!node) return;
-        if (node.type === NODE_TYPES.DATA) this.#syncPeriodicRefresh();
+        if (node.type === NODE_TYPES.DATA || node.type === NODE_TYPES.U2OS_QUERY) this.#syncPeriodicRefresh();
         this.#syncU2osTriggerSubscriptions();
       })
     );
@@ -207,7 +285,7 @@ class DataConnectors {
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_NODE_CREATED, ({ payload }) => {
         const nodeType = payload?.node?.type;
-        if (nodeType === NODE_TYPES.DATA) this.#syncPeriodicRefresh();
+        if (nodeType === NODE_TYPES.DATA || nodeType === NODE_TYPES.U2OS_QUERY) this.#syncPeriodicRefresh();
         this.#syncU2osTriggerSubscriptions();
       })
     );
@@ -215,7 +293,7 @@ class DataConnectors {
     this.#dispose.push(
       subscribe(EVENTS.GRAPH_SELECTION_SET, ({ payload }) => {
         const node = graphStore.getNode(payload?.nodeId);
-        if (!node || node.type !== "data") return;
+        if (!node || (node.type !== NODE_TYPES.DATA && node.type !== NODE_TYPES.U2OS_QUERY)) return;
 
         const refreshMode = String(node.data?.refreshMode ?? "manual").toLowerCase();
         if (refreshMode === "onopen") {
@@ -263,24 +341,28 @@ class DataConnectors {
     const force = options.force === true || reason === "manual";
 
     const node = graphStore.getNode(sourceId);
-    if (!node || node.type !== "data") {
-      throw new Error(`Data node not found: ${sourceId}`);
+    if (!node || (node.type !== NODE_TYPES.DATA && node.type !== NODE_TYPES.U2OS_QUERY)) {
+      throw new Error(`Data source node not found: ${sourceId}`);
     }
 
     try {
-      const { refreshedAt, data, fromCache, sourceType } = await this.#loadNodeData(node, { force });
+      const { refreshedAt, data, fromCache, sourceType } =
+        node.type === NODE_TYPES.U2OS_QUERY
+          ? await this.#loadU2osQueryData(node, { force })
+          : await this.#loadNodeData(node, { force });
       const schema = inferSchema(data);
 
-      const patch = {
-        data: {
-          ...(node.data ?? {}),
-          sourceType,
-          source: sourceType,
-          cachedData: data,
-          cachedSchema: schema,
-          lastUpdated: refreshedAt
-        }
+      const patchData = {
+        ...(node.data ?? {}),
+        cachedData: data,
+        cachedSchema: schema,
+        lastUpdated: refreshedAt
       };
+      if (node.type === NODE_TYPES.DATA) {
+        patchData.sourceType = sourceType;
+        patchData.source = sourceType;
+      }
+      const patch = { data: patchData };
 
       publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
         nodeId: node.id,
@@ -324,7 +406,9 @@ class DataConnectors {
 
   #syncPeriodicRefresh(nodes = null) {
     const allNodes = Array.isArray(nodes) ? nodes : graphStore.getNodes();
-    const dataNodes = allNodes.filter((node) => node.type === "data");
+    const dataNodes = allNodes.filter(
+      (node) => node.type === NODE_TYPES.DATA || node.type === NODE_TYPES.U2OS_QUERY
+    );
 
     const periodicIds = new Set();
 
@@ -360,7 +444,11 @@ class DataConnectors {
 
   #syncAgentLinkedDataCounts() {
     const nodes = graphStore.getNodes();
-    const dataNodeIds = new Set(nodes.filter((node) => node.type === "data").map((node) => node.id));
+    const dataNodeIds = new Set(
+      nodes
+        .filter((node) => node.type === NODE_TYPES.DATA || node.type === NODE_TYPES.U2OS_QUERY)
+        .map((node) => node.id)
+    );
 
     nodes.forEach((node) => {
       if (node.type !== "agent") return;
@@ -492,6 +580,87 @@ class DataConnectors {
 
     return {
       sourceType,
+      data: normalizedData,
+      refreshedAt,
+      fromCache: false
+    };
+  }
+
+  async #loadU2osQueryData(node, { force }) {
+    const entity = String(node.data?.entity ?? "reservation").trim().toLowerCase();
+    const operation = normalizeU2osQueryOperation(node.data?.operation);
+    const resource = getU2osEntityResource(entity);
+    if (!resource) {
+      throw new Error(`Unsupported U2OS query entity: ${entity || "(empty)"}`);
+    }
+
+    const limit = normalizePositiveInt(node.data?.limit, 50, 500);
+    const includeRelations = Array.isArray(node.data?.includeRelations)
+      ? node.data.includeRelations.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [];
+    const rawFilter = node.data?.filter;
+    const filterShape = filterToParams(rawFilter);
+    const identifier = resolveIdentifierFromFilter(operation, rawFilter);
+
+    const cacheKey = JSON.stringify({
+      type: "u2os_query",
+      entity,
+      operation,
+      identifier,
+      limit,
+      includeRelations,
+      filterParams: filterShape.params,
+      keyword: filterShape.keyword,
+      jsonPath: filterShape.jsonPath
+    });
+    const cacheEntry = this.#cache.get(node.id);
+    const ageMs = cacheEntry ? Date.now() - cacheEntry.timestamp : Number.POSITIVE_INFINITY;
+    const cacheTtl = Math.max(DEFAULT_CACHE_TTL_MS, toIntervalMs(node.data?.refreshInterval));
+
+    if (!force && cacheEntry && cacheEntry.key === cacheKey && ageMs < cacheTtl) {
+      return {
+        sourceType: "u2os_query",
+        data: deepClone(cacheEntry.data),
+        refreshedAt: cacheEntry.refreshedAt,
+        fromCache: true
+      };
+    }
+
+    const queryResponse = await bridgeClient.queryU2osEntity({
+      entity,
+      operation,
+      identifier,
+      filter: filterShape.params,
+      keyword: filterShape.keyword,
+      limit,
+      includeRelations
+    });
+    const baseResults = Array.isArray(queryResponse?.results) ? queryResponse.results : [];
+    const filteredResults = filterShape.jsonPath
+      ? baseResults.filter((entry) => valueLooksPresent(applyJsonPath(entry, filterShape.jsonPath)))
+      : baseResults;
+    const normalizedData = {
+      results: filteredResults,
+      count: typeof queryResponse?.count === "number" ? queryResponse.count : filteredResults.length,
+      meta: {
+        ...(queryResponse?.meta ?? {}),
+        entity,
+        operation,
+        limit,
+        includeRelations
+      }
+    };
+    const refreshedAt = new Date().toISOString();
+
+    this.#cache.set(node.id, {
+      key: cacheKey,
+      data: deepClone(normalizedData),
+      refreshedAt,
+      timestamp: Date.now()
+    });
+
+    return {
+      sourceType: "u2os_query",
       data: normalizedData,
       refreshedAt,
       fromCache: false

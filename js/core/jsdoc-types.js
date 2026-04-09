@@ -4,7 +4,7 @@
  */
 
 /**
- * @typedef {"note" | "data" | "u2os_trigger" | "transformer" | "agent" | "view" | "action"} NodeType
+ * @typedef {"note" | "data" | "u2os_trigger" | "u2os_query" | "u2os_mutate" | "u2os_emit" | "transformer" | "agent" | "view" | "action"} NodeType
  */
 
 /**

@@ -5,6 +5,9 @@ const nodeTagByType = {
   agent: "agent-node",
   data: "data-node",
   u2os_trigger: "u2os-trigger-node",
+  u2os_query: "u2os-query-node",
+  u2os_mutate: "u2os-mutate-node",
+  u2os_emit: "u2os-emit-node",
   transformer: "transformer-node",
   view: "view-node",
   action: "action-node"

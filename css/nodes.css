@@ -293,6 +293,11 @@
   border-left: 4px solid #1a6b3c;
 }
 
+.mg-node.u2os-query {
+  width: 280px;
+  border-left: 4px solid #1a6b3c;
+}
+
 .mg-node.compact {
   width: 210px;
   min-height: 104px;
@@ -309,6 +314,14 @@
 
 .mg-node.action {
   border-left: 4px solid #b23f43;
+}
+
+.mg-node.u2os-mutate {
+  border-left: 4px solid #b23f43;
+}
+
+.mg-node.u2os-emit {
+  border-left: 4px solid #9b5c13;
 }
 
 .node-connect-handle {

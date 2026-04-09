@@ -1,18 +1,18 @@
 {
-  "id": "graph_template_data_ingest_normalize_analyze_dashboard",
-  "title": "Template: Data Ingest -> Normalize -> Analyze -> Dashboard",
+  "id": "graph_template_customer_notification_emit",
+  "title": "Template: Customer Notification -> Emit Event",
   "version": "1.0.0",
   "schemaVersion": 3,
   "nodes": [
     {
-      "id": "note_pipeline_context",
+      "id": "note_notification_policy",
       "type": "note",
-      "label": "Dashboard Objective + KPI Definitions",
-      "description": "Defines the business questions and KPI interpretation rules for the analytics flow.",
-      "position": { "x": 538, "y": 88 },
+      "label": "Notification Policy",
+      "description": "Rules for when customer-facing notifications should be emitted.",
+      "position": { "x": 520, "y": 88 },
       "data": {
         "color": "#f4f9ff",
-        "tags": ["analytics", "kpi"],
+        "tags": ["notification", "customer"],
         "inputPorts": [],
         "outputPorts": [
           {
@@ -20,42 +20,34 @@
             "label": "Reference",
             "payloadType": "string",
             "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "schema": { "type": "string", "minLength": 1 }
           }
         ]
       },
-      "metadata": {
-        "lane": "context"
-      }
+      "metadata": { "lane": "context" }
     },
     {
-      "id": "data_event_ingest",
+      "id": "trigger_customer_updated",
       "type": "u2os_trigger",
-      "label": "U2OS Telemetry Trigger",
-      "description": "Activates pipeline normalization when upstream telemetry events arrive from U2OS.",
-      "position": { "x": 112, "y": 274 },
+      "label": "Customer Updated",
+      "description": "Starts notification flow whenever a customer record changes.",
+      "position": { "x": 120, "y": 260 },
       "data": {
-        "eventName": "event.created",
+        "eventName": "customer.updated",
         "filterExpression": "",
         "cachedData": {
-          "rows": [
-            { "campaign": "spring_launch", "impressions": 120000, "clicks": 3400, "spend": 9200 },
-            { "campaign": "security_push", "impressions": 82000, "clicks": 2100, "spend": 6100 }
-          ],
-          "columns": ["campaign", "impressions", "clicks", "spend"],
-          "rowCount": 2
+          "id": "cust_demo_22",
+          "status": "vip",
+          "name": "Avery Mills"
         },
         "cachedSchema": null,
-        "lastUpdated": "2026-04-04T16:05:00.000Z",
-        "lastReceivedAt": "2026-04-04T16:05:00.000Z",
-        "lastReceivedPayloadPreview": "{\"rows\":[{\"campaign\":\"spring_launch\",\"impressions\":120000,\"clicks\":3400,\"spend\":9200}",
+        "lastUpdated": "2026-04-04T15:55:00.000Z",
+        "lastReceivedAt": "2026-04-04T15:55:00.000Z",
+        "lastReceivedPayloadPreview": "{\"id\":\"cust_demo_22\",\"status\":\"vip\",\"name\":\"Avery Mills\"}",
         "lastReceivedMetadata": {
-          "tenantId": "demo-analytics",
-          "receivedAt": "2026-04-04T16:05:00.000Z",
-          "traceId": "trace_demo_event_ingest",
+          "tenantId": "demo-notifications",
+          "receivedAt": "2026-04-04T15:55:00.000Z",
+          "traceId": "trace_customer_updated",
           "sourceChannel": "u2os_bridge"
         },
         "inputPorts": [],
@@ -65,139 +57,66 @@
             "label": "Payload",
             "payloadType": "object",
             "required": true,
-            "schema": {
-              "type": "object",
-              "additionalProperties": true
-            }
+            "schema": { "type": "object", "additionalProperties": true }
           },
           {
             "id": "metadata",
             "label": "Metadata",
             "payloadType": "object",
             "required": false,
-            "schema": {
-              "type": "object",
-              "properties": {
-                "tenantId": { "type": "string" },
-                "receivedAt": { "type": "string" },
-                "traceId": { "type": "string" },
-                "sourceChannel": { "type": "string" }
-              }
-            }
-          }
-        ]
-      },
-      "metadata": {
-        "lane": "trigger",
-        "owner": "integrations"
-      }
-    },
-    {
-      "id": "transform_normalize_events",
-      "type": "transformer",
-      "label": "Normalize Event Schema",
-      "description": "Converts heterogeneous ingest payloads into a planner-friendly normalized dataset.",
-      "position": { "x": 500, "y": 274 },
-      "data": {
-        "transformExpression": "normalize_campaign_events_v3",
-        "inputSchema": {},
-        "outputSchema": {},
-        "status": "idle",
-        "lastOutput": null,
-        "lastRunAt": "",
-        "lastRunSummary": "",
-        "runtimePolicy": {
-          "maxAttempts": 2,
-          "retryBackoffMs": 300,
-          "retryBackoffFactor": 1.7,
-          "failFast": false
-        },
-        "inputPorts": [
-          {
-            "id": "input",
-            "label": "Input",
-            "payloadType": "object",
-            "required": true,
-            "schema": { "type": "object", "additionalProperties": true }
-          }
-        ],
-        "outputPorts": [
-          {
-            "id": "output",
-            "label": "Output",
-            "payloadType": "object",
-            "required": true,
             "schema": { "type": "object", "additionalProperties": true }
           }
         ]
       },
-      "metadata": {
-        "lane": "normalize",
-        "owner": "data-platform"
-      }
+      "metadata": { "lane": "trigger" }
     },
     {
-      "id": "data_business_dimensions",
-      "type": "data",
-      "label": "Business Dimensions",
-      "description": "Lookup dataset for team, region, and product taxonomy mappings.",
-      "position": { "x": 504, "y": 528 },
+      "id": "query_reservation_context",
+      "type": "u2os_query",
+      "label": "Reservation Context",
+      "description": "Loads reservation context to personalize customer notifications.",
+      "position": { "x": 120, "y": 500 },
       "data": {
-        "source": "json",
-        "sourceType": "json",
-        "sourcePath": "support_db.json",
-        "sourceUrl": "",
-        "jsonPath": "",
-        "refreshMode": "onOpen",
-        "refreshInterval": 180,
+        "entity": "reservation",
+        "operation": "search",
+        "filter": "status=confirmed",
+        "limit": 25,
+        "includeRelations": ["customer", "schedule"],
+        "refreshMode": "manual",
+        "refreshInterval": 60,
         "cachedData": {
-          "rows": [
-            { "campaign": "spring_launch", "region": "NA", "team": "Growth" },
-            { "campaign": "security_push", "region": "EU", "team": "Security" }
+          "results": [
+            {
+              "id": "res_demo_55",
+              "customer_id": "cust_demo_22",
+              "status": "confirmed",
+              "start_at": "2026-04-10T18:00:00.000Z"
+            }
           ],
-          "columns": ["campaign", "region", "team"],
-          "rowCount": 2
+          "count": 1,
+          "meta": {
+            "executedAt": "2026-04-04T15:55:00.000Z",
+            "queryId": "u2osq_demo_77",
+            "tenantId": "demo-notifications"
+          }
         },
         "cachedSchema": null,
-        "lastUpdated": "2026-04-04T16:01:00.000Z",
-        "readonly": true,
-        "inputPorts": [],
-        "outputPorts": [
-          {
-            "id": "dataset",
-            "label": "Dataset",
-            "payloadType": "object",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "required": ["rows"],
-              "properties": {
-                "rows": {
-                  "type": "array",
-                  "items": { "type": "object", "additionalProperties": true }
-                }
-              }
-            }
-          }
-        ]
+        "lastUpdated": "2026-04-04T15:55:00.000Z"
       },
-      "metadata": {
-        "lane": "enrichment",
-        "owner": "biz-ops"
-      }
+      "metadata": { "lane": "lookup" }
     },
     {
-      "id": "agent_kpi_analyst",
+      "id": "agent_notification_composer",
       "type": "agent",
-      "label": "Analyze KPI Trends",
-      "description": "Produces diagnostic KPI summaries and anomaly notes from normalized telemetry.",
-      "position": { "x": 896, "y": 274 },
+      "label": "Compose Notification Payload",
+      "description": "Composes final event payload for customer notification modules.",
+      "position": { "x": 560, "y": 320 },
       "data": {
-        "role": "Analytics Lead",
-        "mode": "analyze",
-        "objective": "Identify KPI changes, outliers, and campaign health signals for the dashboard model.",
+        "role": "Notification Orchestrator",
+        "mode": "orchestrate",
+        "objective": "Build event payloads that downstream U2OS modules can consume.",
         "status": "idle",
-        "confidence": 0.58,
+        "confidence": 0.6,
         "lastRunSummary": "",
         "lastOutput": null,
         "lastRunAt": "",
@@ -205,14 +124,8 @@
         "outputSchema": {},
         "runHistory": [],
         "activityHistory": [],
-        "allowedDataSources": ["data_business_dimensions"],
+        "allowedDataSources": ["query_reservation_context"],
         "linkedDataCount": 1,
-        "runtimePolicy": {
-          "maxAttempts": 2,
-          "retryBackoffMs": 320,
-          "retryBackoffFactor": 1.6,
-          "failFast": false
-        },
         "inputPorts": [
           {
             "id": "context",
@@ -220,16 +133,6 @@
             "payloadType": "object",
             "required": true,
             "schema": { "type": "object", "additionalProperties": true }
-          },
-          {
-            "id": "dataset",
-            "label": "Dataset",
-            "payloadType": "object",
-            "required": false,
-            "schema": {
-              "type": "object",
-              "required": ["rows"]
-            }
           }
         ],
         "outputPorts": [
@@ -242,33 +145,29 @@
           }
         ]
       },
-      "metadata": {
-        "lane": "analyze",
-        "owner": "analytics"
-      }
+      "metadata": { "lane": "compose" }
     },
     {
-      "id": "view_dashboard_renderer",
-      "type": "view",
-      "label": "Render Metrics Dashboard",
-      "description": "Renders an operations dashboard model from analytic outputs.",
-      "position": { "x": 1288, "y": 274 },
+      "id": "emit_customer_notification",
+      "type": "u2os_emit",
+      "label": "Emit Customer Notification",
+      "description": "Terminal node that emits a LARC event back into U2OS.",
+      "position": { "x": 1000, "y": 320 },
       "data": {
-        "outputTemplate": "operations_kpi_dashboard",
+        "eventName": "task.created",
+        "payloadMapping": [
+          { "from": "response.customerId", "to": "payload.customerId" },
+          { "from": "response.message", "to": "payload.message" },
+          { "from": "response.channel", "to": "payload.channel" }
+        ],
         "status": "idle",
         "lastOutput": null,
         "lastRunAt": "",
         "lastRunSummary": "",
-        "runtimePolicy": {
-          "maxAttempts": 1,
-          "retryBackoffMs": 250,
-          "retryBackoffFactor": 1.5,
-          "failFast": true
-        },
         "inputPorts": [
           {
-            "id": "model",
-            "label": "Model",
+            "id": "payload",
+            "label": "Payload",
             "payloadType": "object",
             "required": true,
             "schema": { "type": "object", "additionalProperties": true }
@@ -276,26 +175,23 @@
         ],
         "outputPorts": [
           {
-            "id": "render",
-            "label": "Render",
+            "id": "confirmation",
+            "label": "Confirmation",
             "payloadType": "object",
-            "required": false,
+            "required": true,
             "schema": { "type": "object", "additionalProperties": true }
           }
         ]
       },
-      "metadata": {
-        "lane": "dashboard",
-        "owner": "revops"
-      }
+      "metadata": { "lane": "emit" }
     }
   ],
   "edges": [
     {
-      "id": "edge_note_informs_analyzer",
+      "id": "edge_note_informs_composer",
       "type": "informs",
-      "source": "note_pipeline_context",
-      "target": "agent_kpi_analyst",
+      "source": "note_notification_policy",
+      "target": "agent_notification_composer",
       "label": "informs",
       "metadata": {
         "contract": {
@@ -308,83 +204,42 @@
       }
     },
     {
-      "id": "edge_ingest_to_normalize",
+      "id": "edge_trigger_to_composer",
       "type": "feeds_data",
-      "source": "data_event_ingest",
-      "target": "transform_normalize_events",
+      "source": "trigger_customer_updated",
+      "target": "agent_notification_composer",
       "label": "feeds_data",
       "metadata": {
         "contract": {
           "sourcePort": "payload",
-          "targetPort": "input",
-          "payloadType": "object",
-          "required": true,
-          "schema": {
-            "type": "object",
-            "required": ["rows"]
-          }
-        }
-      }
-    },
-    {
-      "id": "edge_dep_normalize_to_analyze",
-      "type": "depends_on",
-      "source": "transform_normalize_events",
-      "target": "agent_kpi_analyst",
-      "label": "depends_on",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": true,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_normalize_transforms_analyze",
-      "type": "transforms",
-      "source": "transform_normalize_events",
-      "target": "agent_kpi_analyst",
-      "label": "transforms",
-      "metadata": {
-        "contract": {
-          "sourcePort": "output",
           "targetPort": "context",
           "payloadType": "object",
           "required": true,
-          "schema": {
-            "type": "object",
-            "additionalProperties": true
-          }
+          "schema": { "type": "object", "additionalProperties": true }
         }
       }
     },
     {
-      "id": "edge_analyze_reads_dimensions",
-      "type": "reads_from",
-      "source": "agent_kpi_analyst",
-      "target": "data_business_dimensions",
-      "label": "reads_from",
+      "id": "edge_query_to_composer",
+      "type": "feeds_data",
+      "source": "query_reservation_context",
+      "target": "agent_notification_composer",
+      "label": "feeds_data",
       "metadata": {
         "contract": {
-          "sourcePort": "dataset",
-          "targetPort": "dataset",
+          "sourcePort": "meta",
+          "targetPort": "context",
           "payloadType": "object",
-          "required": false,
-          "schema": {
-            "type": "object",
-            "required": ["rows"]
-          }
+          "required": true,
+          "schema": { "type": "object", "additionalProperties": true }
         }
       }
     },
     {
-      "id": "edge_dep_analyze_to_dashboard",
+      "id": "edge_dep_composer_to_emit",
       "type": "depends_on",
-      "source": "agent_kpi_analyst",
-      "target": "view_dashboard_renderer",
+      "source": "agent_notification_composer",
+      "target": "emit_customer_notification",
       "label": "depends_on",
       "metadata": {
         "contract": {
@@ -397,90 +252,25 @@
       }
     },
     {
-      "id": "edge_analyze_to_dashboard",
+      "id": "edge_composer_to_emit",
       "type": "feeds_data",
-      "source": "agent_kpi_analyst",
-      "target": "view_dashboard_renderer",
+      "source": "agent_notification_composer",
+      "target": "emit_customer_notification",
       "label": "feeds_data",
       "metadata": {
         "contract": {
           "sourcePort": "response",
-          "targetPort": "model",
+          "targetPort": "payload",
           "payloadType": "object",
           "required": true,
-          "schema": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      }
-    },
-    {
-      "id": "edge_parent_context_to_normalize",
-      "type": "parent_of",
-      "source": "note_pipeline_context",
-      "target": "transform_normalize_events",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_parent_context_to_analyze",
-      "type": "parent_of",
-      "source": "note_pipeline_context",
-      "target": "agent_kpi_analyst",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
-        }
-      }
-    },
-    {
-      "id": "edge_parent_context_to_dashboard",
-      "type": "parent_of",
-      "source": "note_pipeline_context",
-      "target": "view_dashboard_renderer",
-      "label": "parent_of",
-      "metadata": {
-        "contract": {
-          "sourcePort": null,
-          "targetPort": null,
-          "payloadType": "none",
-          "required": false,
-          "schema": {}
+          "schema": { "type": "object", "additionalProperties": true }
         }
       }
     }
   ],
-  "viewport": {
-    "x": -40,
-    "y": -54,
-    "zoom": 0.92
-  },
+  "viewport": { "x": -40, "y": -80, "zoom": 1 },
   "metadata": {
     "createdBy": "mindgraph-demo-template",
-    "templateId": "data-ingest-normalize-analyze-dashboard",
-    "description": "Analytics pipeline showing ingest normalization, semantic transform edges, and dashboard rendering.",
-    "demoFocus": [
-      "transforms edge semantics",
-      "reads_from enrichment",
-      "dashboard rendering"
-    ],
-    "plannerHints": {
-      "expectedFirstReady": ["transform_normalize_events"],
-      "likelyBlockedBeforeRun": ["agent_kpi_analyst", "view_dashboard_renderer"]
-    }
+    "description": "Customer notification flow ending in a U2OS emit terminal node."
   }
 }

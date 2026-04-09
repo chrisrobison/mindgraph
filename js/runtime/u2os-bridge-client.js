@@ -1,6 +1,7 @@
 // @ts-check
 
 import { EVENTS } from "../core/event-constants.js";
+import { getU2osEntityResource } from "../core/u2os-node-catalog.js";
 import { publish, subscribe } from "../core/pan.js";
 import { graphStore } from "../store/graph-store.js";
 import { uiStore } from "../store/ui-store.js";
@@ -73,6 +74,37 @@ const toWsBaseUrl = (endpoint) => {
       const parsed = new URL(raw, window.location.origin);
       parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
       return parsed;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const toHttpBaseUrl = (endpoint) => {
+  const raw = asText(endpoint);
+  if (!raw) return null;
+
+  try {
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      const parsed = new URL(raw);
+      parsed.pathname = parsed.pathname.replace(/\/ws\/?$/i, "");
+      return parsed.toString().replace(/\/$/, "");
+    }
+
+    if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
+      const parsed = new URL(raw);
+      parsed.protocol = parsed.protocol === "wss:" ? "https:" : "http:";
+      parsed.pathname = parsed.pathname.replace(/\/ws\/?$/i, "");
+      return parsed.toString().replace(/\/$/, "");
+    }
+
+    if (typeof window !== "undefined") {
+      const parsed = new URL(raw, window.location.origin);
+      parsed.protocol = parsed.protocol === "wss:" ? "https:" : parsed.protocol === "ws:" ? "http:" : parsed.protocol;
+      parsed.pathname = parsed.pathname.replace(/\/ws\/?$/i, "");
+      return parsed.toString().replace(/\/$/, "");
     }
   } catch {
     return null;
@@ -184,6 +216,258 @@ class U2OSBridgeClient {
 
   getForwardEventNames() {
     return Array.from(this.#forwardEventNames);
+  }
+
+  #buildOutboundEnvelope(eventName, payload = {}, traceId = "") {
+    const normalizedEventName = asText(eventName);
+    if (!normalizedEventName) {
+      throw new Error("eventName is required");
+    }
+
+    const resolvedTraceId = asText(traceId) || asText(payload?.traceId) || asText(payload?.correlationId) || randomTraceId();
+    return {
+      envelope: BRIDGE_ENVELOPE_VERSION,
+      tenantId: this.#tenantId,
+      eventName: normalizedEventName,
+      payload: toObject(payload),
+      publishedAt: nowIso(),
+      sourceSystem: "mindgraph",
+      traceId: resolvedTraceId
+    };
+  }
+
+  #resolveApiBaseCandidates() {
+    const candidates = [];
+    const fromBridge = toHttpBaseUrl(this.#endpoint);
+    if (fromBridge) candidates.push(fromBridge);
+    if (typeof window !== "undefined" && window.location?.origin) {
+      candidates.push(window.location.origin);
+    }
+    return [...new Set(candidates)];
+  }
+
+  #resolveAuthToken() {
+    const settings = uiStore.getRuntimeState()?.providerSettings ?? {};
+    const proxyToken = asText(settings?.proxyToken);
+    if (proxyToken) return proxyToken;
+    return asText(this.#secret);
+  }
+
+  async requestU2osApi({ path = "", method = "GET", query = {}, body = undefined, headers = {} } = {}) {
+    const normalizedPath = asText(path);
+    if (!normalizedPath) {
+      throw new Error("U2OS API request requires a path");
+    }
+
+    if (!asText(this.#endpoint)) {
+      throw new Error("U2OS bridge endpoint is not configured");
+    }
+    if (!asText(this.#tenantId)) {
+      throw new Error("U2OS bridge tenantId is not available");
+    }
+
+    const baseCandidates = this.#resolveApiBaseCandidates();
+    if (!baseCandidates.length) {
+      throw new Error("Unable to resolve U2OS API base URL from bridge settings");
+    }
+
+    const normalizedMethod = asText(method, "GET").toUpperCase();
+    const token = this.#resolveAuthToken();
+    const queryParams = new URLSearchParams();
+    Object.entries(toObject(query)).forEach(([key, value]) => {
+      if (value == null || value === "") return;
+      queryParams.set(key, String(value));
+    });
+
+    let lastError = null;
+    for (const baseUrl of baseCandidates) {
+      let requestUrl = "";
+      try {
+        const url = new URL(normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`, `${baseUrl}/`);
+        if (!queryParams.has("tenantId")) queryParams.set("tenantId", this.#tenantId);
+        queryParams.forEach((value, key) => url.searchParams.set(key, value));
+        requestUrl = url.toString();
+
+        const requestHeaders = {
+          Accept: "application/json",
+          "x-tenant-id": this.#tenantId,
+          ...toObject(headers)
+        };
+        if (asText(this.#secret)) {
+          requestHeaders["x-mindgraph-bridge-secret"] = this.#secret;
+        }
+        if (token && !requestHeaders.Authorization) {
+          requestHeaders.Authorization = `Bearer ${token}`;
+        }
+        if (body !== undefined && !requestHeaders["Content-Type"]) {
+          requestHeaders["Content-Type"] = "application/json";
+        }
+
+        const response = await fetch(requestUrl, {
+          method: normalizedMethod,
+          headers: requestHeaders,
+          body: body === undefined ? undefined : JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          lastError = new Error(
+            `U2OS API ${normalizedMethod} ${normalizedPath} failed (${response.status} ${response.statusText})${errorText ? `: ${errorText.slice(0, 260)}` : ""}`
+          );
+          continue;
+        }
+
+        if (response.status === 204) return null;
+        const contentType = String(response.headers.get("content-type") ?? "").toLowerCase();
+        if (!contentType.includes("application/json")) {
+          const text = await response.text();
+          return { raw: text };
+        }
+        return response.json();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        this.#appendActivity("warn", "U2OS API candidate failed", {
+          baseUrl,
+          path: normalizedPath,
+          requestUrl,
+          error: lastError.message
+        });
+      }
+    }
+
+    throw lastError ?? new Error(`U2OS API request failed: ${normalizedMethod} ${normalizedPath}`);
+  }
+
+  async queryU2osEntity({
+    entity = "",
+    operation = "list",
+    identifier = "",
+    filter = {},
+    keyword = "",
+    limit = 50,
+    includeRelations = []
+  } = {}) {
+    const resource = getU2osEntityResource(entity);
+    if (!resource) throw new Error(`Unsupported U2OS entity: ${entity || "(empty)"}`);
+
+    const normalizedOperation = asText(operation, "list").toLowerCase();
+    const normalizedLimit = Math.max(1, Math.min(500, Math.round(Number(limit) || 50)));
+    const include = Array.isArray(includeRelations)
+      ? includeRelations.map((entry) => asText(entry)).filter(Boolean).join(",")
+      : "";
+    const baseParams = {
+      ...toObject(filter),
+      ...(include ? { include } : {}),
+      limit: normalizedLimit
+    };
+
+    let records = [];
+    if (normalizedOperation === "get") {
+      const id = asText(identifier);
+      if (!id) throw new Error("U2OS get operation requires an identifier");
+      const row = await this.requestU2osApi({ path: `/api/${resource}/${encodeURIComponent(id)}`, method: "GET" });
+      records = row == null ? [] : [row];
+    } else {
+      const query = normalizedOperation === "search"
+        ? {
+            ...baseParams,
+            q: asText(keyword) || asText(baseParams.q)
+          }
+        : baseParams;
+      const response = await this.requestU2osApi({
+        path: `/api/${resource}`,
+        method: "GET",
+        query
+      });
+      if (Array.isArray(response)) records = response;
+      else if (Array.isArray(response?.items)) records = response.items;
+      else if (response?.record && typeof response.record === "object") records = [response.record];
+      else if (response && typeof response === "object") records = [response];
+      else records = [];
+    }
+
+    return {
+      results: records,
+      count: records.length,
+      meta: {
+        queryId: `u2osq_${Date.now().toString(36)}_${Math.floor(Math.random() * 10_000).toString(36)}`,
+        executedAt: nowIso(),
+        tenantId: this.#tenantId,
+        entity: asText(entity),
+        operation: normalizedOperation
+      }
+    };
+  }
+
+  async mutateU2osEntity({ entity = "", operation = "create", entityId = "", payload = {} } = {}) {
+    const resource = getU2osEntityResource(entity);
+    if (!resource) throw new Error(`Unsupported U2OS entity: ${entity || "(empty)"}`);
+
+    const normalizedOperation = asText(operation, "create").toLowerCase();
+    const id = asText(entityId);
+    const body = toObject(payload);
+    let method = "POST";
+    let path = `/api/${resource}`;
+    let responseBody = null;
+
+    if (normalizedOperation === "create") {
+      method = "POST";
+      responseBody = await this.requestU2osApi({ path, method, body });
+    } else if (normalizedOperation === "update") {
+      if (!id) throw new Error("U2OS update requires entityId");
+      method = "PUT";
+      path = `/api/${resource}/${encodeURIComponent(id)}`;
+      responseBody = await this.requestU2osApi({ path, method, body });
+    } else if (normalizedOperation === "patch") {
+      if (!id) throw new Error("U2OS patch requires entityId");
+      method = "PUT";
+      path = `/api/${resource}/${encodeURIComponent(id)}`;
+      responseBody = await this.requestU2osApi({ path, method, body });
+    } else if (normalizedOperation === "delete") {
+      if (!id) throw new Error("U2OS delete requires entityId");
+      method = "DELETE";
+      path = `/api/${resource}/${encodeURIComponent(id)}`;
+      await this.requestU2osApi({ path, method });
+      responseBody = { id };
+    } else {
+      throw new Error(`Unsupported U2OS mutate operation: ${normalizedOperation}`);
+    }
+
+    const resolvedEntityId =
+      asText(responseBody?.id) || asText(responseBody?.public_id) || asText(entityId) || "";
+
+    return {
+      result: responseBody,
+      entityId: resolvedEntityId,
+      status: {
+        ok: true,
+        message: `${normalizedOperation} succeeded`,
+        operation: normalizedOperation,
+        entity: asText(entity)
+      },
+      meta: {
+        tenantId: this.#tenantId,
+        executedAt: nowIso(),
+        method,
+        path
+      }
+    };
+  }
+
+  async emitU2osEvent(eventName, payload = {}, options = {}) {
+    if (!this.#socket || (typeof WebSocket !== "undefined" && this.#socket.readyState !== WebSocket.OPEN)) {
+      throw new Error("U2OS bridge socket is not connected");
+    }
+
+    const envelope = this.#buildOutboundEnvelope(eventName, payload, options?.traceId);
+    this.#socket.send(JSON.stringify(envelope));
+    return {
+      eventName: envelope.eventName,
+      traceId: envelope.traceId,
+      tenantId: envelope.tenantId,
+      publishedAt: envelope.publishedAt,
+      payload: envelope.payload
+    };
   }
 
   #appendActivity(level, message, context = {}) {

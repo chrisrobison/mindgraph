@@ -30,6 +30,18 @@ const schemaPresetEntries = [
     }
   ],
   [
+    "number",
+    {
+      id: "number",
+      label: "Number",
+      payloadType: "number",
+      description: "Numeric payload.",
+      schema: {
+        type: "number"
+      }
+    }
+  ],
+  [
     "object",
     {
       id: "object",
@@ -286,6 +298,93 @@ const PORT_PRESETS_BY_NODE_TYPE = Object.freeze({
       })
     ])
   }),
+  [NODE_TYPES.U2OS_QUERY]: Object.freeze({
+    input: Object.freeze([]),
+    output: Object.freeze([
+      createPortPreset({
+        id: "results",
+        label: "Results",
+        schemaPreset: "array",
+        required: true,
+        description: "Array of records returned from the U2OS query."
+      }),
+      createPortPreset({
+        id: "count",
+        label: "Count",
+        schemaPreset: "number",
+        required: true,
+        description: "Total number of matching records."
+      }),
+      createPortPreset({
+        id: "meta",
+        label: "Meta",
+        schemaPreset: "object",
+        required: false,
+        description: "Query metadata such as executedAt/queryId/tenantId."
+      })
+    ])
+  }),
+  [NODE_TYPES.U2OS_MUTATE]: Object.freeze({
+    input: Object.freeze([
+      createPortPreset({
+        id: "payload",
+        label: "Payload",
+        schemaPreset: "object",
+        required: true,
+        description: "Entity payload used for create/update/patch operations."
+      }),
+      createPortPreset({
+        id: "entityId",
+        label: "Entity ID",
+        schemaPreset: "text",
+        required: false,
+        description: "Identifier for update/patch/delete operations."
+      })
+    ]),
+    output: Object.freeze([
+      createPortPreset({
+        id: "result",
+        label: "Result",
+        schemaPreset: "object",
+        required: false,
+        description: "Created/updated/deleted entity response payload."
+      }),
+      createPortPreset({
+        id: "entityId",
+        label: "Entity ID",
+        schemaPreset: "text",
+        required: false,
+        description: "Identifier of the affected entity record."
+      }),
+      createPortPreset({
+        id: "status",
+        label: "Status",
+        schemaPreset: "object",
+        required: true,
+        description: "Mutation status payload with success/error details."
+      })
+    ])
+  }),
+  [NODE_TYPES.U2OS_EMIT]: Object.freeze({
+    input: Object.freeze([
+      createPortPreset({
+        id: "payload",
+        label: "Payload",
+        schemaPreset: "object",
+        required: true,
+        description: "Event payload sent back to U2OS."
+      })
+    ]),
+    output: Object.freeze([
+      createPortPreset({
+        id: "confirmation",
+        label: "Confirmation",
+        schemaPreset: "object",
+        required: true,
+        description: "Event echo payload including tenant/trace metadata."
+      })
+    ])
+  }),
   [NODE_TYPES.TRANSFORMER]: Object.freeze({
     input: Object.freeze([
       createPortPreset({
@@ -516,10 +615,20 @@ export const inferPortPresetId = (nodeType, direction, portLike = {}) => {
 export const getDefaultPortsFromPresets = (nodeType) => {
   const inputPresets = listPortPresetsForNodeType(nodeType, "input");
   const outputPresets = listPortPresetsForNodeType(nodeType, "output");
-  const includeAllOutputPresets = nodeType === NODE_TYPES.U2OS_TRIGGER;
+  const includeAllInputPresets =
+    nodeType === NODE_TYPES.U2OS_MUTATE || nodeType === NODE_TYPES.U2OS_EMIT;
+  const includeAllOutputPresets =
+    nodeType === NODE_TYPES.U2OS_TRIGGER ||
+    nodeType === NODE_TYPES.U2OS_QUERY ||
+    nodeType === NODE_TYPES.U2OS_MUTATE ||
+    nodeType === NODE_TYPES.U2OS_EMIT;
 
   return {
-    input: inputPresets.length ? [clonePresetPort(inputPresets[0].port)] : [],
+    input: inputPresets.length
+      ? includeAllInputPresets
+        ? inputPresets.map((preset) => clonePresetPort(preset.port))
+        : [clonePresetPort(inputPresets[0].port)]
+      : [],
     output: outputPresets.length
       ? includeAllOutputPresets
         ? outputPresets.map((preset) => clonePresetPort(preset.port))

@@ -8,12 +8,23 @@ import {
   NODE_TYPE_VALUES
 } from "../js/core/types.js";
 
-test("NODE_TYPE_VALUES contains exactly 7 items", () => {
-  assert.equal(NODE_TYPE_VALUES.length, 7);
+test("NODE_TYPE_VALUES contains exactly 10 items", () => {
+  assert.equal(NODE_TYPE_VALUES.length, 10);
 });
 
 test("NODE_TYPE_VALUES includes all expected values", () => {
-  const expected = ["note", "agent", "data", "u2os_trigger", "transformer", "view", "action"];
+  const expected = [
+    "note",
+    "agent",
+    "data",
+    "u2os_trigger",
+    "u2os_query",
+    "u2os_mutate",
+    "u2os_emit",
+    "transformer",
+    "view",
+    "action"
+  ];
   for (const val of expected) {
     assert.ok(NODE_TYPE_VALUES.includes(val), `missing "${val}" in NODE_TYPE_VALUES`);
   }

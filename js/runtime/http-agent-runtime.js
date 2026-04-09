@@ -1,8 +1,16 @@
 import { EVENTS } from "../core/event-constants.js";
-import { isExecutableNodeType } from "../core/graph-semantics.js";
+import {
+  edgeAffectsDataFlow,
+  getEdgeContractEndpoints,
+  getNodeTypeSpec,
+  isExecutableNodeType
+} from "../core/graph-semantics.js";
+import { operationNeedsEntityId } from "../core/u2os-node-catalog.js";
+import { NODE_TYPES } from "../core/types.js";
 import { publish } from "../core/pan.js";
 import { buildExecutionPlan } from "./execution-planner.js";
 import { AgentRuntime } from "./agent-runtime.js";
+import { bridgeClient } from "./u2os-bridge-client.js";
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const makeRunId = (nodeId) => `http_${nodeId}_${Date.now()}_${Math.floor(Math.random() * 1_000)}`;
@@ -12,7 +20,46 @@ const asText = (value, fallback = "") => {
   return next || fallback;
 };
 const toObject = (value) => (value && typeof value === "object" ? value : {});
+const toPlainObject = (value) => (value != null && typeof value === "object" && !Array.isArray(value) ? value : {});
 const compactText = (value, max = 420) => asText(value).replace(/\s+/g, " ").slice(0, max);
+
+const getByPath = (value, rawPath) => {
+  const path = asText(rawPath);
+  if (!path) return undefined;
+  const normalized = path.replace(/^\$\.?/, "");
+  if (!normalized) return value;
+  return normalized
+    .split(".")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce((current, segment) => (current == null ? undefined : current[segment]), value);
+};
+
+const setByPath = (target, rawPath, value) => {
+  const path = asText(rawPath).replace(/^\$\.?/, "");
+  if (!path) return;
+  const segments = path
+    .split(".")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (!segments.length) return;
+
+  let cursor = target;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const key = segments[index];
+    if (!toPlainObject(cursor[key])) cursor[key] = {};
+    cursor = cursor[key];
+  }
+  cursor[segments[segments.length - 1]] = value;
+};
+
+const normalizeMappings = (value) =>
+  toArray(value)
+    .map((entry) => ({
+      from: asText(entry?.from ?? entry?.source ?? entry?.input),
+      to: asText(entry?.to ?? entry?.target ?? entry?.field)
+    }))
+    .filter((entry) => entry.from && entry.to);
 
 const resolveWsUrl = (endpoint, proxyToken = "") => {
   const base = String(endpoint ?? "").trim().replace(/\/$/, "");
@@ -156,7 +203,10 @@ export class HttpAgentRuntime extends AgentRuntime {
     this.publish(this.events.RUNTIME_AGENT_RUN_STARTED, { nodeId, runId, trigger, context, mode: "http" });
 
     try {
-      const payload = await this.#executeRemoteRun(requestPayload, context?.abortSignal, { proxyToken });
+      const payload =
+        node.type === NODE_TYPES.U2OS_MUTATE || node.type === NODE_TYPES.U2OS_EMIT
+          ? await this.#executeU2osNode(node, nodePlan)
+          : await this.#executeRemoteRun(requestPayload, context?.abortSignal, { proxyToken });
       const output = payload?.output ?? {
         type: "http_runtime_output",
         summary: payload?.summary ?? `${node.label} completed via HTTP runtime`,
@@ -330,6 +380,136 @@ export class HttpAgentRuntime extends AgentRuntime {
     }
 
     return { ok: failed === 0, completed, failed, total: nodeIds.length };
+  }
+
+  #resolveNodeOutputValue(node) {
+    const spec = getNodeTypeSpec(node?.type);
+    if (!node) return null;
+    if (spec?.outputField) return node.data?.[spec.outputField] ?? null;
+    return node.data?.lastOutput ?? null;
+  }
+
+  #collectInputsByPort(nodeId) {
+    const document = this.store.getDocument();
+    const node = this.store.getNode(nodeId);
+    if (!node || !document) return {};
+
+    const inputsByPort = {};
+    for (const edge of toArray(document.edges)) {
+      if (!edgeAffectsDataFlow(edge.type)) continue;
+      const sourceNode = this.store.getNode(edge.source);
+      const targetNode = this.store.getNode(edge.target);
+      if (!sourceNode || !targetNode) continue;
+
+      const endpoints = getEdgeContractEndpoints(edge, sourceNode, targetNode);
+      if (endpoints.consumerNode?.id !== nodeId || !endpoints.providerNode) continue;
+      const payload = this.#resolveNodeOutputValue(endpoints.providerNode);
+      if (payload == null) continue;
+
+      const contractPortId = asText(edge?.metadata?.contract?.targetPort);
+      const fallbackPortId = asText(endpoints.consumerPorts?.[0]?.id, "input");
+      const targetPortId = contractPortId || fallbackPortId;
+      if (!inputsByPort[targetPortId]) {
+        inputsByPort[targetPortId] = payload;
+      } else if (Array.isArray(inputsByPort[targetPortId])) {
+        inputsByPort[targetPortId].push(payload);
+      } else {
+        inputsByPort[targetPortId] = [inputsByPort[targetPortId], payload];
+      }
+    }
+
+    return inputsByPort;
+  }
+
+  #mapPayloadFromInputs(payloadInput, mappings = []) {
+    const source = toPlainObject(payloadInput);
+    const normalizedMappings = normalizeMappings(mappings);
+    if (!normalizedMappings.length) return source;
+
+    const mapped = {};
+    normalizedMappings.forEach((entry) => {
+      const sourceValue = getByPath(source, entry.from);
+      if (sourceValue === undefined) return;
+      const targetPath = entry.to.replace(/^[^.]+\./, "");
+      setByPath(mapped, targetPath, sourceValue);
+    });
+    return mapped;
+  }
+
+  #extractEntityId(inputsByPort = {}) {
+    const raw = inputsByPort.entityId;
+    if (typeof raw === "string" || typeof raw === "number") return String(raw);
+    if (Array.isArray(raw) && raw.length) {
+      const first = raw[0];
+      if (typeof first === "string" || typeof first === "number") return String(first);
+      if (toPlainObject(first).id) return String(first.id);
+      if (toPlainObject(first).entityId) return String(first.entityId);
+    }
+    if (toPlainObject(raw).id) return String(raw.id);
+    if (toPlainObject(raw).entityId) return String(raw.entityId);
+    return "";
+  }
+
+  async #executeU2osNode(node, nodePlan) {
+    const inputsByPort = this.#collectInputsByPort(node.id);
+    const payloadInput = inputsByPort.payload ?? inputsByPort.command_input ?? inputsByPort.input ?? {};
+
+    if (node.type === NODE_TYPES.U2OS_MUTATE) {
+      const operation = asText(node.data?.operation, "create").toLowerCase();
+      const entity = asText(node.data?.entity, "reservation").toLowerCase();
+      const entityId = this.#extractEntityId(inputsByPort);
+      if (operationNeedsEntityId(operation) && !entityId) {
+        throw new Error(`U2OS ${operation} requires entityId input`);
+      }
+
+      const mappedPayload = this.#mapPayloadFromInputs(payloadInput, node.data?.mapInputs);
+      const mutation = await bridgeClient.mutateU2osEntity({
+        entity,
+        operation,
+        entityId,
+        payload: mappedPayload
+      });
+
+      return {
+        summary: `${node.label} ${operation} completed for ${entity}.`,
+        confidence: 0.86,
+        output: {
+          type: "u2os_mutation_result",
+          summary: `${node.label} ${operation} completed for ${entity}.`,
+          result: mutation.result ?? null,
+          entityId: mutation.entityId ?? entityId,
+          status: mutation.status ?? { ok: true, message: `${operation} succeeded`, entity, operation },
+          planner: {
+            ready: Boolean(nodePlan?.ready),
+            executionOrderIndex: nodePlan?.executionOrderIndex ?? -1
+          },
+          generatedAt: new Date().toISOString()
+        }
+      };
+    }
+
+    if (node.type === NODE_TYPES.U2OS_EMIT) {
+      const eventName = asText(node.data?.eventName);
+      if (!eventName) throw new Error("U2OS emit requires eventName");
+      const mappedPayload = this.#mapPayloadFromInputs(payloadInput, node.data?.payloadMapping);
+      const confirmation = await bridgeClient.emitU2osEvent(eventName, mappedPayload);
+      return {
+        summary: `${node.label} emitted ${eventName}.`,
+        confidence: 0.9,
+        output: {
+          type: "u2os_emit_confirmation",
+          summary: `${node.label} emitted ${eventName}.`,
+          confirmation,
+          planner: {
+            ready: Boolean(nodePlan?.ready),
+            executionOrderIndex: nodePlan?.executionOrderIndex ?? -1
+          },
+          generatedAt: new Date().toISOString()
+        }
+      };
+    }
+
+    throw new Error(`Unsupported U2OS node type: ${node.type}`);
   }
 
   async #executeRemoteRun(payload, abortSignal, options = {}) {

@@ -2,18 +2,26 @@ import { AgentRuntime } from "./agent-runtime.js";
 import { actionExecutor } from "./action-executor.js";
 import { buildExecutionPlan } from "./execution-planner.js";
 import { dataConnectors } from "./data-connectors.js";
+import { getNodeTypeSpec, isExecutableNodeType } from "../core/graph-semantics.js";
+import { operationNeedsEntityId } from "../core/u2os-node-catalog.js";
+import { NODE_TYPES } from "../core/types.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const asErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
+const asText = (value, fallback = "") => {
+  const next = String(value ?? "").trim();
+  return next || fallback;
+};
+const toObject = (value) => (value != null && typeof value === "object" && !Array.isArray(value) ? value : {});
 
 const makeTaskId = () => `task_${Date.now()}_${Math.floor(Math.random() * 10_000)}`;
 const makeRunId = (nodeId) => `run_${nodeId}_${Date.now()}_${Math.floor(Math.random() * 1_000)}`;
 
 const friendlyNow = () => new Date().toLocaleTimeString();
-const isRunnableNode = (node) => ["agent", "transformer", "view", "action"].includes(node?.type);
+const isRunnableNode = (node) => isExecutableNodeType(node?.type);
 
 const firstValue = (value) => {
   if (value == null) return "(none)";
@@ -27,6 +35,46 @@ const firstValue = (value) => {
   }
   return String(value);
 };
+
+const getByPath = (value, rawPath) => {
+  const path = asText(rawPath);
+  if (!path) return undefined;
+  const normalized = path.replace(/^\$\.?/, "");
+  if (!normalized) return value;
+
+  return normalized
+    .split(".")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce((current, segment) => (current == null ? undefined : current[segment]), value);
+};
+
+const setByPath = (target, rawPath, value) => {
+  const path = asText(rawPath);
+  if (!path) return;
+  const normalized = path.replace(/^\$\.?/, "");
+  const segments = normalized
+    .split(".")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (!segments.length) return;
+
+  let cursor = target;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const key = segments[index];
+    if (!toObject(cursor[key]) || Array.isArray(cursor[key])) cursor[key] = {};
+    cursor = cursor[key];
+  }
+  cursor[segments[segments.length - 1]] = value;
+};
+
+const normalizeMappings = (value) =>
+  toArray(value)
+    .map((entry) => ({
+      from: asText(entry?.from ?? entry?.source ?? entry?.input),
+      to: asText(entry?.to ?? entry?.target ?? entry?.field)
+    }))
+    .filter((entry) => entry.from && entry.to);
 
 export class MockAgentRuntime extends AgentRuntime {
   #taskQueue = [];
@@ -346,7 +394,11 @@ export class MockAgentRuntime extends AgentRuntime {
 
     const missing = (nodePlan.dataProviderIds ?? [])
       .map((providerId) => this.store.getNode(providerId))
-      .filter((provider) => provider?.type === "data" && provider?.data?.cachedData == null);
+      .filter(
+        (provider) =>
+          (provider?.type === NODE_TYPES.DATA || provider?.type === NODE_TYPES.U2OS_QUERY) &&
+          provider?.data?.cachedData == null
+      );
 
     for (const provider of missing) {
       try {
@@ -361,12 +413,16 @@ export class MockAgentRuntime extends AgentRuntime {
     const providers = toArray(nodePlan?.dataProviderIds)
       .map((providerId) => this.store.getNode(providerId))
       .filter(Boolean)
-      .map((provider) => ({
-        id: provider.id,
-        label: provider.label,
-        type: provider.type,
-        payload: provider.type === "data" ? provider.data?.cachedData ?? null : provider.data?.lastOutput ?? null
-      }));
+      .map((provider) => {
+        const outputField = getNodeTypeSpec(provider.type)?.outputField;
+        const payload = outputField ? provider.data?.[outputField] ?? null : provider.data?.lastOutput ?? null;
+        return {
+          id: provider.id,
+          label: provider.label,
+          type: provider.type,
+          payload
+        };
+      });
 
     const dependencies = toArray(nodePlan?.upstreamDependencies)
       .map((depId) => this.store.getNode(depId))
@@ -423,6 +479,14 @@ export class MockAgentRuntime extends AgentRuntime {
       };
     }
 
+    if (node.type === NODE_TYPES.U2OS_MUTATE) {
+      return this.#executeU2osMutateNode(node, inputContext);
+    }
+
+    if (node.type === NODE_TYPES.U2OS_EMIT) {
+      return this.#executeU2osEmitNode(node, inputContext);
+    }
+
     if (node.type === "action") {
       const actionExecution = actionExecutor.execute(node, {
         requestedAt: inputContext.requestedAt,
@@ -466,9 +530,92 @@ export class MockAgentRuntime extends AgentRuntime {
     };
   }
 
+  #resolveMappedPayload(basePayload, mappings) {
+    const source = toObject(basePayload);
+    const normalizedMappings = normalizeMappings(mappings);
+    if (!normalizedMappings.length) return source;
+
+    const mapped = {};
+    normalizedMappings.forEach((entry) => {
+      const sourceValue = getByPath(source, entry.from);
+      if (sourceValue === undefined) return;
+      const targetPath = entry.to.replace(/^[^.]+\./, "");
+      setByPath(mapped, targetPath, sourceValue);
+    });
+    return mapped;
+  }
+
+  #executeU2osMutateNode(node, inputContext) {
+    const operation = asText(node.data?.operation, "create").toLowerCase();
+    const entity = asText(node.data?.entity, "reservation").toLowerCase();
+    const primaryProviderPayload = toObject(inputContext.providers[0]?.payload);
+    const mappedPayload = this.#resolveMappedPayload(primaryProviderPayload, node.data?.mapInputs);
+    const fallbackEntityId = asText(
+      primaryProviderPayload.entityId ?? primaryProviderPayload.id ?? primaryProviderPayload.public_id
+    );
+    const requiredEntityId = operationNeedsEntityId(operation);
+    const entityId = requiredEntityId
+      ? fallbackEntityId || `${entity.slice(0, 3)}_${Date.now().toString(36)}`
+      : fallbackEntityId || `${entity.slice(0, 3)}_${Date.now().toString(36)}`;
+    const publicId = `${entity.slice(0, 3).toUpperCase()}-${Math.floor(10_000 + Math.random() * 90_000)}`;
+    const mutatedRecord =
+      operation === "delete"
+        ? {
+            id: entityId,
+            public_id: publicId,
+            entity,
+            deleted: true,
+            deletedAt: inputContext.requestedAt
+          }
+        : {
+            id: entityId,
+            public_id: publicId,
+            entity,
+            ...mappedPayload,
+            updatedAt: inputContext.requestedAt
+          };
+
+    return {
+      type: "u2os_mutation_result",
+      summary: `${node.label} ${operation} operation completed for ${entity}.`,
+      result: mutatedRecord,
+      entityId,
+      status: {
+        ok: true,
+        message: `${operation} succeeded`,
+        operation,
+        entity
+      },
+      generatedAt: inputContext.requestedAt
+    };
+  }
+
+  #executeU2osEmitNode(node, inputContext) {
+    const eventName = asText(node.data?.eventName, "event.created");
+    const primaryProviderPayload = toObject(inputContext.providers[0]?.payload);
+    const mappedPayload = this.#resolveMappedPayload(primaryProviderPayload, node.data?.payloadMapping);
+    const traceId = `trace_${Date.now()}_${Math.floor(Math.random() * 100_000)}`;
+    const confirmation = {
+      eventName,
+      traceId,
+      tenantId: "mock-tenant",
+      publishedAt: inputContext.requestedAt,
+      payload: mappedPayload
+    };
+
+    return {
+      type: "u2os_emit_confirmation",
+      summary: `${node.label} emitted ${eventName}.`,
+      confirmation,
+      generatedAt: inputContext.requestedAt
+    };
+  }
+
   #confidenceForType(type) {
     if (type === "transformer") return 0.92;
     if (type === "action") return 0.8;
+    if (type === NODE_TYPES.U2OS_MUTATE) return 0.84;
+    if (type === NODE_TYPES.U2OS_EMIT) return 0.88;
     if (type === "view") return 0.86;
     return 0.74;
   }
