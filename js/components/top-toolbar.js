@@ -393,31 +393,31 @@ class TopToolbar extends HTMLElement {
     const selectedTemplate = getDemoTemplateById(this.#selectedTemplateId);
     const templateDescription = selectedTemplate?.description ?? "Select a demo template to import.";
     const templatesDisabled = DEMO_TEMPLATES.length ? "" : "disabled";
+    const graphName = graphStore.getDocument()?.title ?? "MindGraph";
 
     this.innerHTML = `
-      <section class="mg-panel top-toolbar-panel">
+      <section class="top-toolbar-panel">
+        <div class="mg-toolbar-bar">
+          <div class="toolbar-logo">
+            <div class="toolbar-logo-box" aria-hidden="true">⬡</div>
+            <span class="toolbar-logo-name">MindGraph</span>
+            <span class="toolbar-caret" aria-hidden="true">▾</span>
+          </div>
+          <div class="toolbar-separator" aria-hidden="true"></div>
+          <span class="toolbar-graph-name">${graphName}</span>
+          <div class="toolbar-spacer"></div>
+          <div class="toolbar-actions toolbar-actions-inline">
+            <button data-action="run-all" type="button">▷ Run All</button>
+            <button data-action="summarize-subtree" type="button">⊙ Summarize</button>
+            <button data-tool="create:note" type="button" class="primary" aria-pressed="false">+ Add Node</button>
+            <button data-action="cancel-runs" type="button" class="icon-btn" title="Cancel runs" aria-label="Cancel runs" disabled>×</button>
+            <button data-action="open-runtime-settings" type="button" class="icon-btn" title="Runtime settings" aria-label="Runtime settings">⚙</button>
+          </div>
+        </div>
         <div class="top-toolbar-content">
-          <div class="toolbar-brand">
-            <div class="brand-glyph" aria-hidden="true">MG</div>
-            <div class="brand-text">
-              <strong>MindGraph AI</strong>
-              <span>Visual Agent Graph Workbench</span>
-            </div>
-          </div>
-
-          <div class="toolbar-actions toolbar-action-group">
-            <button data-action="run-all" type="button">Run All</button>
-            <button data-action="summarize-subtree" type="button">Run Subtree</button>
-            <button data-action="cancel-runs" type="button" disabled>Cancel Runs</button>
-          </div>
-
           <div class="toolbar-actions toolbar-action-group">
             <button data-action="undo" type="button" title="Undo (Cmd/Ctrl+Z)">Undo</button>
             <button data-action="redo" type="button" title="Redo (Shift+Cmd/Ctrl+Z)">Redo</button>
-          </div>
-
-          <div class="toolbar-actions toolbar-action-group">
-            <button data-tool="create:note" type="button" aria-pressed="false">Add Node</button>
             <button data-tool="connect" type="button" aria-pressed="false">Add Edge</button>
           </div>
 
@@ -442,7 +442,6 @@ class TopToolbar extends HTMLElement {
               <option value="http" ${this.#runtimeMode === "http" ? "selected" : ""}>HTTP Runtime</option>
             </select>
             <input data-field="runtime-endpoint" type="text" value="${this.#runtimeEndpoint}" placeholder="/api/mindgraph/runtime" />
-            <button data-action="open-runtime-settings" type="button">Settings</button>
           </div>
 
           <div class="toolbar-actions toolbar-action-group toolbar-zoom">

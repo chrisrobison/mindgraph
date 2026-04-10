@@ -323,9 +323,9 @@ class InspectorPanel extends HTMLElement {
         .join("");
 
       this.innerHTML = `
-        <aside class="mg-panel mg-inspector-panel">
-          <header>Connection Inspector</header>
-          <div class="content inspector-layout">
+        <aside class="mg-panel mg-inspector-panel inspector-shell">
+          <div class="inspector-header"><span>Connection Inspector</span></div>
+          <div class="inspector-layout inspector-content">
             <div class="inspector-summary">
               <p class="inspector-node-title">${sourceLabel} → ${targetLabel}</p>
               <p class="inspector-node-meta">Type: ${escapeHtml(edge.type ?? "depends_on")}</p>
@@ -440,9 +440,9 @@ class InspectorPanel extends HTMLElement {
     const activeTab = resolveActiveTab(this.#activeTab, visibleTabs);
 
     this.innerHTML = `
-      <aside class="mg-panel mg-inspector-panel">
-        <header>Node Inspector</header>
-        <div class="content inspector-layout">
+      <aside class="mg-panel mg-inspector-panel inspector-shell">
+        <div class="inspector-header"><span>Node Inspector</span></div>
+        <div class="inspector-layout inspector-content">
           <div class="inspector-summary">
             <p class="inspector-node-title">${selectedTitle}</p>
             <p class="inspector-node-meta">Type: ${selectedType}</p>

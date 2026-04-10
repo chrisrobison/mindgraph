@@ -1991,3 +1991,323 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Reference-aligned UI skin */
+.top-toolbar-panel {
+  margin: 0;
+  border-bottom: 1px solid #1c2836;
+  background: #0d1117;
+  color: #e2e8f0;
+}
+
+.mg-toolbar-bar {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+}
+
+.toolbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-logo-box {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
+}
+
+.toolbar-logo-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #e2e8f0;
+  letter-spacing: -0.3px;
+}
+
+.toolbar-caret {
+  color: #475569;
+  font-size: 10px;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 22px;
+  background: #1c2836;
+  margin: 0 6px;
+}
+
+.toolbar-graph-name {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.toolbar-actions-inline {
+  flex-wrap: nowrap;
+}
+
+.top-toolbar-panel .toolbar-actions button,
+.top-toolbar-panel select,
+.top-toolbar-panel input[type="text"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.top-toolbar-panel select,
+.top-toolbar-panel input[type="text"] {
+  min-height: 34px;
+}
+
+.top-toolbar-panel .toolbar-actions button:hover,
+.top-toolbar-panel select:hover,
+.top-toolbar-panel input[type="text"]:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.top-toolbar-panel .toolbar-actions button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.top-toolbar-panel .toolbar-actions button.primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.top-toolbar-panel .toolbar-actions button.icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.top-toolbar-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px 10px;
+  border-top: 1px solid #1c2836;
+  overflow-x: auto;
+}
+
+.top-toolbar-content .toolbar-action-group {
+  border-right: 1px solid #1c2836;
+  padding-right: 8px;
+  margin-right: 2px;
+}
+
+.top-toolbar-content .toolbar-action-group:last-child {
+  border-right: 0;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.mg-graph-panel {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.graph-wrap {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #f1f5f9;
+  background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+.graph-workspace {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  background-image: none;
+}
+
+.graph-scene {
+  min-width: 920px;
+  min-height: 500px;
+}
+
+.mg-inspector-panel.inspector-shell {
+  margin: 0;
+  border-left: 1px solid #e2e8f0;
+  border-radius: 0;
+  box-shadow: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f8fafc;
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 15px;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+}
+
+.inspector-content {
+  padding: 14px 16px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.bottom-panel-shell {
+  margin: 0;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  border-top: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+}
+
+.bottom-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.bottom-panel-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.bottom-tab-actions {
+  flex: 1;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+.bottom-tab-actions button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bottom-panel-content {
+  grid-template-rows: minmax(100px, 1fr) auto;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.bottom-panel-dev {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+}
+
+.mg-palette .mg-panel {
+  margin: 0;
+  height: 100%;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mg-palette .mg-panel header {
+  background: #fff;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: -0.2px;
+  color: #0f172a;
+  padding: 8px 14px;
+}
+
+:root[data-theme="dark"] .top-toolbar-panel {
+  border-bottom-color: #263242;
+  background: #0f1723;
+}
+
+:root[data-theme="dark"] .mg-toolbar-bar,
+:root[data-theme="dark"] .top-toolbar-content {
+  background: #0f1723;
+}
+
+:root[data-theme="dark"] .toolbar-separator,
+:root[data-theme="dark"] .top-toolbar-content .toolbar-action-group {
+  border-color: #263242;
+  background-color: #263242;
+}
+
+:root[data-theme="dark"] .graph-wrap {
+  background: #0f1622;
+  background-image: radial-gradient(circle, #334155 1px, transparent 1px);
+}
+
+:root[data-theme="dark"] .mg-inspector-panel.inspector-shell {
+  background: #111827;
+  border-left-color: #263242;
+}
+
+:root[data-theme="dark"] .inspector-header {
+  background: #121a28;
+  border-bottom-color: #263242;
+  color: #dce9f9;
+}
+
+:root[data-theme="dark"] .bottom-panel-shell {
+  background: #111827;
+  border-color: #263242;
+}
+
+:root[data-theme="dark"] .bottom-panel-header {
+  border-bottom-color: #263242;
+}
+
+:root[data-theme="dark"] .bottom-panel-title,
+:root[data-theme="dark"] .mg-palette .mg-panel header {
+  color: #dce9f9;
+}
+
+:root[data-theme="dark"] .mg-palette .mg-panel,
+:root[data-theme="dark"] .mg-palette .mg-panel header {
+  background: #111827;
+  border-color: #263242;
+}

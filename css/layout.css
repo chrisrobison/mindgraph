@@ -1,81 +1,62 @@
-.mg-shell {
-  min-height: 100vh;
-  height: 100vh;
+#app.mg-shell {
   display: grid;
-  gap: 0;
-  padding: 0.4rem 0.45rem 0.5rem;
-  grid-template-rows: auto 1fr var(--bottom-height);
-  grid-template-columns: minmax(200px, var(--left-width)) minmax(0, 1fr) minmax(300px, var(--right-width));
+  height: 100vh;
   grid-template-areas:
-    "toolbar toolbar toolbar"
-    "palette canvas inspector"
-    "activity activity activity";
+    "toolbar toolbar"
+    "canvas inspector"
+    "bottom inspector";
+  grid-template-columns: 1fr var(--right-width);
+  grid-template-rows: var(--toolbar-height) 1fr var(--bottom-height);
   overflow: hidden;
 }
 
 .mg-toolbar {
   grid-area: toolbar;
-  position: relative;
-  z-index: 20;
-}
-
-.mg-palette {
-  grid-area: palette;
-  position: relative;
-  z-index: 5;
-  min-height: 0;
+  display: block;
+  min-width: 0;
 }
 
 .mg-canvas {
   grid-area: canvas;
-  display: flex;
-  flex-direction: column;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#bottom-row.mg-bottom-row {
+  grid-area: bottom;
+  display: grid;
+  grid-template-columns: 1.65fr 1fr;
+  min-height: 0;
+}
+
+.mg-activity,
+.mg-palette,
+.mg-inspector {
+  display: block;
   min-height: 0;
   min-width: 0;
 }
 
 .mg-inspector {
   grid-area: inspector;
-  min-height: 0;
 }
 
-.mg-activity {
-  grid-area: activity;
-  min-height: 0;
-}
-
-@media (max-width: 1200px) {
-  :root {
-    --left-width: 210px;
-    --right-width: 294px;
-  }
-}
-
-@media (max-width: 1380px) {
-  .mg-shell {
-    grid-template-columns: minmax(188px, var(--left-width)) minmax(0, 1fr);
-    grid-template-rows: auto minmax(370px, 1fr) auto var(--bottom-height);
-    grid-template-areas:
-      "toolbar toolbar"
-      "palette canvas"
-      "inspector inspector"
-      "activity activity";
-  }
-}
-
-@media (max-width: 960px) {
-  .mg-shell {
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-    padding: 0.35rem;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(300px, 1fr) auto auto;
+@media (max-width: 1180px) {
+  #app.mg-shell {
     grid-template-areas:
       "toolbar"
-      "palette"
       "canvas"
       "inspector"
-      "activity";
+      "bottom";
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--toolbar-height) minmax(360px, 1fr) minmax(320px, auto) minmax(260px, auto);
+    height: auto;
+    min-height: 100vh;
+  }
+
+  #bottom-row.mg-bottom-row {
+    grid-template-columns: 1fr;
   }
 }

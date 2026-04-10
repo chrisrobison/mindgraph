@@ -171,21 +171,21 @@ class BottomActivityPanel extends HTMLElement {
 
   render() {
     this.innerHTML = `
-      <section class="mg-panel">
-        <header>Activity & Runtime</header>
-        <div class="content bottom-panel-content">
-          <div class="bottom-panel-toolbar">
-            <div class="toolbar-actions" role="tablist" aria-label="Bottom activity tabs">
-              ${tabs
-                .map(
-                  (tab) => `<button type="button" role="tab" data-bottom-tab="${tab.key}" aria-pressed="${this.#tab === tab.key}">${tab.label}</button>`
-                )
-                .join("")}
-            </div>
-            <button type="button" class="bottom-dev-toggle" data-action="toggle-dev-console" aria-pressed="${this.#runtime.devConsoleVisible}">
-              ${this.#runtime.devConsoleVisible ? "Hide PAN Console" : "Show PAN Console"}
-            </button>
+      <section class="mg-panel bottom-panel-shell">
+        <div class="bottom-panel-header">
+          <span class="bottom-panel-title">Activity & Chat</span>
+          <div class="toolbar-actions bottom-tab-actions" role="tablist" aria-label="Bottom activity tabs">
+            ${tabs
+              .map(
+                (tab) => `<button type="button" role="tab" data-bottom-tab="${tab.key}" aria-pressed="${this.#tab === tab.key}">${tab.label}</button>`
+              )
+              .join("")}
           </div>
+          <button type="button" class="bottom-dev-toggle" data-action="toggle-dev-console" aria-pressed="${this.#runtime.devConsoleVisible}">
+            ${this.#runtime.devConsoleVisible ? "Hide PAN Console" : "Show PAN Console"}
+          </button>
+        </div>
+        <div class="bottom-panel-content">
           <section class="bottom-panel-tab-content" data-role="bottom-tab-content"></section>
           <section class="bottom-panel-dev" data-role="pan-dev-console"></section>
         </div>

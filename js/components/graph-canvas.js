@@ -123,9 +123,8 @@ class GraphCanvas extends HTMLElement {
 
   #renderShell() {
     this.innerHTML = `
-      <section class="mg-panel mg-graph-panel">
-        <header>Graph Canvas</header>
-        <div class="content mg-graph-content">
+      <section class="mg-graph-panel">
+        <div class="graph-wrap">
           <div class="graph-workspace" data-role="workspace" tabindex="0">
             <div class="graph-scene" data-role="scene">
               <svg class="graph-edges-layer" data-role="edges" width="${WORLD_SIZE.width}" height="${WORLD_SIZE.height}" viewBox="0 0 ${WORLD_SIZE.width} ${WORLD_SIZE.height}" aria-hidden="true"></svg>

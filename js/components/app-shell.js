@@ -5,12 +5,14 @@ class AppShell extends HTMLElement {
 
   render() {
     this.innerHTML = `
-      <main class="mg-shell">
+      <main id="app" class="mg-shell">
         <top-toolbar class="mg-toolbar"></top-toolbar>
-        <left-tool-palette class="mg-palette"></left-tool-palette>
         <graph-canvas class="mg-canvas"></graph-canvas>
+        <div id="bottom-row" class="mg-bottom-row">
+          <bottom-activity-panel class="mg-activity"></bottom-activity-panel>
+          <left-tool-palette class="mg-palette"></left-tool-palette>
+        </div>
         <inspector-panel class="mg-inspector"></inspector-panel>
-        <bottom-activity-panel class="mg-activity"></bottom-activity-panel>
       </main>
     `;
   }
