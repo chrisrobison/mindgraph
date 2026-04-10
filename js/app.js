@@ -3,6 +3,7 @@ import "./components/top-toolbar.js";
 import "./components/left-tool-palette.js";
 import "./components/graph-canvas.js";
 import "./components/inspector-panel.js";
+import "./components/node-data-viewer-dialog.js";
 import "./components/bottom-activity-panel.js";
 import "./components/pan-event-console.js";
 import "./components/bottom-panel/messages-view.js";

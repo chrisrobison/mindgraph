@@ -294,6 +294,15 @@ class InspectorPanel extends HTMLElement {
     });
   }
 
+  #bindNodeInspectorActions() {
+    this.querySelector('[data-action="open-data-viewer"]')?.addEventListener("click", () => {
+      if (!this.#selectedNodeId) return;
+      const viewer = document.querySelector("node-data-viewer-dialog");
+      if (!viewer || typeof viewer.openForNode !== "function") return;
+      viewer.openForNode(this.#selectedNodeId);
+    });
+  }
+
   render() {
     if (this.#selectedEdge) {
       const edge = this.#selectedEdge;
@@ -452,6 +461,9 @@ class InspectorPanel extends HTMLElement {
                 ? `<p class="inspector-help">${escapeHtml(nodePlan.blockedReasons[0])}</p>`
                 : ""
             }
+            <div class="inspector-inline-row inspector-summary-actions">
+              <button type="button" data-action="open-data-viewer" ${node ? "" : "disabled"}>View Data</button>
+            </div>
           </div>
           <div class="inspector-tabs" role="tablist" aria-label="Inspector tabs">
             ${visibleTabs
@@ -476,6 +488,7 @@ class InspectorPanel extends HTMLElement {
     const tabEl = document.createElement(activeTag);
     tabEl.node = node;
     contentEl.append(tabEl);
+    this.#bindNodeInspectorActions();
   }
 }
 
