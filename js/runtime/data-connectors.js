@@ -680,6 +680,12 @@ class DataConnectors {
       return this.#fetchJson(url);
     }
 
+    // For json type: use sourcePath for path resolution.
+    // If sourcePath is empty but sourceUrl is set, fetch it directly.
+    if (!sourcePath && sourceUrl) {
+      return this.#fetchJson(sourceUrl);
+    }
+
     return this.#loadJsonSource(sourcePath);
   }
 
@@ -698,6 +704,14 @@ class DataConnectors {
 
     if (rawPath && embeddedSamples[rawPath]) {
       return deepClone(embeddedSamples[rawPath]);
+    }
+
+    // Also resolve by basename without extension so that paths like
+    // "market_data.json" or "/data/sample/market_data.json" match the
+    // embedded samples keyed as "market_data", "site_config", etc.
+    const baseName = rawPath.split("/").pop()?.replace(/\.json$/i, "") ?? "";
+    if (baseName && embeddedSamples[baseName]) {
+      return deepClone(embeddedSamples[baseName]);
     }
 
     const isAbsolutePath = rawPath.startsWith("/");
