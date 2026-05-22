@@ -7,6 +7,8 @@ import { persistenceStore } from "../store/persistence-store.js";
 import { uiStore } from "../store/ui-store.js";
 import { isExecutableNodeType } from "../core/graph-semantics.js";
 import { DEMO_TEMPLATES, getDemoTemplateById, loadDemoTemplateDocument } from "../core/demo-templates.js";
+import { libraryStore } from "../store/library-store.js";
+import { showWorkflowBrowser } from "./workflow-browser.js";
 
 class TopToolbar extends HTMLElement {
   #dispose = [];
@@ -19,6 +21,7 @@ class TopToolbar extends HTMLElement {
   #runtimeMode = "mock";
   #runtimeEndpoint = "";
   #selectedTemplateId = DEMO_TEMPLATES[0]?.id ?? "";
+  #libraryCount = 0;
 
   connectedCallback() {
     const history = graphStore.getHistoryState();
@@ -31,6 +34,8 @@ class TopToolbar extends HTMLElement {
       this.#selectedTemplateId = DEMO_TEMPLATES[0].id;
     }
 
+    this.#libraryCount = libraryStore.getCount();
+    libraryStore.initialize();
     this.render();
     this.#bind();
 
@@ -100,6 +105,13 @@ class TopToolbar extends HTMLElement {
       })
     );
 
+    this.#dispose.push(
+      subscribe(EVENTS.LIBRARY_UPDATED, ({ payload }) => {
+        this.#libraryCount = payload?.count ?? libraryStore.getCount();
+        this.#syncLibraryButton();
+      })
+    );
+
     this.#syncPressedState();
     this.#syncZoom();
     this.#syncRunButtons();
@@ -107,6 +119,7 @@ class TopToolbar extends HTMLElement {
     this.#syncAutosaveToggle();
     this.#syncRuntimeFields();
     this.#syncTemplatePicker();
+    this.#syncLibraryButton();
   }
 
   disconnectedCallback() {
@@ -130,6 +143,9 @@ class TopToolbar extends HTMLElement {
     this.querySelector("[data-action='save']")?.addEventListener("click", () => this.#onSave());
     this.querySelector("[data-action='load']")?.addEventListener("click", () => this.#onLoadRequest());
     this.querySelector("[data-action='load-template']")?.addEventListener("click", () => void this.#onLoadTemplate());
+    this.querySelector("[data-action='new-workflow']")?.addEventListener("click", () => this.#onNewWorkflow());
+    this.querySelector("[data-action='save-to-library']")?.addEventListener("click", () => this.#onSaveToLibrary());
+    this.querySelector("[data-action='open-library']")?.addEventListener("click", () => showWorkflowBrowser());
 
     this.querySelector("[data-action='undo']")?.addEventListener("click", () => this.#undo());
     this.querySelector("[data-action='redo']")?.addEventListener("click", () => this.#redo());
@@ -295,6 +311,46 @@ class TopToolbar extends HTMLElement {
     }
   }
 
+  #syncLibraryButton() {
+    const btn = this.querySelector("[data-action='open-library']");
+    if (!btn) return;
+    btn.textContent = this.#libraryCount > 0 ? `Library (${this.#libraryCount})` : "Library";
+  }
+
+  #onSaveToLibrary() {
+    const entry = libraryStore.saveCurrentDocument();
+    if (entry) {
+      publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+        level: "info",
+        message: `Saved to library: ${entry.title}`
+      });
+      this.#syncLibraryButton();
+    }
+  }
+
+  #onNewWorkflow() {
+    const title = prompt("Workflow name:", "New Workflow");
+    if (title === null) return;
+    const safeTitle = title.trim() || "New Workflow";
+    const newDoc = {
+      id: `graph_${Date.now()}`,
+      title: safeTitle,
+      schemaVersion: 1,
+      nodes: [],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 }
+    };
+    publish(EVENTS.GRAPH_DOCUMENT_LOAD_REQUESTED, {
+      document: newDoc,
+      reason: "new_workflow",
+      origin: "top-toolbar"
+    });
+    publish(EVENTS.ACTIVITY_LOG_APPENDED, {
+      level: "info",
+      message: `New workflow created: ${safeTitle}`
+    });
+  }
+
   #onSave() {
     const snapshot = graphStore.getDocument();
     if (!snapshot) return;
@@ -422,8 +478,11 @@ class TopToolbar extends HTMLElement {
           </div>
 
           <div class="toolbar-actions toolbar-action-group">
-            <button data-action="save" type="button">Save JSON</button>
-            <button data-action="load" type="button">Load JSON</button>
+            <button data-action="new-workflow" type="button">New</button>
+            <button data-action="save-to-library" type="button">Save to Library</button>
+            <button data-action="open-library" type="button">Library</button>
+            <button data-action="save" type="button">Export JSON</button>
+            <button data-action="load" type="button">Import JSON</button>
             <button data-action="toggle-autosave" type="button" aria-pressed="true">Autosave On</button>
             <input data-role="load-input" name="graph-load-file" type="file" accept="application/json,.json" hidden />
           </div>

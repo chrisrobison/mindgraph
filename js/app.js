@@ -27,6 +27,7 @@ import "./components/nodes/transformer-node.js";
 import "./components/nodes/view-node.js";
 import "./components/nodes/action-node.js";
 import "./components/nodes/checkpoint-node.js";
+import "./components/workflow-browser.js";
 
 import "./components/inspector/inspector-overview.js";
 import "./components/inspector/inspector-prompt.js";

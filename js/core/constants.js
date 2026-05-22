@@ -25,7 +25,8 @@ export const NODE_SIZE_BY_TYPE = Object.freeze({
   u2os_emit: Object.freeze({ width: 210, height: 104 }),
   transformer: Object.freeze({ width: 210, height: 104 }),
   view: Object.freeze({ width: 210, height: 104 }),
-  action: Object.freeze({ width: 210, height: 104 })
+  action: Object.freeze({ width: 210, height: 104 }),
+  checkpoint: Object.freeze({ width: 260, height: 120 })
 });
 
 export const NODE_TEMPLATES = Object.freeze({
@@ -158,6 +159,15 @@ export const NODE_TEMPLATES = Object.freeze({
       lastRunAt: "",
       lastRunSummary: ""
     })
+  }),
+  checkpoint: Object.freeze({
+    label: "Approval Checkpoint",
+    description: "Pauses workflow for human approval.",
+    data: Object.freeze({
+      title: "Approval Required",
+      message: "",
+      status: "idle"
+    })
   })
 });
 
@@ -175,7 +185,8 @@ export const PERSISTENCE = Object.freeze({
     runtimeProviderSettings: "mindgraph.runtime.provider.settings",
     runtimeProviderSettingsSession: "mindgraph.runtime.provider.settings.session",
     uiTheme: "mindgraph.ui.theme",
-    uiToolbarDisplay: "mindgraph.ui.toolbar.display"
+    uiToolbarDisplay: "mindgraph.ui.toolbar.display",
+    library: "mindgraph.library"
   })
 });
 
