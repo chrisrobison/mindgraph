@@ -23,6 +23,8 @@ export const EVENTS = Object.freeze({
   RUNTIME_ALL_RUN_REQUESTED: "runtime.all.run.requested",
   RUNTIME_RUN_CANCEL_REQUESTED: "runtime.run.cancel.requested",
   RUNTIME_PROVIDER_SETTINGS_UPDATE_REQUESTED: "runtime.provider.settings.update.requested",
+  RUNTIME_CHECKPOINT_APPROVE_REQUESTED: "runtime.checkpoint.approve.requested",
+  RUNTIME_CHECKPOINT_REJECT_REQUESTED: "runtime.checkpoint.reject.requested",
   UI_SETTINGS_UPDATE_REQUESTED: "ui.settings.update.requested",
 
   GRAPH_NODE_SELECTED: "graph.node.selected",
@@ -57,6 +59,8 @@ export const EVENTS = Object.freeze({
   RUNTIME_TRACE_APPENDED: "runtime.trace.appended",
   RUNTIME_ERROR_APPENDED: "runtime.error.appended",
   RUNTIME_DATA_REFRESHED: "runtime.data.refreshed",
+  RUNTIME_CHECKPOINT_REACHED: "runtime.checkpoint.reached",
+  RUNTIME_CHECKPOINT_RESOLVED: "runtime.checkpoint.resolved",
   U2OS_BRIDGE_CONNECTED: "u2os.bridge.connected",
   U2OS_BRIDGE_DISCONNECTED: "u2os.bridge.disconnected",
   U2OS_BRIDGE_EVENT_RECEIVED: "u2os.bridge.event.received",

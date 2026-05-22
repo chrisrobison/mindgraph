@@ -2524,3 +2524,67 @@
   background: #111827;
   border-color: #263242;
 }
+
+/* ── Checkpoint Inspector ─────────────────────────────────────── */
+
+.checkpoint-approval-section {
+  background: linear-gradient(180deg, #fffef6 0%, #fffae8 100%);
+  border: 1px solid #f0d580;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.checkpoint-inspector-message {
+  margin: 0.6rem 0 0.9rem;
+  padding: 0.72rem 0.9rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #e8d58a;
+  border-left: 3px solid #c47c0e;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #3a2a00;
+  line-height: 1.5;
+}
+
+.checkpoint-decision-buttons {
+  display: flex;
+  gap: 0.72rem;
+  margin-top: 0.9rem;
+}
+
+.checkpoint-btn-approve,
+.checkpoint-btn-reject {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 120ms, transform 80ms;
+  letter-spacing: 0.01em;
+}
+.checkpoint-btn-approve:hover,
+.checkpoint-btn-reject:hover { filter: brightness(1.06); }
+.checkpoint-btn-approve:active,
+.checkpoint-btn-reject:active { transform: scale(0.97); }
+
+.checkpoint-btn-approve {
+  background: #1f7040;
+  color: #fff;
+}
+.checkpoint-btn-reject {
+  background: #c13234;
+  color: #fff;
+}
+
+:root[data-theme="dark"] .checkpoint-approval-section {
+  background: linear-gradient(180deg, #1e1800 0%, #221c00 100%);
+  border-color: #5a4800;
+}
+:root[data-theme="dark"] .checkpoint-inspector-message {
+  background: rgba(0,0,0,0.2);
+  border-color: #5a4800;
+  color: #f0d580;
+}

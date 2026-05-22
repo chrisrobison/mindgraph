@@ -5,6 +5,7 @@ import { dataConnectors } from "./data-connectors.js";
 import { getNodeTypeSpec, isExecutableNodeType } from "../core/graph-semantics.js";
 import { operationNeedsEntityId } from "../core/u2os-node-catalog.js";
 import { NODE_TYPES } from "../core/types.js";
+import { checkpointExecutor } from "./checkpoint-executor.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -79,6 +80,7 @@ const normalizeMappings = (value) =>
 export class MockAgentRuntime extends AgentRuntime {
   #taskQueue = [];
   #cancelRequested = false;
+  #pendingCheckpointNodeIds = new Set();
 
   constructor(options = {}) {
     super(options);
@@ -133,6 +135,11 @@ export class MockAgentRuntime extends AgentRuntime {
         generatedAt: new Date().toISOString()
       });
       return { ok: false, nodeId, runId, error: reason, blockedReasons: nodePlan.blockedReasons };
+    }
+
+    // ── Checkpoint node: pause execution and await human decision ──
+    if (node.type === NODE_TYPES.CHECKPOINT) {
+      return await this.#runCheckpointNode(node, taskId, runId, context);
     }
 
     this.#setTask(taskId, {
@@ -383,6 +390,10 @@ export class MockAgentRuntime extends AgentRuntime {
 
   cancelAll(reason = "cancelled") {
     this.#cancelRequested = true;
+    for (const nodeId of this.#pendingCheckpointNodeIds) {
+      try { checkpointExecutor.cancelNode(nodeId); } catch { /* noop */ }
+    }
+    this.#pendingCheckpointNodeIds.clear();
     this.#appendActivity("warn", `Run cancellation requested (${reason})`, { reason });
   }
 
@@ -609,6 +620,197 @@ export class MockAgentRuntime extends AgentRuntime {
       confirmation,
       generatedAt: inputContext.requestedAt
     };
+  }
+
+  async #runCheckpointNode(node, taskId, runId, context) {
+    const latestPlan = buildExecutionPlan(this.store.getDocument());
+    const inputContext = this.#buildInputContext(node, latestPlan.nodes?.[node.id], latestPlan);
+    const trigger = context?.trigger ?? "manual";
+
+    // Create the pending approval promise
+    const { token, decision } = checkpointExecutor.createPending(node.id);
+    this.#pendingCheckpointNodeIds.add(node.id);
+
+    // Set node to pending_approval state
+    this.#patchNodeData(node.id, {
+      status: "pending_approval",
+      checkpointToken: token,
+      lastRunSummary: "Awaiting human approval…",
+      lastRunAt: new Date().toISOString()
+    });
+
+    this.#setTask(taskId, {
+      id: taskId,
+      nodeId: node.id,
+      label: `Checkpoint: ${node.label}`,
+      status: "pending",
+      progress: 0.5,
+      runId,
+      startedAt: new Date().toISOString()
+    });
+
+    this.publish(this.events.RUNTIME_AGENT_RUN_STARTED, {
+      nodeId: node.id,
+      runId,
+      trigger,
+      status: "pending_approval"
+    });
+
+    this.publish(this.events.RUNTIME_CHECKPOINT_REACHED, {
+      nodeId: node.id,
+      token,
+      nodeLabel: node.label,
+      message: node.data?.message ?? "",
+      inputContext,
+      at: new Date().toISOString()
+    });
+
+    this.#appendActivity("info", `Checkpoint "${node.label}" reached — awaiting approval`, {
+      nodeId: node.id,
+      runId,
+      token
+    });
+    this.#appendNodeActivity(node.id, {
+      at: new Date().toISOString(),
+      level: "info",
+      message: `Checkpoint pending approval (token: ${token})`
+    });
+
+    // Wait for the human decision
+    const decisionResult = await decision;
+    this.#pendingCheckpointNodeIds.delete(node.id);
+
+    if (this.#isCancelled(context)) {
+      this.#markCancelled(node, taskId, runId, "Execution cancelled during checkpoint wait");
+      return { ok: false, nodeId: node.id, runId, status: "cancelled", error: "Execution cancelled", cancelled: true };
+    }
+
+    const completedAt = new Date().toISOString();
+    const decisionLabel = decisionResult.approved ? "approved" : "rejected";
+    const output = {
+      type: "checkpoint_decision",
+      approved: decisionResult.approved,
+      comment: decisionResult.comment,
+      decidedBy: decisionResult.decidedBy,
+      decidedAt: decisionResult.decidedAt,
+      summary: `${node.label} ${decisionLabel} by ${decisionResult.decidedBy}`,
+      generatedAt: completedAt
+    };
+
+    this.publish(this.events.RUNTIME_CHECKPOINT_RESOLVED, {
+      nodeId: node.id,
+      token,
+      decision: decisionResult,
+      at: completedAt
+    });
+
+    if (decisionResult.approved) {
+      const runEntry = { runId, status: "completed", summary: output.summary, confidence: 1.0, at: completedAt };
+      const latestNode = this.store.getNode(node.id);
+
+      this.#patchNodeData(node.id, {
+        status: "completed",
+        confidence: 1.0,
+        lastRunAt: completedAt,
+        lastRunSummary: output.summary,
+        lastOutput: output,
+        decision: "approved",
+        decidedBy: decisionResult.decidedBy,
+        decidedAt: decisionResult.decidedAt,
+        decisionComment: decisionResult.comment,
+        checkpointToken: null,
+        runHistory: [runEntry, ...toArray(latestNode?.data?.runHistory)].slice(0, 25),
+        activityHistory: [{
+          at: completedAt,
+          level: "info",
+          message: `Approved by ${decisionResult.decidedBy}${decisionResult.comment ? ": " + decisionResult.comment : ""}`
+        }, ...toArray(latestNode?.data?.activityHistory)].slice(0, 40)
+      });
+
+      this.#setTask(taskId, { status: "completed", progress: 1, completedAt });
+
+      this.publish(this.events.RUNTIME_AGENT_RUN_COMPLETED, {
+        nodeId: node.id,
+        runId,
+        status: "completed",
+        confidence: 1.0,
+        output
+      });
+      this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
+        nodeId: node.id,
+        nodeLabel: node.label,
+        runId,
+        status: "completed",
+        summary: output.summary,
+        confidence: 1.0,
+        output,
+        at: completedAt
+      });
+
+      this.#appendActivity("info", `Checkpoint "${node.label}" approved by ${decisionResult.decidedBy}`, {
+        nodeId: node.id,
+        runId
+      });
+
+      return { ok: true, nodeId: node.id, runId, status: "completed", confidence: 1.0, output };
+    } else {
+      const runEntry = { runId, status: "failed", summary: output.summary, confidence: 0, at: completedAt };
+      const latestNode = this.store.getNode(node.id);
+
+      this.#patchNodeData(node.id, {
+        status: "rejected",
+        confidence: 0,
+        lastRunAt: completedAt,
+        lastRunSummary: output.summary,
+        lastOutput: output,
+        decision: "rejected",
+        decidedBy: decisionResult.decidedBy,
+        decidedAt: decisionResult.decidedAt,
+        decisionComment: decisionResult.comment,
+        checkpointToken: null,
+        runHistory: [runEntry, ...toArray(latestNode?.data?.runHistory)].slice(0, 25),
+        activityHistory: [{
+          at: completedAt,
+          level: "warn",
+          message: `Rejected by ${decisionResult.decidedBy}${decisionResult.comment ? ": " + decisionResult.comment : ""}`
+        }, ...toArray(latestNode?.data?.activityHistory)].slice(0, 40)
+      });
+
+      this.#setTask(taskId, { status: "failed", progress: 1, completedAt });
+
+      this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, {
+        nodeId: node.id,
+        runId,
+        reason: output.summary,
+        output
+      });
+      this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
+        nodeId: node.id,
+        nodeLabel: node.label,
+        runId,
+        status: "failed",
+        summary: output.summary,
+        confidence: 0,
+        output,
+        at: completedAt
+      });
+      this.publish(this.events.RUNTIME_ERROR_APPENDED, {
+        nodeId: node.id,
+        nodeLabel: node.label,
+        runId,
+        message: output.summary,
+        source: "mock-agent-runtime",
+        output,
+        at: completedAt
+      });
+
+      this.#appendActivity("warn", `Checkpoint "${node.label}" rejected by ${decisionResult.decidedBy}`, {
+        nodeId: node.id,
+        runId
+      });
+
+      return { ok: false, nodeId: node.id, runId, status: "failed", error: output.summary, output };
+    }
   }
 
   #confidenceForType(type) {

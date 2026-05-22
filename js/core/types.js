@@ -8,7 +8,8 @@ export const NODE_TYPES = Object.freeze({
   U2OS_EMIT: "u2os_emit",
   TRANSFORMER: "transformer",
   VIEW: "view",
-  ACTION: "action"
+  ACTION: "action",
+  CHECKPOINT: "checkpoint"
 });
 
 export const EDGE_TYPES = Object.freeze({

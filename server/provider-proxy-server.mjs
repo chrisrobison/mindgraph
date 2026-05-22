@@ -48,6 +48,16 @@ let wsClientSeq = 0;
 const wsClients = new Map();
 const wsRunControllers = new Map();
 
+// ── Checkpoint store (in-memory, single-server V1) ─────────────
+const checkpoints = new Map(); // token -> checkpoint record
+
+const pushCheckpointEvent = (eventType, data) => {
+  const message = JSON.stringify({ type: eventType, ...data });
+  for (const client of wsClients.values()) {
+    try { client.socket.write(encodeWsTextFrame(message)); } catch { /* noop */ }
+  }
+};
+
 const clamp = (value, min, max, fallback) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -872,6 +882,110 @@ const server = http.createServer(async (req, res) => {
       tenancyMode: tenancyConfig.mode,
       strictHostMatch: tenancyConfig.strictHostMatch
     });
+    return;
+  }
+
+  // ── Checkpoint: create ─────────────────────────────────────────
+  if (req.method === "POST" && pathname === "/api/mindgraph/checkpoints") {
+    try {
+      const body = await readJsonBody(req);
+      const token = String(body?.token ?? crypto.randomUUID()).trim();
+      const checkpoint = {
+        token,
+        nodeId:     String(body?.nodeId ?? ""),
+        graphId:    String(body?.graphId ?? ""),
+        nodeLabel:  String(body?.nodeLabel ?? "Checkpoint"),
+        graphTitle: String(body?.graphTitle ?? ""),
+        message:    String(body?.message ?? ""),
+        inputPayload: body?.inputPayload ?? null,
+        status:     "pending",
+        createdAt:  nowIso(),
+        decidedBy:  null,
+        decidedAt:  null,
+        decisionComment: null
+      };
+      checkpoints.set(token, checkpoint);
+
+      const webhookUrl = String(body?.notifyWebhookUrl ?? "").trim();
+      if (webhookUrl) {
+        const approvalUrl = String(body?.approvalUrl ?? "").trim();
+        fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: `⏳ Checkpoint "${checkpoint.nodeLabel}" is awaiting approval in workflow "${checkpoint.graphTitle || "Untitled"}".`,
+            blocks: [{
+              type: "section",
+              text: { type: "mrkdwn", text: `*Checkpoint: ${checkpoint.nodeLabel}*\n${checkpoint.message || "Review required."}\n${approvalUrl ? `<${approvalUrl}|Review & Decide>` : ""}` }
+            }]
+          }),
+          signal: AbortSignal.timeout(5000)
+        }).catch(() => { /* webhook is best-effort */ });
+      }
+
+      writeJson(req, res, 201, { ok: true, token, checkpoint });
+    } catch (error) {
+      writeProxyError(req, res, error);
+    }
+    return;
+  }
+
+  // ── Checkpoint: list pending ────────────────────────────────────
+  if (req.method === "GET" && pathname === "/api/mindgraph/checkpoints") {
+    const pending = [...checkpoints.values()].filter((cp) => cp.status === "pending");
+    writeJson(req, res, 200, { ok: true, checkpoints: pending, total: pending.length });
+    return;
+  }
+
+  // ── Checkpoint: get by token ────────────────────────────────────
+  const checkpointGetMatch = pathname.match(/^\/api\/mindgraph\/checkpoints\/([^/]+)$/);
+  if (req.method === "GET" && checkpointGetMatch) {
+    const token = decodeURIComponent(checkpointGetMatch[1]);
+    const cp = checkpoints.get(token);
+    if (!cp) {
+      writeProxyError(req, res, new ProxyError("CHECKPOINT_NOT_FOUND", "Checkpoint not found", { status: 404 }));
+      return;
+    }
+    writeJson(req, res, 200, { ok: true, checkpoint: cp });
+    return;
+  }
+
+  // ── Checkpoint: approve / reject ────────────────────────────────
+  const checkpointDecisionMatch = pathname.match(/^\/api\/mindgraph\/checkpoints\/([^/]+)\/(approve|reject)$/);
+  if (req.method === "POST" && checkpointDecisionMatch) {
+    const token = decodeURIComponent(checkpointDecisionMatch[1]);
+    const action = checkpointDecisionMatch[2];
+    const cp = checkpoints.get(token);
+
+    if (!cp) {
+      writeProxyError(req, res, new ProxyError("CHECKPOINT_NOT_FOUND", "Checkpoint not found", { status: 404 }));
+      return;
+    }
+    if (cp.status !== "pending") {
+      writeJson(req, res, 200, { ok: true, checkpoint: cp, message: "Checkpoint was already resolved" });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      const comment    = String(body?.comment ?? "").trim();
+      const decidedBy  = String(body?.decidedBy ?? "reviewer").trim() || "reviewer";
+      const decidedAt  = nowIso();
+      const approved   = action === "approve";
+      const updated = { ...cp, status: approved ? "approved" : "rejected", decidedBy, decidedAt, decisionComment: comment };
+      checkpoints.set(token, updated);
+
+      // Push live event to all connected canvas clients
+      pushCheckpointEvent("runtime.checkpoint.resolved", {
+        nodeId: cp.nodeId,
+        token,
+        decision: { approved, comment, decidedBy, decidedAt }
+      });
+
+      writeJson(req, res, 200, { ok: true, checkpoint: updated });
+    } catch (error) {
+      writeProxyError(req, res, error);
+    }
     return;
   }
 

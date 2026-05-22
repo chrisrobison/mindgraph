@@ -26,6 +26,7 @@ import "./components/nodes/u2os-emit-node.js";
 import "./components/nodes/transformer-node.js";
 import "./components/nodes/view-node.js";
 import "./components/nodes/action-node.js";
+import "./components/nodes/checkpoint-node.js";
 
 import "./components/inspector/inspector-overview.js";
 import "./components/inspector/inspector-prompt.js";
@@ -37,8 +38,10 @@ import "./components/inspector/inspector-activity.js";
 import "./components/inspector/inspector-output.js";
 import "./components/inspector/inspector-automation.js";
 import "./components/inspector/inspector-permissions.js";
+import "./components/inspector/inspector-checkpoint.js";
 import "./runtime/data-connectors.js";
 import "./runtime/runtime-service.js";
+import "./runtime/checkpoint-executor.js";
 import "./runtime/runtime-audit-store.js";
 import "./runtime/u2os-bridge-client.js";
 

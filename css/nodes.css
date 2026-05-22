@@ -403,3 +403,87 @@
 :root[data-theme="dark"] .node-compact-meta {
   color: #94a3b8;
 }
+
+/* ── Checkpoint Node ─────────────────────────────────────────── */
+
+@keyframes checkpoint-pending-pulse {
+  0%, 100% {
+    border-left-color: #c47c0e;
+    box-shadow: 0 0 0 0 rgba(196, 124, 14, 0.15), 0 16px 34px -24px rgba(12, 30, 64, 0.52);
+  }
+  50% {
+    border-left-color: #e8a020;
+    box-shadow: 0 0 0 4px rgba(196, 124, 14, 0.12), 0 18px 34px -24px rgba(12, 30, 64, 0.52);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mg-node.checkpoint.checkpoint-pending {
+    animation: checkpoint-pending-pulse 1.8s ease-in-out infinite;
+  }
+}
+
+.mg-node.checkpoint {
+  width: 260px;
+  border-left: 4px solid #6e7e98;
+}
+
+.mg-node.checkpoint.checkpoint-pending {
+  border-left-color: #c47c0e;
+  background: linear-gradient(180deg, #fffdf6 0%, #fff8e8 100%);
+}
+
+.mg-node.checkpoint.checkpoint-approved {
+  border-left-color: #1f7040;
+  background: linear-gradient(180deg, #f6fef9 0%, #edfaf3 100%);
+}
+
+.mg-node.checkpoint.checkpoint-rejected {
+  border-left-color: #a1363c;
+  background: linear-gradient(180deg, #fff6f6 0%, #fdeeed 100%);
+}
+
+.checkpoint-status-badge {
+  display: inline-block;
+  margin-top: 0.52rem;
+  padding: 0.18rem 0.56rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+
+.checkpoint-pending-badge {
+  background: #fff3d8;
+  border-color: #f0c97a;
+  color: #7a4d00;
+}
+
+.checkpoint-approved-badge {
+  background: #e8f8ef;
+  border-color: #a8d8bc;
+  color: #1a5c38;
+}
+
+.checkpoint-rejected-badge {
+  background: #fdeeed;
+  border-color: #f0b8bb;
+  color: #8a2328;
+}
+
+.checkpoint-message {
+  margin-top: 0.4rem;
+  font-size: 0.77rem;
+  color: #445;
+  font-style: italic;
+  border-left: 2px solid #d0dff1;
+  padding-left: 0.5rem;
+}
+
+.checkpoint-decision-comment {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: #556;
+  font-style: italic;
+}

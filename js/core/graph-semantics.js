@@ -145,6 +145,17 @@ const nodeTypeSpecEntries = [
       outputField: "lastOutput",
       description: "U2OS event emitter node that publishes named events to the bridge."
     }
+  ],
+  [
+    NODE_TYPES.CHECKPOINT,
+    {
+      role: "checkpoint",
+      executable: true,
+      requiredDataKeys: ["title"],
+      requiredInputSources: 0,
+      outputField: "lastOutput",
+      description: "Pauses workflow execution and waits for human approval or rejection before continuing."
+    }
   ]
 ];
 
@@ -167,7 +178,8 @@ const edgeTypeSpecEntries = [
         NODE_TYPES.VIEW,
         NODE_TYPES.ACTION,
         NODE_TYPES.U2OS_MUTATE,
-        NODE_TYPES.U2OS_EMIT
+        NODE_TYPES.U2OS_EMIT,
+        NODE_TYPES.CHECKPOINT
       ]
     }
   ],
@@ -180,8 +192,8 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: false,
       description: "Source completion requests target execution.",
-      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT],
-      validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT]
+      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT, NODE_TYPES.CHECKPOINT],
+      validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT, NODE_TYPES.CHECKPOINT]
     }
   ],
   [
@@ -200,7 +212,8 @@ const edgeTypeSpecEntries = [
         NODE_TYPES.VIEW,
         NODE_TYPES.ACTION,
         NODE_TYPES.U2OS_MUTATE,
-        NODE_TYPES.U2OS_EMIT
+        NODE_TYPES.U2OS_EMIT,
+        NODE_TYPES.CHECKPOINT
       ],
       validTargetTypes: ALL_NODE_TYPES
     }
@@ -223,7 +236,8 @@ const edgeTypeSpecEntries = [
         NODE_TYPES.VIEW,
         NODE_TYPES.ACTION,
         NODE_TYPES.U2OS_MUTATE,
-        NODE_TYPES.U2OS_EMIT
+        NODE_TYPES.U2OS_EMIT,
+        NODE_TYPES.CHECKPOINT
       ],
       validTargetTypes: [
         NODE_TYPES.TRANSFORMER,
@@ -231,7 +245,8 @@ const edgeTypeSpecEntries = [
         NODE_TYPES.VIEW,
         NODE_TYPES.ACTION,
         NODE_TYPES.U2OS_MUTATE,
-        NODE_TYPES.U2OS_EMIT
+        NODE_TYPES.U2OS_EMIT,
+        NODE_TYPES.CHECKPOINT
       ]
     }
   ],
@@ -316,7 +331,8 @@ const edgeTypeSpecEntries = [
         NODE_TYPES.VIEW,
         NODE_TYPES.ACTION,
         NODE_TYPES.U2OS_MUTATE,
-        NODE_TYPES.U2OS_EMIT
+        NODE_TYPES.U2OS_EMIT,
+        NODE_TYPES.CHECKPOINT
       ]
     }
   ],
@@ -329,7 +345,7 @@ const edgeTypeSpecEntries = [
       affectsHierarchy: false,
       informationalOnly: true,
       description: "Organizational reporting relation.",
-      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT, NODE_TYPES.VIEW],
+      validSourceTypes: [NODE_TYPES.AGENT, NODE_TYPES.ACTION, NODE_TYPES.U2OS_MUTATE, NODE_TYPES.U2OS_EMIT, NODE_TYPES.VIEW, NODE_TYPES.CHECKPOINT],
       validTargetTypes: [NODE_TYPES.AGENT, NODE_TYPES.NOTE]
     }
   ],
@@ -598,6 +614,7 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
       else if (key === "mode") next[key] = "orchestrate";
       else if (key === "outputTemplate") next[key] = "summary_card";
       else if (key === "command") next[key] = "noop";
+      else if (key === "title") next[key] = "Approval Required";
       else if (key === "entity") next[key] = "reservation";
       else if (key === "operation" && nodeType === NODE_TYPES.U2OS_QUERY) next[key] = "list";
       else if (key === "operation" && nodeType === NODE_TYPES.U2OS_MUTATE) next[key] = "create";
@@ -634,6 +651,19 @@ export const normalizeNodeDataWithContract = (nodeType, data = {}) => {
 
   if (nodeType === NODE_TYPES.U2OS_EMIT) {
     if (!Array.isArray(next.payloadMapping)) next.payloadMapping = [];
+  }
+
+  if (nodeType === NODE_TYPES.CHECKPOINT) {
+    if (next.message === undefined) next.message = "";
+    if (next.notifyWebhookUrl === undefined) next.notifyWebhookUrl = "";
+    if (next.timeoutMs === undefined) next.timeoutMs = 0;
+    if (next.timeoutBehavior === undefined) next.timeoutBehavior = "block";
+    if (next.checkpointToken === undefined) next.checkpointToken = null;
+    if (next.approvalUrl === undefined) next.approvalUrl = null;
+    if (next.decidedBy === undefined) next.decidedBy = null;
+    if (next.decidedAt === undefined) next.decidedAt = null;
+    if (next.decision === undefined) next.decision = null;
+    if (next.decisionComment === undefined) next.decisionComment = "";
   }
 
   if (next.lastRunAt === undefined && spec.executable) {

@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workflow Approval — MindGraph AI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f0f4f9;
+      color: #1e2a3a;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2.5rem 1rem 4rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(20, 40, 80, 0.10), 0 1px 4px rgba(20, 40, 80, 0.06);
+      padding: 2.5rem 2.5rem 2rem;
+      width: 100%;
+      max-width: 620px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 2rem;
+      color: #4a6a9c;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .brand svg { flex-shrink: 0; }
+    h1 { margin: 0 0 0.4rem; font-size: 1.45rem; line-height: 1.25; color: #111827; }
+    .subtitle { margin: 0 0 1.8rem; color: #5a6f88; font-size: 0.95rem; }
+    .section { margin-bottom: 1.5rem; }
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7a90aa;
+      margin-bottom: 0.5rem;
+    }
+    .message-box {
+      padding: 0.9rem 1.1rem;
+      background: #f4f8fd;
+      border: 1px solid #d6e4f0;
+      border-left: 4px solid #3a72b5;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      line-height: 1.55;
+      color: #253045;
+      white-space: pre-wrap;
+    }
+    .context-box {
+      background: #f8fafc;
+      border: 1px solid #dde5ef;
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: #2a3a50;
+      overflow-x: auto;
+      max-height: 280px;
+      overflow-y: auto;
+      white-space: pre;
+    }
+    textarea {
+      width: 100%;
+      border: 1px solid #c8d6e8;
+      border-radius: 8px;
+      padding: 0.72rem 0.9rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: vertical;
+      color: #1e2a3a;
+      outline: none;
+      transition: border-color 120ms;
+    }
+    textarea:focus { border-color: #3a72b5; box-shadow: 0 0 0 3px rgba(58, 114, 181, 0.12); }
+    .actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.8rem;
+    }
+    .btn {
+      flex: 1;
+      padding: 0.78rem 1rem;
+      border-radius: 9px;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: filter 120ms, transform 80ms;
+      letter-spacing: 0.01em;
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn:active { transform: scale(0.98); }
+    .btn-approve { background: #1f7040; color: #fff; }
+    .btn-reject  { background: #c13234; color: #fff; }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .status-banner {
+      display: none;
+      padding: 1.1rem 1.4rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 1.5rem;
+      text-align: center;
+    }
+    .status-banner.success-approve { background: #e9f8ef; color: #145a30; border: 1px solid #b3dcc4; display: block; }
+    .status-banner.success-reject  { background: #fdeeed; color: #8a2328; border: 1px solid #f0b8bb; display: block; }
+    .status-banner.error { background: #fff3e0; color: #7a4300; border: 1px solid #f5d99a; display: block; }
+    .token-note {
+      margin-top: 2rem;
+      padding-top: 1.2rem;
+      border-top: 1px solid #e8eef5;
+      font-size: 0.74rem;
+      color: #8a9ab0;
+    }
+    .token-note code {
+      background: #f0f4f9;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+    }
+    .loading { color: #7a90aa; font-size: 0.95rem; padding: 1rem 0; }
+    .error-text { color: #c13234; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+<div class="card" id="app">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="4" width="56" height="56" rx="14" fill="#1e4d86"/>
+      <text x="32" y="39" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="white">MG</text>
+    </svg>
+    MindGraph AI
+  </div>
+  <p class="loading" id="loading-msg">Loading checkpoint details…</p>
+  <div id="content" style="display:none">
+    <h1 id="cp-title">Approval Required</h1>
+    <p class="subtitle" id="cp-subtitle">Review the request below and approve or reject.</p>
+
+    <div class="section" id="message-section" style="display:none">
+      <div class="section-label">Reviewer Message</div>
+      <div class="message-box" id="cp-message"></div>
+    </div>
+
+    <div class="section" id="context-section" style="display:none">
+      <div class="section-label">Incoming Context</div>
+      <div class="context-box" id="cp-context"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Your Comment (optional)</div>
+      <textarea id="cp-comment" rows="3" placeholder="Add a note — it will appear in the audit log…"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-approve" id="btn-approve">✓ Approve</button>
+      <button class="btn btn-reject"  id="btn-reject">✗ Reject</button>
+    </div>
+
+    <div class="status-banner" id="status-banner"></div>
+
+    <div class="token-note">
+      Checkpoint token: <code id="cp-token-display"></code><br/>
+      Decisions are recorded in the workflow audit log.
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  const qs = new URLSearchParams(location.search);
+  const token  = qs.get("token")  ?? "";
+  const server = (qs.get("server") ?? "").replace(/\/$/, "");
+
+  const $ = (id) => document.getElementById(id);
+  const loadingMsg = $("loading-msg");
+  const content    = $("content");
+  const banner     = $("status-banner");
+
+  if (!token || !server) {
+    loadingMsg.textContent = "Missing token or server parameter. URL should be: approval.html?token=chk_xxx&server=http://localhost:3001";
+    loadingMsg.className = "error-text";
+  } else {
+    loadAsync();
+  }
+
+  async function loadAsync() {
+    try {
+      const res = await fetch(`${server}/api/mindgraph/checkpoints/${encodeURIComponent(token)}`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+
+      if (!data.ok) throw new Error(data.error?.message ?? "Checkpoint not found");
+
+      const cp = data.checkpoint;
+      $("cp-title").textContent = cp.nodeLabel ?? "Approval Required";
+      $("cp-subtitle").textContent = `Workflow: ${cp.graphTitle ?? "Untitled"} · Checkpoint reached at ${new Date(cp.createdAt).toLocaleString()}`;
+      $("cp-token-display").textContent = token;
+
+      if (cp.message) {
+        $("cp-message").textContent = cp.message;
+        $("message-section").style.display = "block";
+      }
+
+      if (cp.inputPayload) {
+        try {
+          $("cp-context").textContent = JSON.stringify(
+            typeof cp.inputPayload === "string" ? JSON.parse(cp.inputPayload) : cp.inputPayload,
+            null, 2
+          );
+          $("context-section").style.display = "block";
+        } catch {
+          $("cp-context").textContent = String(cp.inputPayload);
+          $("context-section").style.display = "block";
+        }
+      }
+
+      if (cp.status !== "pending") {
+        const resolved = cp.status === "approved";
+        showBanner(resolved
+          ? `This checkpoint was already approved by ${cp.decidedBy ?? "someone"}.`
+          : `This checkpoint was already rejected by ${cp.decidedBy ?? "someone"}.`,
+          resolved ? "success-approve" : "success-reject"
+        );
+        $("btn-approve").disabled = true;
+        $("btn-reject").disabled  = true;
+      }
+
+      loadingMsg.style.display = "none";
+      content.style.display = "block";
+
+      $("btn-approve").addEventListener("click", () => decide("approve"));
+      $("btn-reject").addEventListener("click",  () => decide("reject"));
+
+    } catch (err) {
+      loadingMsg.textContent = `Error: ${err.message}`;
+      loadingMsg.className = "error-text";
+    }
+  }
+
+  async function decide(action) {
+    const comment = $("cp-comment").value.trim();
+    $("btn-approve").disabled = true;
+    $("btn-reject").disabled  = true;
+
+    try {
+      const res = await fetch(
+        `${server}/api/mindgraph/checkpoints/${encodeURIComponent(token)}/${action}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ comment, decidedBy: "reviewer" })
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error?.message ?? `Server returned ${res.status}`);
+      }
+
+      const approved = action === "approve";
+      showBanner(
+        approved
+          ? "✓ Approved — the workflow will continue."
+          : "✗ Rejected — the workflow has been stopped at this checkpoint.",
+        approved ? "success-approve" : "success-reject"
+      );
+    } catch (err) {
+      showBanner(`Failed to submit decision: ${err.message}`, "error");
+      $("btn-approve").disabled = false;
+      $("btn-reject").disabled  = false;
+    }
+  }
+
+  function showBanner(msg, cls) {
+    banner.textContent = msg;
+    banner.className = `status-banner ${cls}`;
+  }
+</script>
+</body>
+</html>

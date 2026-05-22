@@ -34,6 +34,12 @@ const tabs = [
     visible: (nodeType) => nodeType === NODE_TYPES.U2OS_TRIGGER
   },
   {
+    key: "checkpoint",
+    label: "Approval",
+    tag: "inspector-checkpoint",
+    visible: (nodeType) => nodeType === NODE_TYPES.CHECKPOINT
+  },
+  {
     key: "tools",
     label: "Tools",
     tag: "inspector-tools",

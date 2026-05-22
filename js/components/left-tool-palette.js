@@ -15,6 +15,7 @@ const ICON_BY_TOOL = {
   "create:transformer": "assets/toolbar/transform.svg",
   "create:view": "assets/toolbar/view.svg",
   "create:action": "assets/toolbar/action.svg",
+  "create:checkpoint": "assets/toolbar/action.svg",
   connect: "assets/toolbar/connect.svg"
 };
 
@@ -108,7 +109,8 @@ const TOOL_GROUPS = [
       { id: "create:data", label: "Data Node" },
       { id: "create:transformer", label: "Transformer Node" },
       { id: "create:view", label: "View Node" },
-      { id: "create:action", label: "Action Node" }
+      { id: "create:action", label: "Action Node" },
+      { id: "create:checkpoint", label: "Checkpoint Node" }
     ]
   },
   {

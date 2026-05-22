@@ -534,6 +534,33 @@ const PORT_PRESETS_BY_NODE_TYPE = Object.freeze({
         description: "Normalized command execution output."
       })
     ])
+  }),
+  [NODE_TYPES.CHECKPOINT]: Object.freeze({
+    input: Object.freeze([
+      createPortPreset({
+        id: "review_context",
+        label: "Review Context",
+        schemaPreset: "object",
+        required: false,
+        description: "Data payload presented to the approver for review."
+      })
+    ]),
+    output: Object.freeze([
+      createPortPreset({
+        id: "decision",
+        label: "Decision",
+        schemaPreset: "object",
+        required: true,
+        description: "Human decision outcome: { approved, comment, decidedBy, decidedAt }."
+      }),
+      createPortPreset({
+        id: "approved_context",
+        label: "Approved Context",
+        schemaPreset: "object",
+        required: false,
+        description: "Input context passed through only when approved, with decision metadata attached."
+      })
+    ])
   })
 });
 
@@ -621,7 +648,8 @@ export const getDefaultPortsFromPresets = (nodeType) => {
     nodeType === NODE_TYPES.U2OS_TRIGGER ||
     nodeType === NODE_TYPES.U2OS_QUERY ||
     nodeType === NODE_TYPES.U2OS_MUTATE ||
-    nodeType === NODE_TYPES.U2OS_EMIT;
+    nodeType === NODE_TYPES.U2OS_EMIT ||
+    nodeType === NODE_TYPES.CHECKPOINT;
 
   return {
     input: inputPresets.length
