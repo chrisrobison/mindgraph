@@ -10,14 +10,15 @@ It intentionally keeps:
 - `ui-store` for UI-only state
 - `persistence-store` for autosave/restore
 
-Roadmap: [ROADMAP.md](/Users/cdr/Projects/mindgraph/ROADMAP.md)
+Roadmap: [ROADMAP.md](ROADMAP.md)
 
 ## Run Locally
 
 Use any static HTTP server (do not open with `file://`).
 
 ```bash
-cd /Users/cdr/Projects/mindgraph
+git clone https://github.com/chrisrobison/mindgraph.git
+cd mindgraph
 python3 -m http.server 4173
 ```
 
@@ -25,10 +26,9 @@ Open [http://127.0.0.1:4173](http://127.0.0.1:4173).
 
 ### Run Provider Proxy (OpenAI / Claude / Gemini)
 
-In a second terminal:
+In a second terminal, from the repository directory:
 
 ```bash
-cd /Users/cdr/Projects/mindgraph
 node server/provider-proxy-server.mjs
 ```
 
@@ -73,8 +73,8 @@ No component directly mutates shared graph state.
 
 ## Graph Semantics (Implemented)
 
-Full design note: [docs/graph-semantics.md](/Users/cdr/Projects/mindgraph/docs/graph-semantics.md)
-Provider proxy note: [docs/provider-proxy.md](/Users/cdr/Projects/mindgraph/docs/provider-proxy.md)
+Full design note: [docs/graph-semantics.md](docs/graph-semantics.md)
+Provider proxy note: [docs/provider-proxy.md](docs/provider-proxy.md)
 
 ### Node roles
 
@@ -190,7 +190,7 @@ Graph documents include a top-level integer `schemaVersion` and are migrated bef
 - `persistence-store` restore and toolbar JSON load both flow through `graphStore.load(...)`, so migration happens automatically on import/restore.
 - Future schema versions fail safely with a readable migration error object (`code`, `message`, `sourceVersion`, `targetVersion`, `details`).
 
-Migration authoring details: [docs/graph-schema-migrations.md](/Users/cdr/Projects/mindgraph/docs/graph-schema-migrations.md)
+Migration authoring details: [docs/graph-schema-migrations.md](docs/graph-schema-migrations.md)
 
 ## Current Limitations
 
