@@ -4,6 +4,7 @@ import "./components/left-tool-palette.js";
 import "./components/graph-canvas.js";
 import "./components/inspector-panel.js";
 import "./components/node-data-viewer-dialog.js";
+import "./components/webllm-model-download-dialog.js";
 import "./components/bottom-activity-panel.js";
 import "./components/pan-event-console.js";
 import "./components/bottom-panel/messages-view.js";
@@ -51,6 +52,7 @@ import { publish } from "./core/pan.js";
 import { graphStore } from "./store/graph-store.js";
 import { persistenceStore } from "./store/persistence-store.js";
 import { uiStore } from "./store/ui-store.js";
+import { runtimeService } from "./runtime/runtime-service.js";
 
 const bootstrap = () => {
   persistenceStore.initialize();
@@ -65,9 +67,13 @@ const bootstrap = () => {
   uiStore.setBottomTab("messages");
   uiStore.setDevConsoleVisible(true);
 
+  const mode = runtimeService.getMode();
+  const modeLabel = mode === "webllm" ? "Local AI (WebLLM)" : mode === "http" ? "HTTP runtime" : "mock runtime";
   publish(EVENTS.ACTIVITY_LOG_APPENDED, {
     level: "info",
-    message: restored ? "MindGraph AI restored from last session" : "MindGraph AI initialized"
+    message: restored
+      ? `MindGraph AI restored from last session — ${modeLabel}`
+      : `MindGraph AI initialized — ${modeLabel}`
   });
 };
 

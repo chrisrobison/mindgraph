@@ -627,8 +627,12 @@ export class MockAgentRuntime extends AgentRuntime {
     const inputContext = this.#buildInputContext(node, latestPlan.nodes?.[node.id], latestPlan);
     const trigger = context?.trigger ?? "manual";
 
-    // Create the pending approval promise
-    const { token, decision } = checkpointExecutor.createPending(node.id);
+    // Create the pending approval promise (also writes to IndexedDB for cross-tab approval)
+    const { token, decision } = checkpointExecutor.createPending(node.id, {
+      nodeLabel: node.label ?? node.id,
+      message: node.data?.message ?? "",
+      inputPayload: inputContext ?? null
+    });
     this.#pendingCheckpointNodeIds.add(node.id);
 
     // Set node to pending_approval state

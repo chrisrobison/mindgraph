@@ -1,7 +1,10 @@
 import { uiStore } from "../../store/ui-store.js";
+import { runtimeService } from "../../runtime/runtime-service.js";
+import { WEBLLM_MODELS, DEFAULT_WEBLLM_MODEL_ID, getWebLLMModel } from "../../runtime/webllm-model-catalog.js";
+import { isWebGpuAvailable } from "../../runtime/webllm-engine.js";
 import { escapeHtml, formatDateTime } from "./shared.js";
 
-const PROVIDERS = Object.freeze([
+const CLOUD_PROVIDERS = Object.freeze([
   {
     key: "openai",
     label: "OpenAI ChatGPT",
@@ -19,7 +22,14 @@ const PROVIDERS = Object.freeze([
   }
 ]);
 
-const providerByKey = Object.freeze(Object.fromEntries(PROVIDERS.map((entry) => [entry.key, entry])));
+const WEBLLM_PROVIDER = Object.freeze({
+  key: "webllm",
+  label: "Local AI (WebLLM)",
+  models: WEBLLM_MODELS.map((entry) => entry.id)
+});
+
+const ALL_PROVIDERS = Object.freeze([WEBLLM_PROVIDER, ...CLOUD_PROVIDERS]);
+const providerByKey = Object.freeze(Object.fromEntries(ALL_PROVIDERS.map((entry) => [entry.key, entry])));
 
 const sanitizeSettings = (raw = {}) => {
   const provider = providerByKey[raw?.provider] ? raw.provider : "openai";
@@ -129,12 +139,45 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
   render() {
     const settings = this.#settings;
+    const isWebLLM = settings.provider === "webllm";
+    const isCloudProvider = !isWebLLM;
+    const webGpuAvailable = isWebGpuAvailable();
     const provider = providerByKey[settings.provider] ?? providerByKey.openai;
     const uiSettings = this.#uiSettings;
     const bridge = this.#bridgeStatus;
-    const modelOptions = provider.models
-      .map((model) => `<option value="${escapeHtml(model)}" ${settings.model === model ? "selected" : ""}>${escapeHtml(model)}</option>`)
-      .join("");
+
+    // For WebLLM, build model options with size labels
+    const modelOptions = isWebLLM
+      ? WEBLLM_MODELS.map((entry) => {
+          const sel = settings.model === entry.id ? "selected" : "";
+          const note = entry.recommended ? " ★" : "";
+          return `<option value="${escapeHtml(entry.id)}" ${sel}>${escapeHtml(entry.label + note)} (${escapeHtml(entry.sizeLabel)})</option>`;
+        }).join("")
+      : provider.models
+          .map((model) => `<option value="${escapeHtml(model)}" ${settings.model === model ? "selected" : ""}>${escapeHtml(model)}</option>`)
+          .join("");
+
+    // WebGPU notice — shown only for WebLLM when WebGPU is unavailable
+    const webGpuNotice = isWebLLM && !webGpuAvailable
+      ? `<div class="runtime-settings-field runtime-settings-field-wide runtime-webgpu-notice" role="alert">
+           <span>⚠️</span>
+           <span>WebGPU is not available in this browser. Local AI models cannot run here.
+           Try Chrome, Edge, or Safari 18+. Cloud providers still work via HTTP mode.</span>
+         </div>`
+      : "";
+
+    // WebLLM model info card — shown below the model picker when WebLLM is selected
+    const activeModel = isWebLLM ? getWebLLMModel(settings.model) : null;
+    const modelInfoCard = activeModel
+      ? `<div class="runtime-settings-field runtime-settings-field-wide runtime-webllm-model-card">
+           <span>Selected model</span>
+           <div class="runtime-webllm-model-detail">
+             <strong>${escapeHtml(activeModel.label)}</strong>
+             <span class="row-meta">Size: ${escapeHtml(activeModel.sizeLabel)} · ${escapeHtml(activeModel.note)}</span>
+             ${activeModel.toolUseFinetuned ? `<span class="row-meta webllm-tool-badge">Tool-use fine-tuned</span>` : ""}
+           </div>
+         </div>`
+      : "";
     const bridgeConnectionState = settings.bridgeEnabled ? bridge.connectionState : "disconnected";
     const bridgeStateLabel =
       !settings.bridgeEnabled
@@ -197,22 +240,30 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
       <section class="panel-split">
         <h4>Provider Settings</h4>
-        <p class="panel-empty">Keys are session-only by default. Enable <strong>Remember Keys On This Device</strong> to persist them in local browser storage.</p>
+        <p class="panel-empty">${isWebLLM
+          ? "Local AI runs entirely in your browser — no API key or server required. The model is cached after the first download."
+          : "Keys are session-only by default. Enable <strong>Remember Keys On This Device</strong> to persist them in local browser storage."
+        }</p>
       </section>
 
       <section class="runtime-settings-grid">
         <label class="runtime-settings-field">
           <span>Provider</span>
           <select data-field="provider">
-            ${PROVIDERS.map((entry) => `<option value="${entry.key}" ${settings.provider === entry.key ? "selected" : ""}>${escapeHtml(entry.label)}</option>`).join("")}
+            ${ALL_PROVIDERS.map((entry) => `<option value="${entry.key}" ${settings.provider === entry.key ? "selected" : ""}>${escapeHtml(entry.label)}</option>`).join("")}
           </select>
         </label>
+
+        ${webGpuNotice}
 
         <label class="runtime-settings-field">
           <span>Model</span>
           <select data-field="model">${modelOptions}</select>
         </label>
 
+        ${modelInfoCard}
+
+        ${isCloudProvider ? `
         <label class="runtime-settings-field">
           <span>API Key</span>
           <input type="password" data-field="apiKey" value="${escapeHtml(settings.apiKey)}" placeholder="sk-... / claude... / AIza..." autocomplete="off" />
@@ -226,7 +277,7 @@ class BottomRuntimeSettingsView extends HTMLElement {
         <label class="runtime-settings-field">
           <span>Remember Keys On This Device</span>
           <input type="checkbox" data-field="rememberApiKey" ${settings.rememberApiKey ? "checked" : ""} />
-        </label>
+        </label>` : ""}
 
         <label class="runtime-settings-field">
           <span>Temperature</span>
@@ -280,7 +331,14 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
       <section class="panel-split">
         <h4>Transport</h4>
-        <p class="panel-empty">Current runtime mode: <strong>${escapeHtml(this.#runtimeMode)}</strong>. Use <strong>HTTP Runtime</strong> in the top toolbar to route runs through the proxy server via WebSocket (with HTTP fallback).</p>
+        <p class="panel-empty">Current runtime mode: <strong>${escapeHtml(this.#runtimeMode)}</strong>.
+          ${this.#runtimeMode === "webllm"
+            ? "Inference runs locally in your browser via WebLLM — no proxy or API key needed."
+            : this.#runtimeMode === "http"
+              ? "Runs are routed through the proxy server. Use <strong>Provider Settings</strong> above to configure the endpoint and API key."
+              : "Mock mode returns simulated output — no model is called."
+          }
+        </p>
       </section>
     `;
 
@@ -302,12 +360,32 @@ class BottomRuntimeSettingsView extends HTMLElement {
 
     this.querySelector('[data-field="provider"]')?.addEventListener("change", (event) => {
       const nextProvider = event.target.value;
-      const defaultModel = providerByKey[nextProvider]?.models?.[0] ?? providerByKey.openai.models[0];
+      const defaultModel = nextProvider === "webllm"
+        ? DEFAULT_WEBLLM_MODEL_ID
+        : (providerByKey[nextProvider]?.models?.[0] ?? providerByKey.openai.models[0]);
       this.#update({ provider: nextProvider, model: defaultModel });
+
+      // Auto-switch runtime mode to match the provider class:
+      // webllm → "webllm" mode, cloud providers → "http" mode (only if currently mock)
+      const currentMode = runtimeService.getMode();
+      if (nextProvider === "webllm" && currentMode !== "webllm" && runtimeService.getAvailableModes().includes("webllm")) {
+        runtimeService.setMode("webllm");
+      } else if (nextProvider !== "webllm" && currentMode === "webllm") {
+        runtimeService.setMode("http");
+      }
+
+      // Sync WebLLM model id if applicable
+      if (nextProvider === "webllm") {
+        runtimeService.setWebLLMModelId(defaultModel);
+      }
     });
 
     this.querySelector('[data-field="model"]')?.addEventListener("change", (event) => {
-      this.#update({ model: String(event.target.value ?? "").trim() });
+      const nextModel = String(event.target.value ?? "").trim();
+      this.#update({ model: nextModel });
+      if (this.#settings.provider === "webllm") {
+        runtimeService.setWebLLMModelId(nextModel);
+      }
     });
 
     this.querySelector('[data-field="apiKey"]')?.addEventListener("change", (event) => {

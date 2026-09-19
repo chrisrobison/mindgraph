@@ -8,6 +8,8 @@ import { uiStore } from "../store/ui-store.js";
 import { buildExecutionPlan } from "./execution-planner.js";
 import { HttpAgentRuntime } from "./http-agent-runtime.js";
 import { mockAgentRuntime } from "./mock-agent-runtime.js";
+import { WebLLMAgentRuntime } from "./webllm-agent-runtime.js";
+import { isWebGpuAvailable } from "./webllm-engine.js";
 import { resolveBatchConcurrencyLimit, runPlanWithBranchParallelism } from "./plan-batch-runner.js";
 import {
   buildPlannerSnapshotTrace,
@@ -25,7 +27,8 @@ class RuntimeService {
   #mode = "mock";
   #adapters = {
     mock: mockAgentRuntime,
-    http: new HttpAgentRuntime()
+    http: new HttpAgentRuntime(),
+    webllm: new WebLLMAgentRuntime()
   };
   #activeControllers = new Set();
   #cancelRequested = false;
@@ -78,7 +81,26 @@ class RuntimeService {
   }
 
   getAvailableModes() {
-    return ["mock", "http"];
+    const modes = ["mock"];
+    if (isWebGpuAvailable()) modes.push("webllm");
+    modes.push("http");
+    return modes;
+  }
+
+  /**
+   * Allow the WebLLM adapter's active model id to be updated from the UI
+   * without restarting the runtime service.
+   */
+  setWebLLMModelId(modelId) {
+    const adapter = this.#adapters.webllm;
+    if (adapter && typeof adapter.setModelId === "function") {
+      adapter.setModelId(modelId);
+    }
+  }
+
+  getWebLLMModelId() {
+    const adapter = this.#adapters.webllm;
+    return typeof adapter?.getModelId === "function" ? adapter.getModelId() : "";
   }
 
   setMode(mode) {
@@ -456,11 +478,13 @@ class RuntimeService {
 
   #readMode() {
     const storage = this.#storage();
-    if (!storage) return "mock";
+    const availableModes = this.getAvailableModes();
+    const preferredDefault = availableModes.includes("webllm") ? "webllm" : "mock";
+    if (!storage) return preferredDefault;
 
     const raw = storage.getItem(PERSISTENCE.storage.runtimeMode);
-    if (!raw) return "mock";
-    return this.getAvailableModes().includes(raw) ? raw : "mock";
+    if (!raw) return preferredDefault;
+    return availableModes.includes(raw) ? raw : preferredDefault;
   }
 
   #writeMode(mode) {

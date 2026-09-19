@@ -132,6 +132,19 @@
       border-radius: 4px;
       font-size: 0.72rem;
     }
+    .local-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.71rem;
+      font-weight: 600;
+      background: #e8f4e8;
+      color: #1f6030;
+      border: 1px solid #b3dcc4;
+      border-radius: 5px;
+      padding: 0.15rem 0.45rem;
+      margin-left: 0.4rem;
+    }
     .loading { color: #7a90aa; font-size: 0.95rem; padding: 1rem 0; }
     .error-text { color: #c13234; font-size: 0.9rem; }
   </style>
@@ -144,6 +157,7 @@
       <text x="32" y="39" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="white">MG</text>
     </svg>
     MindGraph AI
+    <span class="local-badge">⚡ Local</span>
   </div>
   <p class="loading" id="loading-msg">Loading checkpoint details…</p>
   <div id="content" style="display:none">
@@ -174,39 +188,98 @@
 
     <div class="token-note">
       Checkpoint token: <code id="cp-token-display"></code><br/>
-      Decisions are recorded in the workflow audit log.
+      Decisions are stored in your browser and synced to the running workflow automatically.
     </div>
   </div>
 </div>
 
 <script type="module">
-  const qs = new URLSearchParams(location.search);
-  const token  = qs.get("token")  ?? "";
-  const server = (qs.get("server") ?? "").replace(/\/$/, "");
+  // ── IndexedDB helpers ────────────────────────────────────────────────────
+  const DB_NAME    = "mindgraph-checkpoints";
+  const DB_VERSION = 1;
+  const STORE_NAME = "checkpoints";
+  const CHANNEL    = "mindgraph-checkpoint-decisions";
 
-  const $ = (id) => document.getElementById(id);
+  const openDb = () => new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (ev) => {
+      const db = ev.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const s = db.createObjectStore(STORE_NAME, { keyPath: "token" });
+        s.createIndex("status",    "status",    { unique: false });
+        s.createIndex("createdAt", "createdAt", { unique: false });
+      }
+    };
+    req.onsuccess = (ev) => resolve(ev.target.result);
+    req.onerror   = (ev) => reject(ev.target.error);
+  });
+
+  const idbGet = async (token) => {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx    = db.transaction(STORE_NAME, "readonly");
+      const req   = tx.objectStore(STORE_NAME).get(token);
+      req.onsuccess = () => { db.close(); resolve(req.result ?? null); };
+      req.onerror   = () => { db.close(); reject(req.error); };
+    });
+  };
+
+  const idbPut = async (record) => {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, "readwrite");
+      const req = tx.objectStore(STORE_NAME).put(record);
+      tx.oncomplete = () => { db.close(); resolve(req.result); };
+      tx.onerror    = () => { db.close(); reject(tx.error); };
+    });
+  };
+
+  // ── UI helpers ───────────────────────────────────────────────────────────
+  const qs         = new URLSearchParams(location.search);
+  const token      = qs.get("token") ?? "";
+  const $          = (id) => document.getElementById(id);
   const loadingMsg = $("loading-msg");
   const content    = $("content");
   const banner     = $("status-banner");
 
-  if (!token || !server) {
-    loadingMsg.textContent = "Missing token or server parameter. URL should be: approval.html?token=chk_xxx&server=http://localhost:3001";
+  const showBanner = (msg, cls) => {
+    banner.textContent = msg;
+    banner.className = `status-banner ${cls}`;
+  };
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  if (!token) {
+    loadingMsg.textContent = "Missing token parameter. URL should be: approval.html?token=chk_xxx";
     loadingMsg.className = "error-text";
   } else {
     loadAsync();
   }
 
+  // ── Retry helper — the main app writes IDB asynchronously, so we may
+  //    arrive before the record exists. Poll briefly before giving up.
+  async function waitForRecord(token, attempts = 12, intervalMs = 300) {
+    for (let i = 0; i < attempts; i++) {
+      const rec = await idbGet(token);
+      if (rec) return rec;
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+    return null;
+  }
+
   async function loadAsync() {
     try {
-      const res = await fetch(`${server}/api/mindgraph/checkpoints/${encodeURIComponent(token)}`);
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const data = await res.json();
+      const cp = await waitForRecord(token);
+      if (!cp) {
+        throw new Error(
+          "Checkpoint not found in local storage. " +
+          "Make sure you opened this link from the same browser where MindGraph is running."
+        );
+      }
 
-      if (!data.ok) throw new Error(data.error?.message ?? "Checkpoint not found");
-
-      const cp = data.checkpoint;
       $("cp-title").textContent = cp.nodeLabel ?? "Approval Required";
-      $("cp-subtitle").textContent = `Workflow: ${cp.graphTitle ?? "Untitled"} · Checkpoint reached at ${new Date(cp.createdAt).toLocaleString()}`;
+      $("cp-subtitle").textContent =
+        `Workflow: ${cp.graphTitle ?? "Untitled"} · ` +
+        `Reached at ${new Date(cp.createdAt).toLocaleString()}`;
       $("cp-token-display").textContent = token;
 
       if (cp.message) {
@@ -214,12 +287,11 @@
         $("message-section").style.display = "block";
       }
 
-      if (cp.inputPayload) {
+      if (cp.inputPayload != null) {
         try {
-          $("cp-context").textContent = JSON.stringify(
-            typeof cp.inputPayload === "string" ? JSON.parse(cp.inputPayload) : cp.inputPayload,
-            null, 2
-          );
+          const src = typeof cp.inputPayload === "string"
+            ? JSON.parse(cp.inputPayload) : cp.inputPayload;
+          $("cp-context").textContent = JSON.stringify(src, null, 2);
           $("context-section").style.display = "block";
         } catch {
           $("cp-context").textContent = String(cp.inputPayload);
@@ -228,49 +300,62 @@
       }
 
       if (cp.status !== "pending") {
-        const resolved = cp.status === "approved";
-        showBanner(resolved
-          ? `This checkpoint was already approved by ${cp.decidedBy ?? "someone"}.`
-          : `This checkpoint was already rejected by ${cp.decidedBy ?? "someone"}.`,
-          resolved ? "success-approve" : "success-reject"
+        const isApproved = cp.status === "approved";
+        showBanner(
+          isApproved
+            ? `✓ Already approved by ${cp.decidedBy ?? "someone"}.`
+            : `✗ Already rejected by ${cp.decidedBy ?? "someone"}.`,
+          isApproved ? "success-approve" : "success-reject"
         );
         $("btn-approve").disabled = true;
         $("btn-reject").disabled  = true;
+      } else {
+        $("btn-approve").addEventListener("click", () => decide("approve"));
+        $("btn-reject").addEventListener("click",  () => decide("reject"));
       }
 
       loadingMsg.style.display = "none";
-      content.style.display = "block";
-
-      $("btn-approve").addEventListener("click", () => decide("approve"));
-      $("btn-reject").addEventListener("click",  () => decide("reject"));
-
+      content.style.display    = "block";
     } catch (err) {
       loadingMsg.textContent = `Error: ${err.message}`;
-      loadingMsg.className = "error-text";
+      loadingMsg.className   = "error-text";
     }
   }
 
   async function decide(action) {
-    const comment = $("cp-comment").value.trim();
+    const comment    = $("cp-comment").value.trim();
+    const decidedAt  = new Date().toISOString();
+    const decidedBy  = "reviewer";
+    const approved   = action === "approve";
+
     $("btn-approve").disabled = true;
     $("btn-reject").disabled  = true;
 
     try {
-      const res = await fetch(
-        `${server}/api/mindgraph/checkpoints/${encodeURIComponent(token)}/${action}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ comment, decidedBy: "reviewer" })
-        }
-      );
+      // Fetch current record so we overwrite the correct version
+      const existing = await idbGet(token);
+      if (!existing) throw new Error("Checkpoint record disappeared from local storage.");
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message ?? `Server returned ${res.status}`);
+      const updated = {
+        ...existing,
+        status: approved ? "approved" : "rejected",
+        decidedBy,
+        decidedAt,
+        decisionComment: comment || null
+      };
+
+      await idbPut(updated);
+
+      // Notify the main-app tab via BroadcastChannel
+      try {
+        const ch = new BroadcastChannel(CHANNEL);
+        ch.postMessage({ type: "checkpoint_decision", token, approved, comment, decidedBy, decidedAt });
+        ch.close();
+      } catch {
+        // BroadcastChannel unavailable — decision is still stored in IDB,
+        // the main app will read it when the user returns to the tab.
       }
 
-      const approved = action === "approve";
       showBanner(
         approved
           ? "✓ Approved — the workflow will continue."
@@ -278,15 +363,10 @@
         approved ? "success-approve" : "success-reject"
       );
     } catch (err) {
-      showBanner(`Failed to submit decision: ${err.message}`, "error");
+      showBanner(`Failed to save decision: ${err.message}`, "error");
       $("btn-approve").disabled = false;
       $("btn-reject").disabled  = false;
     }
-  }
-
-  function showBanner(msg, cls) {
-    banner.textContent = msg;
-    banner.className = `status-banner ${cls}`;
   }
 </script>
 </body>

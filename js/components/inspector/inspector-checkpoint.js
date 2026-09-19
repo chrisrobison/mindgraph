@@ -2,6 +2,7 @@
 
 import { EVENTS } from "../../core/event-constants.js";
 import { publish } from "../../core/pan.js";
+import { checkpointExecutor } from "../../runtime/checkpoint-executor.js";
 import { emitNodePatch, escapeHtml, patchNodeData, textValue } from "./shared.js";
 
 class InspectorCheckpoint extends HTMLElement {
@@ -79,6 +80,8 @@ class InspectorCheckpoint extends HTMLElement {
     const timeoutMinutes = Math.round((Number(data.timeoutMs ?? 0)) / 60_000);
     const timeoutBehavior = data.timeoutBehavior ?? "block";
 
+    const approvalUrl = isPending && token ? checkpointExecutor.getApprovalUrl(token) : null;
+
     const pendingSection = isPending ? `
       <section class="inspector-group checkpoint-approval-section">
         <h4>⏳ Awaiting Your Decision</h4>
@@ -92,6 +95,11 @@ class InspectorCheckpoint extends HTMLElement {
           <button type="button" class="checkpoint-btn-approve" data-checkpoint-action="approve">✓ Approve</button>
           <button type="button" class="checkpoint-btn-reject" data-checkpoint-action="reject">✗ Reject</button>
         </div>
+        ${approvalUrl ? `
+        <div class="checkpoint-approval-link">
+          <span class="inspector-help">Or open the full approval page:</span>
+          <a href="${escapeHtml(approvalUrl)}" target="_blank" rel="noopener" class="checkpoint-approval-url">Open Approval Page ↗</a>
+        </div>` : ""}
         <p class="inspector-help">Token: <code>${escapeHtml(token ?? "")}</code></p>
       </section>
     ` : "";
@@ -138,7 +146,7 @@ class InspectorCheckpoint extends HTMLElement {
       <section class="inspector-group">
         <h4>How Checkpoints Work</h4>
         <p class="inspector-help">When a workflow reaches this node, execution pauses. The approver reviews context data and clicks Approve or Reject. Approved → downstream nodes continue. Rejected → workflow stops here.</p>
-        <p class="inspector-help">For remote approvals, run the proxy server and share the approval URL with your team — no login required.</p>
+        <p class="inspector-help">When a workflow reaches this node, the <strong>Open Approval Page</strong> link appears — share it with a reviewer. Decisions are stored locally in your browser and sync back to the running workflow automatically via BroadcastChannel.</p>
       </section>
     `;
   }

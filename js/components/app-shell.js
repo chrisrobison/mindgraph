@@ -15,6 +15,7 @@ class AppShell extends HTMLElement {
         <inspector-panel class="mg-inspector"></inspector-panel>
       </main>
       <node-data-viewer-dialog></node-data-viewer-dialog>
+      <webllm-model-download-dialog></webllm-model-download-dialog>
     `;
   }
 }

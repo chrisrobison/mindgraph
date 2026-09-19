@@ -14,7 +14,12 @@ const readRuntimeMode = () => {
   }
 };
 
+// WebLLM model ids are catalog-managed; we mirror the recommended default here
+// so this file doesn't need a runtime import of the catalog at module init.
+const DEFAULT_WEBLLM_MODEL_ID = "Llama-3.2-3B-Instruct-q4f16_1-MLC";
+
 const providerModels = Object.freeze({
+  webllm: Object.freeze([DEFAULT_WEBLLM_MODEL_ID]),
   openai: Object.freeze(["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"]),
   anthropic: Object.freeze(["claude-3-5-sonnet-latest", "claude-3-7-sonnet-latest"]),
   gemini: Object.freeze(["gemini-2.0-flash", "gemini-2.5-pro-preview"])
@@ -25,10 +30,24 @@ const defaultModelForProvider = (provider) => {
   return providerModels[key]?.[0] ?? providerModels.openai[0];
 };
 
+const isWebGpuAvailableSync = () => {
+  try {
+    return typeof navigator !== "undefined" && Boolean(navigator.gpu);
+  } catch {
+    return false;
+  }
+};
+
 const sanitizeProvider = (value) => {
-  const key = String(value ?? "openai").trim().toLowerCase();
+  // If the caller passes an explicit value, honour it (fallback to "openai" for
+  // unknown keys; "webllm" is treated as valid if WebGPU is present, otherwise
+  // downgrade to "openai" so settings don't silently lock users into a broken mode).
+  const key = String(value ?? "").trim().toLowerCase();
   if (key === "anthropic" || key === "gemini") return key;
-  return "openai";
+  if (key === "webllm") return isWebGpuAvailableSync() ? "webllm" : "openai";
+  if (key === "openai") return "openai";
+  // No explicit value (empty/null/undefined) — choose the best available default.
+  return isWebGpuAvailableSync() ? "webllm" : "openai";
 };
 
 const sanitizeProviderSettings = (raw = {}) => {

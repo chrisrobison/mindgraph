@@ -1,3 +1,5 @@
+// @ts-check
+
 import { EVENTS } from "../core/event-constants.js";
 import {
   edgeAffectsDataFlow,
@@ -7,20 +9,33 @@ import {
 } from "../core/graph-semantics.js";
 import { operationNeedsEntityId } from "../core/u2os-node-catalog.js";
 import { NODE_TYPES } from "../core/types.js";
-import { publish } from "../core/pan.js";
-import { buildExecutionPlan } from "./execution-planner.js";
 import { AgentRuntime } from "./agent-runtime.js";
-import { bridgeClient } from "./u2os-bridge-client.js";
+import { buildExecutionPlan } from "./execution-planner.js";
+import {
+  initEngine as defaultInitEngine,
+  isWebGpuAvailable as defaultIsWebGpuAvailable,
+  resolveModelId
+} from "./webllm-engine.js";
+
+// NOTE: `u2os-bridge-client` is imported lazily inside #getBridgeClient because
+// it transitively pulls in `ui-store`, which references `window`/`document` at
+// module load time. Keeping the import deferred lets this runtime be unit-tested
+// in Node without DOM polyfills.
+
+const MAX_PROMPT_CHARS = 24_000;
+const DEFAULT_TEMPERATURE = 0.3;
+const DEFAULT_MAX_TOKENS = 800;
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
-const makeRunId = (nodeId) => `http_${nodeId}_${Date.now()}_${Math.floor(Math.random() * 1_000)}`;
-const asMessage = (error) => (error instanceof Error ? error.message : String(error));
 const asText = (value, fallback = "") => {
   const next = String(value ?? "").trim();
   return next || fallback;
 };
-const toPlainObject = (value) => (value != null && typeof value === "object" && !Array.isArray(value) ? value : {});
-const compactText = (value, max = 420) => asText(value).replace(/\s+/g, " ").slice(0, max);
+const toPlainObject = (value) =>
+  value != null && typeof value === "object" && !Array.isArray(value) ? value : {};
+const asMessage = (error) => (error instanceof Error ? error.message : String(error));
+const makeRunId = (nodeId) => `webllm_${nodeId}_${Date.now()}_${Math.floor(Math.random() * 1_000)}`;
+const nowIso = () => new Date().toISOString();
 
 const getByPath = (value, rawPath) => {
   const path = asText(rawPath);
@@ -60,28 +75,116 @@ const normalizeMappings = (value) =>
     }))
     .filter((entry) => entry.from && entry.to);
 
-export class HttpAgentRuntime extends AgentRuntime {
-  #endpoint = "/api/llm";
+const buildPrompt = ({ node, nodePlan, context }) => {
+  const providerSummary = Array.isArray(nodePlan?.dataProviderIds)
+    ? nodePlan.dataProviderIds.join(", ")
+    : "none";
+  const dependencySummary = Array.isArray(nodePlan?.upstreamDependencies)
+    ? nodePlan.upstreamDependencies.join(", ")
+    : "none";
 
+  return [
+    "You are executing a MindGraph node in an AI workflow graph.",
+    "Return a concise, practical result for this node.",
+    "",
+    `Node ID: ${node?.id ?? "unknown"}`,
+    `Node Label: ${node?.label ?? "Unnamed"}`,
+    `Node Type: ${node?.type ?? "unknown"}`,
+    `Description: ${node?.description ?? ""}`,
+    `Upstream Dependencies: ${dependencySummary}`,
+    `Data Providers: ${providerSummary}`,
+    `Trigger: ${context?.trigger ?? "manual"}`,
+    "",
+    "Node data JSON:",
+    JSON.stringify(node?.data ?? {}, null, 2),
+    "",
+    "Provide output content suitable for downstream workflow execution."
+  ].join("\n");
+};
+
+const buildResultEnvelope = ({ modelId, text }) => {
+  const compact = String(text ?? "").trim();
+  const summary =
+    compact.split(/\n+/).slice(0, 2).join(" ").slice(0, 280) || "WebLLM response captured";
+  return {
+    confidence: 0.74,
+    summary,
+    output: {
+      type: "provider_output",
+      provider: "webllm",
+      model: modelId,
+      summary: compact.slice(0, 420) || summary,
+      text: compact,
+      toolCalls: [],
+      generatedAt: nowIso()
+    }
+  };
+};
+
+/**
+ * In-browser agent runtime that runs inference against a WebLLM model
+ * loaded into the current page. Matches the public surface of
+ * `HttpAgentRuntime` so it can plug into `RuntimeService` as a peer mode.
+ */
+export class WebLLMAgentRuntime extends AgentRuntime {
+  #modelId = "";
+  #activeAborts = new Set();
+  #initEngineFn;
+  #isWebGpuAvailableFn;
+  #bridgeClientOverride;
+  #bridgeClientCache = null;
+
+  /**
+   * @param {Object} [options]
+   * @param {string} [options.modelId] Default model id to use for runs
+   * @param {(modelId: string, onProgress?: Function) => Promise<{ chat: Function, modelId: string }>} [options.initEngine] Override engine factory (tests)
+   * @param {() => boolean} [options.isWebGpuAvailable] Override capability probe (tests)
+   * @param {{ mutateU2osEntity: Function, emitU2osEvent: Function }} [options.bridgeClient] Override U2OS bridge (tests)
+   */
   constructor(options = {}) {
     super(options);
-    if (options.endpoint) {
-      this.#endpoint = String(options.endpoint);
+    this.#modelId = resolveModelId(options.modelId ?? "");
+    this.#initEngineFn = options.initEngine ?? defaultInitEngine;
+    this.#isWebGpuAvailableFn = options.isWebGpuAvailable ?? defaultIsWebGpuAvailable;
+    this.#bridgeClientOverride = options.bridgeClient ?? null;
+  }
+
+  /**
+   * Lazily resolve the U2OS bridge client. Tests inject `bridgeClient` in the
+   * constructor and never hit the dynamic import path.
+   */
+  async #getBridgeClient() {
+    if (this.#bridgeClientOverride) return this.#bridgeClientOverride;
+    if (this.#bridgeClientCache) return this.#bridgeClientCache;
+    const mod = await import("./u2os-bridge-client.js");
+    this.#bridgeClientCache = mod.bridgeClient;
+    return this.#bridgeClientCache;
+  }
+
+  getModelId() {
+    return this.#modelId;
+  }
+
+  setModelId(modelId) {
+    const next = resolveModelId(modelId);
+    if (next !== this.#modelId) {
+      this.#modelId = next;
     }
   }
 
-  setEndpoint(endpoint) {
-    if (!endpoint) return;
-    this.#endpoint = String(endpoint);
+  isAvailable() {
+    return this.#isWebGpuAvailableFn();
   }
 
-  getEndpoint() {
-    return this.#endpoint;
-  }
-
-  cancelAll(_reason = "cancelled") {
-    // HTTP fetches are cancelled via AbortSignal passed to runNode context.
-    // Nothing to tear down here; individual run callers hold their own AbortController.
+  cancelAll(reason = "cancelled") {
+    for (const controller of this.#activeAborts) {
+      try {
+        controller.abort(reason);
+      } catch {
+        // noop
+      }
+    }
+    this.#activeAborts.clear();
   }
 
   async runNode(nodeId, context = {}) {
@@ -90,17 +193,23 @@ export class HttpAgentRuntime extends AgentRuntime {
     const trigger = context.trigger ?? "manual";
 
     if (!node) {
-      const message = `HTTP runtime failed: node ${nodeId} not found`;
-      this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, { nodeId, runId, reason: message, trigger });
+      const message = `WebLLM runtime failed: node ${nodeId} not found`;
+      this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, {
+        nodeId,
+        runId,
+        reason: message,
+        trigger,
+        mode: "webllm"
+      });
       this.publish(this.events.RUNTIME_ERROR_APPENDED, {
         nodeId,
         nodeLabel: "Unknown node",
         runId,
         message,
-        source: "http-runtime",
-        at: new Date().toISOString()
+        source: "webllm-runtime",
+        at: nowIso()
       });
-      return { ok: false, nodeId, runId, error: message };
+      return { ok: false, nodeId, runId, error: message, mode: "webllm" };
     }
 
     if (!isExecutableNodeType(node.type)) {
@@ -108,7 +217,8 @@ export class HttpAgentRuntime extends AgentRuntime {
         ok: false,
         nodeId,
         runId,
-        error: `HTTP runtime skipped non-runnable node type ${node.type}`
+        error: `WebLLM runtime skipped non-runnable node type ${node.type}`,
+        mode: "webllm"
       };
     }
 
@@ -120,39 +230,48 @@ export class HttpAgentRuntime extends AgentRuntime {
         nodeId,
         runId,
         error: nodePlan?.blockedReasons?.[0] ?? "Node blocked by planner",
-        blockedReasons: nodePlan?.blockedReasons ?? []
+        blockedReasons: nodePlan?.blockedReasons ?? [],
+        mode: "webllm"
       };
     }
 
-    const providerSettings = {
-      ...(context?.providerSettings ?? {})
-    };
-    const proxyToken = asText(providerSettings?.proxyToken);
-    delete providerSettings.proxyToken;
-    delete providerSettings.rememberApiKey;
+    const providerSettings = { ...(context?.providerSettings ?? {}) };
+    const requestedModelId = asText(providerSettings.model, this.#modelId);
+    const temperature = Number.isFinite(Number(providerSettings.temperature))
+      ? Number(providerSettings.temperature)
+      : DEFAULT_TEMPERATURE;
+    const maxTokens = Number.isFinite(Number(providerSettings.maxTokens))
+      ? Math.max(64, Math.min(8192, Math.round(Number(providerSettings.maxTokens))))
+      : DEFAULT_MAX_TOKENS;
+    const systemPrompt = asText(providerSettings.systemPrompt);
 
-    const requestPayload = {
+    this.publish(this.events.RUNTIME_AGENT_RUN_STARTED, {
+      nodeId,
       runId,
       trigger,
-      node,
-      nodePlan,
-      context: {
-        ...(context ?? {}),
-        providerSettings
-      }
-    };
-
-    this.publish(this.events.RUNTIME_AGENT_RUN_STARTED, { nodeId, runId, trigger, context, mode: "http" });
+      context,
+      mode: "webllm"
+    });
 
     try {
       const payload =
         node.type === NODE_TYPES.U2OS_MUTATE || node.type === NODE_TYPES.U2OS_EMIT
           ? await this.#executeU2osNode(node, nodePlan)
-          : await this.#runNodeViaHttp(requestPayload, context?.abortSignal, { proxyToken });
+          : await this.#executeWebLLMRun({
+              node,
+              nodePlan,
+              context,
+              runId,
+              modelId: requestedModelId,
+              temperature,
+              maxTokens,
+              systemPrompt
+            });
+
       const output = payload?.output ?? {
-        type: "http_runtime_output",
-        summary: payload?.summary ?? `${node.label} completed via HTTP runtime`,
-        generatedAt: new Date().toISOString()
+        type: "webllm_runtime_output",
+        summary: payload?.summary ?? `${node.label} completed via WebLLM runtime`,
+        generatedAt: nowIso()
       };
 
       const validation = this.validateOutput(node, output);
@@ -160,8 +279,10 @@ export class HttpAgentRuntime extends AgentRuntime {
         throw new Error(`Output validation failed: ${validation.errors.join("; ")}`);
       }
 
-      const confidence = Number.isFinite(Number(payload?.confidence)) ? Number(payload.confidence) : 0.75;
-      const completedAt = new Date().toISOString();
+      const confidence = Number.isFinite(Number(payload?.confidence))
+        ? Number(payload.confidence)
+        : 0.72;
+      const completedAt = nowIso();
       const latest = this.store.getNode(nodeId);
 
       this.publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
@@ -172,13 +293,15 @@ export class HttpAgentRuntime extends AgentRuntime {
             status: "completed",
             confidence,
             lastRunAt: completedAt,
-            lastRunSummary: output.summary ?? payload?.summary ?? "Completed via HTTP runtime",
+            lastRunSummary:
+              output.summary ?? payload?.summary ?? "Completed via WebLLM runtime",
             lastOutput: output,
             runHistory: [
               {
                 runId,
                 status: "completed",
-                summary: output.summary ?? payload?.summary ?? "Completed via HTTP runtime",
+                summary:
+                  output.summary ?? payload?.summary ?? "Completed via WebLLM runtime",
                 confidence,
                 at: completedAt
               },
@@ -188,13 +311,13 @@ export class HttpAgentRuntime extends AgentRuntime {
               {
                 at: completedAt,
                 level: "info",
-                message: `Completed HTTP run ${runId}`
+                message: `Completed WebLLM run ${runId}`
               },
               ...toArray(latest?.data?.activityHistory)
             ].slice(0, 40)
           }
         },
-        origin: "http-runtime"
+        origin: "webllm-runtime"
       });
 
       this.publish(this.events.RUNTIME_AGENT_RUN_COMPLETED, {
@@ -203,18 +326,18 @@ export class HttpAgentRuntime extends AgentRuntime {
         status: "completed",
         confidence,
         output,
-        mode: "http"
+        mode: "webllm"
       });
       this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
         nodeId,
         nodeLabel: node.label,
         runId,
         status: "completed",
-        summary: output.summary ?? payload?.summary ?? "Completed via HTTP runtime",
+        summary: output.summary ?? payload?.summary ?? "Completed via WebLLM runtime",
         confidence,
         output,
         at: completedAt,
-        mode: "http"
+        mode: "webllm"
       });
 
       return {
@@ -224,11 +347,11 @@ export class HttpAgentRuntime extends AgentRuntime {
         status: "completed",
         confidence,
         output,
-        mode: "http"
+        mode: "webllm"
       };
     } catch (error) {
       const message = asMessage(error);
-      const failedAt = new Date().toISOString();
+      const failedAt = nowIso();
       const latest = this.store.getNode(nodeId);
 
       this.publish(EVENTS.GRAPH_NODE_UPDATE_REQUESTED, {
@@ -253,20 +376,20 @@ export class HttpAgentRuntime extends AgentRuntime {
               {
                 at: failedAt,
                 level: "error",
-                message: `HTTP run failed ${runId}: ${message}`
+                message: `WebLLM run failed ${runId}: ${message}`
               },
               ...toArray(latest?.data?.activityHistory)
             ].slice(0, 40)
           }
         },
-        origin: "http-runtime"
+        origin: "webllm-runtime"
       });
 
       this.publish(this.events.RUNTIME_AGENT_RUN_FAILED, {
         nodeId,
         runId,
         reason: message,
-        mode: "http"
+        mode: "webllm"
       });
       this.publish(this.events.RUNTIME_RUN_HISTORY_APPENDED, {
         nodeId,
@@ -277,18 +400,18 @@ export class HttpAgentRuntime extends AgentRuntime {
         confidence: 0.2,
         output: { type: "runtime_error", message },
         at: failedAt,
-        mode: "http"
+        mode: "webllm"
       });
       this.publish(this.events.RUNTIME_ERROR_APPENDED, {
         nodeId,
         nodeLabel: node.label,
         runId,
         message,
-        source: "http-runtime",
+        source: "webllm-runtime",
         at: failedAt
       });
 
-      return { ok: false, nodeId, runId, error: message, mode: "http" };
+      return { ok: false, nodeId, runId, error: message, mode: "webllm" };
     }
   }
 
@@ -322,6 +445,80 @@ export class HttpAgentRuntime extends AgentRuntime {
     }
 
     return { ok: failed === 0, completed, failed, total: nodeIds.length };
+  }
+
+  async #executeWebLLMRun({
+    node,
+    nodePlan,
+    context,
+    runId,
+    modelId,
+    temperature,
+    maxTokens,
+    systemPrompt
+  }) {
+    if (!this.#isWebGpuAvailableFn()) {
+      throw new Error("WebGPU is not available in this browser");
+    }
+
+    const prompt = buildPrompt({ node, nodePlan, context });
+    if (prompt.length > MAX_PROMPT_CHARS) {
+      throw new Error(`Prompt exceeds max length (${MAX_PROMPT_CHARS})`);
+    }
+
+    const controller = new AbortController();
+    if (context?.abortSignal && typeof context.abortSignal.addEventListener === "function") {
+      context.abortSignal.addEventListener("abort", () => controller.abort("upstream_abort"), {
+        once: true
+      });
+    }
+    this.#activeAborts.add(controller);
+
+    this.publish(this.events.RUNTIME_TRACE_APPENDED, {
+      kind: "webllm_run_started",
+      at: nowIso(),
+      nodeId: node.id,
+      runId,
+      mode: "webllm",
+      modelId
+    });
+
+    try {
+      const messages = [];
+      if (systemPrompt) {
+        messages.push({ role: "system", content: systemPrompt });
+      }
+      messages.push({ role: "user", content: prompt });
+
+      const onProgress = (report) => {
+        this.publish(this.events.RUNTIME_TRACE_APPENDED, {
+          kind: "webllm_init_progress",
+          at: nowIso(),
+          nodeId: node.id,
+          runId,
+          mode: "webllm",
+          modelId,
+          progress: report?.progress ?? 0,
+          message: report?.text ?? ""
+        });
+      };
+
+      const engine = await this.#initEngineFn(modelId, onProgress);
+      this.#modelId = engine?.modelId ?? modelId;
+
+      const completion = await engine.chat(
+        messages,
+        { temperature, maxTokens },
+        controller.signal
+      );
+
+      return buildResultEnvelope({
+        modelId: this.#modelId,
+        text: completion?.text ?? ""
+      });
+    } finally {
+      this.#activeAborts.delete(controller);
+    }
   }
 
   #resolveNodeOutputValue(node) {
@@ -394,7 +591,9 @@ export class HttpAgentRuntime extends AgentRuntime {
 
   async #executeU2osNode(node, nodePlan) {
     const inputsByPort = this.#collectInputsByPort(node.id);
-    const payloadInput = inputsByPort.payload ?? inputsByPort.command_input ?? inputsByPort.input ?? {};
+    const payloadInput =
+      inputsByPort.payload ?? inputsByPort.command_input ?? inputsByPort.input ?? {};
+    const bridge = await this.#getBridgeClient();
 
     if (node.type === NODE_TYPES.U2OS_MUTATE) {
       const operation = asText(node.data?.operation, "create").toLowerCase();
@@ -405,7 +604,7 @@ export class HttpAgentRuntime extends AgentRuntime {
       }
 
       const mappedPayload = this.#mapPayloadFromInputs(payloadInput, node.data?.mapInputs);
-      const mutation = await bridgeClient.mutateU2osEntity({
+      const mutation = await bridge.mutateU2osEntity({
         entity,
         operation,
         entityId,
@@ -420,12 +619,13 @@ export class HttpAgentRuntime extends AgentRuntime {
           summary: `${node.label} ${operation} completed for ${entity}.`,
           result: mutation.result ?? null,
           entityId: mutation.entityId ?? entityId,
-          status: mutation.status ?? { ok: true, message: `${operation} succeeded`, entity, operation },
+          status:
+            mutation.status ?? { ok: true, message: `${operation} succeeded`, entity, operation },
           planner: {
             ready: Boolean(nodePlan?.ready),
             executionOrderIndex: nodePlan?.executionOrderIndex ?? -1
           },
-          generatedAt: new Date().toISOString()
+          generatedAt: nowIso()
         }
       };
     }
@@ -434,7 +634,7 @@ export class HttpAgentRuntime extends AgentRuntime {
       const eventName = asText(node.data?.eventName);
       if (!eventName) throw new Error("U2OS emit requires eventName");
       const mappedPayload = this.#mapPayloadFromInputs(payloadInput, node.data?.payloadMapping);
-      const confirmation = await bridgeClient.emitU2osEvent(eventName, mappedPayload);
+      const confirmation = await bridge.emitU2osEvent(eventName, mappedPayload);
       return {
         summary: `${node.label} emitted ${eventName}.`,
         confidence: 0.9,
@@ -446,136 +646,11 @@ export class HttpAgentRuntime extends AgentRuntime {
             ready: Boolean(nodePlan?.ready),
             executionOrderIndex: nodePlan?.executionOrderIndex ?? -1
           },
-          generatedAt: new Date().toISOString()
+          generatedAt: nowIso()
         }
       };
     }
 
     throw new Error(`Unsupported U2OS node type: ${node.type}`);
-  }
-
-  /**
-   * POST to the edge proxy (edge/llm-proxy.mjs or any compatible endpoint).
-   *
-   * Request body: { provider, model, messages, temperature, maxTokens }
-   * Response:     { ok, text, summary, model, provider, generatedAt }
-   */
-  async #runNodeViaHttp(requestPayload, abortSignal, options = {}) {
-    const { node, nodePlan, context } = requestPayload;
-    const providerSettings = toPlainObject(context?.providerSettings);
-
-    // ── LLM call parameters ──────────────────────────────────────────────────
-    const provider = asText(
-      providerSettings?.provider || node?.data?.provider,
-      "openai"
-    ).toLowerCase();
-
-    const model = asText(providerSettings?.model || node?.data?.model);
-
-    const rawTemp = providerSettings?.temperature ?? node?.data?.temperature;
-    const temperature = Number.isFinite(Number(rawTemp)) ? Number(rawTemp) : 0.3;
-
-    const rawMax = providerSettings?.maxTokens ?? node?.data?.maxTokens;
-    const maxTokens = Number.isFinite(Number(rawMax))
-      ? Math.max(64, Math.min(8192, Number(rawMax)))
-      : 800;
-
-    // Client-side API key: forwarded as `apiKey` so the proxy can use it
-    // instead of its server-side env var (useful for dev / BYOK setups).
-    const apiKey = asText(providerSettings?.apiKey);
-
-    // ── Build messages array ─────────────────────────────────────────────────
-    const inputsByPort = this.#collectInputsByPort(node.id);
-    const inputEntries = Object.entries(inputsByPort);
-    const inputContext = inputEntries.length
-      ? JSON.stringify(
-          inputEntries.length === 1 ? inputEntries[0][1] : inputsByPort,
-          null,
-          2
-        )
-      : null;
-
-    const systemPrompt = asText(
-      node?.data?.systemPrompt || node?.data?.instructions
-    );
-    const userPrompt = asText(
-      node?.data?.prompt || node?.data?.userPrompt || node?.data?.query
-    );
-
-    const messages = [];
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt });
-    }
-
-    let userContent = userPrompt;
-    if (inputContext) {
-      userContent = userContent
-        ? `${userContent}\n\nInput context:\n${inputContext}`
-        : `Input context:\n${inputContext}`;
-    }
-    if (!userContent) {
-      userContent = `Run node: ${node?.label ?? node?.id}`;
-    }
-    messages.push({ role: "user", content: userContent });
-
-    // ── HTTP request ─────────────────────────────────────────────────────────
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    };
-    const proxyToken = asText(options?.proxyToken);
-    if (proxyToken) {
-      headers.Authorization = `Bearer ${proxyToken}`;
-    }
-
-    const body = { provider, messages, temperature, maxTokens };
-    if (model)  body.model  = model;
-    if (apiKey) body.apiKey = apiKey;
-
-    publish(EVENTS.RUNTIME_TRACE_APPENDED, {
-      kind: "http_request_sent",
-      at: new Date().toISOString(),
-      nodeId: node.id,
-      runId: requestPayload.runId,
-      mode: "http",
-      detail: { provider, model: model || "(default)", endpoint: this.#endpoint }
-    });
-
-    const response = await fetch(this.#endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: abortSignal
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Proxy error ${response.status}: ${errText}`);
-    }
-
-    const result = await response.json();
-    if (!result.ok) {
-      throw new Error(result?.error?.message ?? "Edge proxy returned an error");
-    }
-
-    const text = String(result.text ?? "").trim();
-    const summary = result.summary ?? compactText(text, 280) || "Provider response";
-
-    return {
-      summary,
-      confidence: 0.8,
-      output: {
-        type: "provider_response",
-        provider: result.provider ?? provider,
-        model: result.model ?? model,
-        text,
-        summary,
-        planner: {
-          ready: Boolean(nodePlan?.ready),
-          executionOrderIndex: nodePlan?.executionOrderIndex ?? -1
-        },
-        generatedAt: result.generatedAt ?? new Date().toISOString()
-      }
-    };
   }
 }

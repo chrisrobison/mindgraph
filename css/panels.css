@@ -2589,6 +2589,43 @@
   color: #f0d580;
 }
 
+.checkpoint-approval-link {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.checkpoint-approval-url {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2858b0;
+  background: #e8f0ff;
+  border: 1px solid #b8d0f0;
+  border-radius: 6px;
+  padding: 0.22rem 0.6rem;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.checkpoint-approval-url:hover {
+  background: #d4e5ff;
+  border-color: #90b8e8;
+}
+
+:root[data-theme="dark"] .checkpoint-approval-url {
+  background: #0e2040;
+  border-color: #1e4070;
+  color: #6090d0;
+}
+
+:root[data-theme="dark"] .checkpoint-approval-url:hover {
+  background: #162a50;
+  border-color: #2a5090;
+}
+
 /* ── Workflow Library Browser ────────────────────────────────── */
 
 .wf-browser-overlay {
@@ -2907,3 +2944,234 @@
 :root[data-theme="dark"] .wf-btn-secondary { border-color: #2e5080; color: #7ab0e0; }
 :root[data-theme="dark"] .wf-btn-secondary:hover { background: #162035; }
 :root[data-theme="dark"] .wf-rename-input { background: #1a2535; color: #dce9f9; border-color: #3a72b5; }
+
+/* ─── WebLLM Model Download Dialog ───────────────────────────────────────── */
+
+webllm-model-download-dialog {
+  display: contents;
+}
+
+.webllm-dialog {
+  width: min(480px, 94vw);
+  border: 1px solid #cfdced;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 32px 80px -20px rgba(14, 28, 55, 0.55);
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.webllm-dialog::backdrop {
+  background: rgba(14, 28, 49, 0.42);
+}
+
+.webllm-dialog-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.webllm-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.1rem 1.3rem 0.9rem;
+  border-bottom: 1px solid #d9e5f3;
+  background: linear-gradient(180deg, #fcfeff 0%, #f2f7ff 100%);
+}
+
+.webllm-dialog-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.webllm-dialog-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  color: #1a2e4a;
+  letter-spacing: -0.01em;
+}
+
+.webllm-dialog-body {
+  padding: 1.2rem 1.3rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.webllm-model-name {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1e3555;
+}
+
+.webllm-model-size {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #5e7390;
+}
+
+.webllm-progress-wrap {
+  height: 8px;
+  background: #dde8f5;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 0.3rem;
+  role: progressbar;
+}
+
+.webllm-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #3a72c8 0%, #56a0f8 100%);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.webllm-progress-pct {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #3a72c8;
+  text-align: right;
+}
+
+.webllm-progress-msg {
+  margin: 0;
+  font-size: 0.77rem;
+  color: #5e7390;
+  min-height: 1em;
+  word-break: break-word;
+}
+
+.webllm-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #b83232;
+  background: #fff5f5;
+  border: 1px solid #f5c0c0;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+}
+
+.webllm-hint {
+  margin: 0;
+  font-size: 0.77rem;
+  color: #6a82a0;
+  line-height: 1.5;
+}
+
+.webllm-dialog-footer {
+  padding: 0.75rem 1.3rem 1.1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid #edf2fa;
+}
+
+.webllm-btn {
+  padding: 0.42rem 1rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.webllm-btn-cancel {
+  background: #f0f5fc;
+  border: 1px solid #c5d5e8;
+  color: #2a4060;
+}
+
+.webllm-btn-cancel:hover {
+  background: #e4edf8;
+  border-color: #a8c0d8;
+}
+
+/* ─── WebLLM Settings Fields ─────────────────────────────────────────────── */
+
+.runtime-webgpu-notice {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #fff8e8;
+  border: 1px solid #f0d070;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8rem;
+  color: #6b4800;
+  line-height: 1.45;
+}
+
+.runtime-webllm-model-card {
+  background: #f2f7ff;
+  border: 1px solid #ccddf0;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem !important;
+}
+
+.runtime-webllm-model-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  font-size: 0.82rem;
+}
+
+.runtime-webllm-model-detail strong {
+  font-size: 0.85rem;
+  color: #1e3555;
+}
+
+.webllm-tool-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #e6f0ff;
+  color: #2858b0;
+  border: 1px solid #b8d0f0;
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+}
+
+/* ─── Dark mode ───────────────────────────────────────────────────────────── */
+
+:root[data-theme="dark"] .webllm-dialog {
+  background: #111d2e;
+  border-color: #1e3050;
+}
+
+:root[data-theme="dark"] .webllm-dialog-header {
+  background: linear-gradient(180deg, #131e30 0%, #0f1a28 100%);
+  border-bottom-color: #1e3050;
+}
+
+:root[data-theme="dark"] .webllm-dialog-title { color: #dce9f9; }
+:root[data-theme="dark"] .webllm-model-name { color: #c8dff5; }
+:root[data-theme="dark"] .webllm-model-size { color: #6a85a5; }
+:root[data-theme="dark"] .webllm-progress-wrap { background: #1a2e48; }
+:root[data-theme="dark"] .webllm-progress-pct { color: #5090e0; }
+:root[data-theme="dark"] .webllm-progress-msg { color: #6a85a5; }
+:root[data-theme="dark"] .webllm-error { background: #2a1010; border-color: #7a2020; color: #f08080; }
+:root[data-theme="dark"] .webllm-hint { color: #4e6888; }
+:root[data-theme="dark"] .webllm-dialog-footer { border-top-color: #1a2e48; }
+:root[data-theme="dark"] .webllm-btn-cancel { background: #162030; border-color: #2a4060; color: #90aac8; }
+:root[data-theme="dark"] .webllm-btn-cancel:hover { background: #1c2a40; border-color: #3a5a80; }
+
+:root[data-theme="dark"] .runtime-webgpu-notice {
+  background: #2a2000;
+  border-color: #604800;
+  color: #e0b060;
+}
+:root[data-theme="dark"] .runtime-webllm-model-card {
+  background: #0e1c30;
+  border-color: #1e3050;
+}
+:root[data-theme="dark"] .runtime-webllm-model-detail strong { color: #c8dff5; }
+:root[data-theme="dark"] .webllm-tool-badge {
+  background: #0e2040;
+  border-color: #1e4070;
+  color: #6090d0;
+}

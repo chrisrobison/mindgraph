@@ -298,7 +298,9 @@ class TopToolbar extends HTMLElement {
     const endpointField = this.querySelector('[data-field="runtime-endpoint"]');
     if (modeField) modeField.value = this.#runtimeMode;
     if (endpointField) endpointField.value = this.#runtimeEndpoint;
-    if (endpointField) endpointField.disabled = this.#runtimeMode !== "http";
+    const isHttp = this.#runtimeMode === "http";
+    if (endpointField) endpointField.disabled = !isHttp;
+    if (endpointField) endpointField.style.display = isHttp ? "" : "none";
   }
 
   #syncTemplatePicker() {
@@ -498,9 +500,10 @@ class TopToolbar extends HTMLElement {
           <div class="toolbar-actions toolbar-action-group">
             <select data-field="runtime-mode" aria-label="Runtime mode">
               <option value="mock" ${this.#runtimeMode === "mock" ? "selected" : ""}>Mock Runtime</option>
+              <option value="webllm" ${this.#runtimeMode === "webllm" ? "selected" : ""}>Local AI (WebLLM)</option>
               <option value="http" ${this.#runtimeMode === "http" ? "selected" : ""}>HTTP Runtime</option>
             </select>
-            <input data-field="runtime-endpoint" type="text" value="${this.#runtimeEndpoint}" placeholder="/api/mindgraph/runtime" />
+            <input data-field="runtime-endpoint" type="text" value="${this.#runtimeEndpoint}" placeholder="/api/mindgraph/runtime" style="${this.#runtimeMode === "http" ? "" : "display:none"}" />
           </div>
 
           <div class="toolbar-actions toolbar-action-group toolbar-zoom">
