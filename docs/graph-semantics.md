@@ -116,8 +116,8 @@ Behavior:
 
 Runtime adapters currently implemented:
 - `mock-agent-runtime` (local planner-aware execution)
-- `http-agent-runtime` (WebSocket-first transport at `{endpoint}/ws`, with HTTP fallback to `POST {endpoint}/run-node`)
-- `provider-proxy-server` backend (`server/provider-proxy-server.mjs`) supporting OpenAI ChatGPT, Anthropic Claude, and Google Gemini
+- `webllm-agent-runtime` (in-browser inference via WebGPU/WebLLM; default when supported)
+- `http-agent-runtime` (`POST {endpoint}` to the stateless edge proxy, `edge/llm-proxy.mjs`, for cloud providers)
 
 ## 6. UI Semantic Visibility
 
@@ -149,8 +149,8 @@ Writes occur through `GRAPH_METADATA_UPDATE_REQUESTED` so `graph-store` remains 
 - clearer edge compatibility validation messages with endpoint context
 - request-driven runtime service with retry/cancel/failure propagation
 - branch-parallel batch scheduling for independent runnable DAG branches
-- HTTP adapter behind shared planner/executor interface with structured WebSocket realtime transport
-- provider proxy server for OpenAI/Anthropic/Gemini model execution
+- WebLLM adapter behind the shared planner/executor interface for in-browser inference (default when WebGPU is available)
+- HTTP adapter behind the same interface, calling a stateless edge proxy for OpenAI/Anthropic/Gemini model execution
 - runtime settings control panel for provider/model/key selection
 - persisted planner snapshots and run traces
 

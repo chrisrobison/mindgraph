@@ -1,104 +1,83 @@
-# Provider Proxy Server
+# Cloud Provider Edge Proxy
 
-MindGraph includes a hosted-capable runtime proxy for model execution and tenant routing.
+MindGraph runs entirely client-side by default, using [WebLLM](https://webllm.mlc.ai/)
+for in-browser inference. The edge proxy is an **optional** component for
+users who want to route agent nodes to a cloud model (OpenAI / Anthropic /
+Gemini) instead.
 
-File: `server/provider-proxy-server.mjs`
+File: `edge/llm-proxy.mjs`
 
 ## What It Provides
 
-- Provider calls for OpenAI / Anthropic / Gemini
-- WebSocket streaming + HTTP fallback for node execution
-- Host/domain tenant resolution using a control-plane DB
-- Optional bearer auth for proxy access (`MINDGRAPH_PROXY_TOKEN`)
-- Guardrails: request body size, prompt length, provider timeout
+- A single stateless endpoint: `POST /api/llm`
+- Server-side API key handling for OpenAI, Anthropic, and Gemini
+- Optional bearer-token auth for proxy access (`PROXY_AUTH_TOKEN`)
+- CORS allowlisting, request size limits, and a provider request timeout
 
-## Start
+It intentionally has **no database, no WebSocket transport, and no
+multi-tenancy** — those all belonged to the retired `server/provider-proxy-server.mjs`
+and were removed when checkpoints and the workflow library moved to
+IndexedDB and cloud calls moved to this stateless proxy.
+
+## Run
+
+Works unmodified across several runtimes:
 
 ```bash
-cd /Users/cdr/Projects/mindgraph
-node server/provider-proxy-server.mjs
+node edge/llm-proxy.mjs                                    # local dev (node:http)
+wrangler dev edge/llm-proxy.mjs                             # Cloudflare Workers
+vercel dev                                                  # Vercel Edge Functions
+deno run --allow-net --allow-env edge/llm-proxy.mjs         # Deno Deploy
 ```
 
-## Core Environment Variables
+Or via the npm script (local dev only):
 
-Proxy transport/security:
+```bash
+npm run start:edge
+```
 
-- `MINDGRAPH_PROXY_HOST` (default `127.0.0.1`)
-- `MINDGRAPH_PROXY_PORT` (default `8787`)
-- `MINDGRAPH_PROXY_ALLOW_ORIGIN` (default local allowlist; use `*` for unrestricted)
-- `MINDGRAPH_PROXY_TOKEN` (optional bearer token for HTTP + WS access)
-- `MINDGRAPH_PROXY_REQUEST_TIMEOUT_MS` (default `45000`)
-- `MINDGRAPH_PROXY_MAX_PROMPT_CHARS` (default `16000`)
+## Environment Variables
 
-Tenancy routing:
+- `OPENAI_API_KEY` — OpenAI secret key
+- `ANTHROPIC_API_KEY` — Anthropic secret key
+- `GEMINI_API_KEY` — Google Gemini secret key
+- `PROXY_AUTH_TOKEN` — optional bearer token clients must send
+- `ALLOWED_ORIGINS` — comma-separated allowed CORS origins (default `*`)
+- `PORT` — Node-mode listen port (default `3001`)
+- `HOST` — Node-mode listen host (default `127.0.0.1`)
 
-- `TENANCY_MODE` (`local` default, or `hybrid` / `hosted`)
-- `TENANCY_STRICT_HOST_MATCH` (defaults to `true` in hosted mode)
-- `TENANCY_TRUST_FORWARDED_HOST` (`false` default)
-- `TENANCY_ALLOW_OVERRIDE` (`false` default)
-- `TENANCY_OVERRIDE_HEADER` (default `x-tenant-id`)
-- `TENANCY_OVERRIDE_QUERY_PARAM` (default `tenant_id`)
-- `TENANCY_BOOTSTRAP_HOST` (default `localhost`)
-- `TENANCY_BOOTSTRAP_DOMAIN` (default `localhost`)
+## Request
 
-Control-plane DB (global app DB):
+```
+POST /api/llm
+Content-Type: application/json
+Authorization: Bearer <PROXY_AUTH_TOKEN>   (only if configured)
 
-- `CONTROL_DB_CLIENT` (`sqlite` default; `mysql` supported)
-- `CONTROL_DB_FILE` (sqlite path, default `./data/mindgraph-control.sqlite`)
-- `CONTROL_DB_HOST`, `CONTROL_DB_PORT`, `CONTROL_DB_USER`, `CONTROL_DB_PASSWORD`, `CONTROL_DB_NAME` (for mysql)
+{
+  "provider": "openai" | "anthropic" | "gemini",   // default "openai"
+  "model": "gpt-4.1-mini",                          // default per-provider
+  "messages": [{ "role": "user", "content": "..." }],
+  "temperature": 0.3,                               // 0–2
+  "maxTokens": 800                                  // 64–8192
+}
+```
 
-Provider fallback keys:
+## Response
 
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GEMINI_API_KEY`
+```json
+{ "ok": true, "provider": "openai", "model": "gpt-4.1-mini", "text": "...", "summary": "...", "generatedAt": "2026-09-19T00:00:00.000Z" }
+```
 
-## Control-Plane Tables
+or, on failure:
 
-The proxy maintains a global tenancy registry:
-
-- `customers`
-- `instances`
-- `instance_domains`
-
-Each `instances` row includes tenant-specific DB connection metadata (`db_client`, `db_config_json`) for per-tenant data isolation.
-
-## Endpoints
-
-- `GET /api/mindgraph/health`
-- `POST /api/mindgraph/runtime/run-node`
-- `WS /api/mindgraph/runtime/ws`
-
-## WebSocket Protocol
-
-Client -> server:
-
-- `runtime.run_node.request`
-- `runtime.run_node.cancel`
-- `runtime.cancel_all.request`
-
-Server -> client:
-
-- `runtime.run_node.event`
-- `runtime.run_node.progress`
-- `runtime.run_node.completed`
-- `runtime.run_node.failed`
-
-`runtime.run_node.event` includes provider stream event types:
-
-- `runtime.stream.stage`
-- `runtime.stream.text.delta`
-- `runtime.stream.tool_call.started`
-- `runtime.stream.tool_call.progress`
-- `runtime.stream.tool_call.completed`
-- `runtime.stream.output.final`
+```json
+{ "ok": false, "error": { "code": "PROVIDER_ERROR", "message": "..." } }
+```
 
 ## Runtime Settings UI
 
-The bottom-panel `Runtime Settings` now supports:
-
-- provider/model/API key
-- proxy token (for hosted auth)
-- key persistence toggle (`Remember Keys On This Device`)
-
-By default, secrets are session-only unless remember mode is enabled.
+The bottom-panel `Runtime Settings` panel supports switching between
+`webllm`, `mock`, and `http` (proxy-backed cloud) modes, and configuring
+provider/model/API key/endpoint for `http` mode. Secrets are session-only
+by default; persistence requires the explicit `Remember Keys On This
+Device` opt-in.

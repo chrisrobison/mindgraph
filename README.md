@@ -1,16 +1,24 @@
 # MindGraph AI
 
-MindGraph AI is a browser-native, framework-free graph workbench for operational AI workflows.
+Open `index.html`. No backend required.
+
+MindGraph AI is a browser-native, framework-free graph workbench for
+operational AI workflows. Build a graph of typed nodes (data, transform,
+agent, view, action, human-approval checkpoint, and more), connect them
+with semantically-typed edges, and run the graph — by default entirely
+client-side, using [WebLLM](https://webllm.mlc.ai/) for in-browser
+inference over WebGPU. Cloud providers (OpenAI / Anthropic / Gemini) are
+available as an opt-in mode behind a small stateless edge proxy.
 
 It intentionally keeps:
-- custom elements (Web Components)
-- plain ES modules
-- PAN event bus
+- custom elements (Web Components), plain ES modules, no build step
+- a PAN event bus (`js/core/pan.js`) — components publish intent, stores own mutation
 - `graph-store` as the canonical graph document owner
 - `ui-store` for UI-only state
 - `persistence-store` for autosave/restore
+- `checkpoint-store` (IndexedDB) for human-in-the-loop approval state
 
-Roadmap: [ROADMAP.md](ROADMAP.md)
+Roadmap: [ROADMAP.md](ROADMAP.md) · Migration history: [PLAN.md](PLAN.md)
 
 ## Run Locally
 
@@ -22,27 +30,31 @@ cd mindgraph
 python3 -m http.server 4173
 ```
 
-Open [http://127.0.0.1:4173](http://127.0.0.1:4173).
+Open [http://127.0.0.1:4173](http://127.0.0.1:4173), pick a model in
+`Runtime Settings` if prompted, and run a graph. On a first run, the chosen
+WebLLM model downloads and caches in the browser (a progress dialog shows
+size/stage); subsequent runs load from cache.
 
-### Run Provider Proxy (OpenAI / Claude / Gemini)
+If your browser doesn't support WebGPU, MindGraph falls back to `mock`
+mode automatically so the UI/planner remain usable without any model.
 
-In a second terminal, from the repository directory:
+### Optional: Cloud Providers via Edge Proxy
+
+To run agent nodes against OpenAI / Anthropic / Gemini instead of a local
+model, start the stateless edge proxy in a second terminal:
 
 ```bash
-node server/provider-proxy-server.mjs
+npm run start:edge
 ```
-
-Proxy defaults:
-- HTTP health: `http://127.0.0.1:8787/api/mindgraph/health`
-- Runtime HTTP endpoint: `http://127.0.0.1:8787/api/mindgraph/runtime`
-- Runtime WebSocket endpoint: `ws://127.0.0.1:8787/api/mindgraph/runtime/ws`
-- Tenancy mode: `local` (default bootstrap tenant/domain is `localhost`)
-- Control DB: `./data/mindgraph-control.sqlite` (default)
 
 Then in the app:
 1. Set runtime mode to `HTTP Runtime` in the top toolbar.
-2. Set runtime endpoint to `http://127.0.0.1:8787/api/mindgraph/runtime`.
-3. Open `Provider Settings` and configure provider, model, API key, and (optionally) proxy token.
+2. Set runtime endpoint to `http://127.0.0.1:3001/api/llm` (the proxy's default).
+3. Open `Runtime Settings` and configure provider, model, API key, and (optionally) proxy auth token.
+
+Full details, environment variables, and request/response shape:
+[docs/provider-proxy.md](docs/provider-proxy.md). The same proxy file also
+runs unmodified on Cloudflare Workers, Vercel Edge, and Deno Deploy.
 
 ## Architecture
 
@@ -60,16 +72,18 @@ No component directly mutates shared graph state.
 - `js/store/graph-store.js`: canonical graph mutations + selection + undo/redo + metadata updates
 - `js/store/ui-store.js`: UI-only runtime/feed state (`activity`, `queue`, `history`, `traces`)
 - `js/store/persistence-store.js`: autosave/restore
+- `js/store/library-store.js`: named workflow library (save/browse/switch saved graphs)
+- `js/store/checkpoint-store.js`: IndexedDB-backed human-in-the-loop checkpoint state, synced across tabs via `BroadcastChannel`
 - `js/core/graph-document.js`: normalize + validate graph docs
 - `js/core/graph-migrations.js`: schema versioning + ordered graph document migrations
 - `js/core/graph-semantics.js`: node/edge contracts and semantic rules
 - `js/runtime/execution-planner.js`: readiness, order, cycles, stale detection
-- `js/runtime/runtime-service.js`: request-driven runtime orchestration, retries, cancellation, propagation
-- `js/runtime/mock-agent-runtime.js`: planner-aware local runtime adapter
-- `js/runtime/http-agent-runtime.js`: external runtime adapter (WebSocket first, HTTP fallback)
+- `js/runtime/runtime-service.js`: request-driven runtime orchestration, mode switching, retries, cancellation, propagation
+- `js/runtime/mock-agent-runtime.js`: planner-aware local runtime adapter (no model calls)
+- `js/runtime/webllm-agent-runtime.js` + `webllm-engine.js` + `webllm-model-catalog.js`: in-browser inference via WebGPU/WebLLM (default mode when supported)
+- `js/runtime/http-agent-runtime.js`: external runtime adapter, `POST`s to the edge proxy for cloud providers
 - `js/runtime/runtime-audit-store.js`: persists planner snapshots/run traces into graph metadata
-- `server/provider-proxy-server.mjs`: hosted-capable provider proxy with tenant host/domain resolution (HTTP + WS)
-- `server/tenancy/*`: control-plane tenant registry, pluggable DB adapter, and host-based tenant resolver
+- `edge/llm-proxy.mjs`: optional, stateless edge proxy for OpenAI/Anthropic/Gemini (see [docs/provider-proxy.md](docs/provider-proxy.md))
 
 ## Graph Semantics (Implemented)
 
@@ -127,11 +141,13 @@ Runtime service behavior:
 
 ### Runtime modes
 
-- `mock`: in-browser execution against planner state
-- `http`: delegates to external runtime endpoint over WebSocket (fallback HTTP)
+- `webllm`: in-browser inference via WebGPU/WebLLM — default when the browser supports WebGPU, no backend required
+- `mock`: in-browser execution against planner state, no model calls — always available, used as the fallback when WebGPU is unavailable
+- `http`: delegates to the edge proxy (`edge/llm-proxy.mjs`) for cloud providers (OpenAI/Anthropic/Gemini)
 
 The toolbar controls mode and HTTP endpoint. Mode/endpoint are persisted in local storage.
-Provider settings (provider/model/api key/system prompt) are available in bottom panel `Runtime Settings`.
+Provider settings (provider/model/api key/system prompt) are available in bottom panel `Runtime Settings`,
+along with the WebLLM model picker and first-use download progress dialog.
 
 ## UI Clarity Improvements
 
@@ -195,10 +211,12 @@ Migration authoring details: [docs/graph-schema-migrations.md](docs/graph-schema
 ## Current Limitations
 
 - Port contracts are lightweight and do not enforce full JSON Schema semantics.
-- Proxy server currently supports single-node execution requests (`run-node`) and WebSocket structured runtime stream events (plan orchestration remains client-side).
+- WebLLM models are text-only (no multimodal input) and are a multi-gigabyte first download; mobile WebGPU support is inconsistent, so mobile is not a supported target yet.
+- The edge proxy handles single-node execution requests only (`POST /api/llm`); plan orchestration remains client-side.
 - API keys are session-only by default; persistence requires explicit opt-in (`Remember Keys On This Device`).
 - Planner uses in-memory recomputation each render/request (no incremental diff engine yet).
 - Batch execution parallelism is intentionally bounded by a configurable concurrency limit (`metadata.runtimePolicy.batchConcurrencyLimit` or `runtimePolicy.concurrencyLimit` override).
+- WebLLM (`@mlc-ai/web-llm`) is currently loaded from a CDN (`esm.run`) rather than vendored — first load requires that CDN to be reachable.
 
 ## Suggested Next Steps
 

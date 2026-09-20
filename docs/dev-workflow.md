@@ -28,17 +28,21 @@ python3 -m http.server 4173
 
 Open: <http://127.0.0.1:4173>
 
-## Run Hosted-Capable Runtime Proxy
+## Run the Edge Proxy (Optional — Cloud Providers Only)
+
+The app runs entirely in the browser by default (WebLLM). The edge proxy is
+only needed if you want to use a cloud provider (OpenAI/Anthropic/Gemini)
+instead of a local model:
 
 ```bash
-npm run start:proxy
+npm run start:edge
 ```
 
-Health endpoint:
-
-```bash
-curl http://127.0.0.1:8787/api/mindgraph/health
-```
+This starts `edge/llm-proxy.mjs` as a plain Node dev server on
+`http://127.0.0.1:3001` (configurable via `HOST`/`PORT`). The same file also
+runs unmodified under `wrangler dev`, `vercel dev`, or Deno Deploy. See
+[docs/provider-proxy.md](provider-proxy.md) for the request/response shape
+and environment variables.
 
 ## Test Commands
 
@@ -60,28 +64,7 @@ Runtime/planner focused tests:
 npm run test:runtime
 ```
 
-Proxy/tenancy focused tests:
-
-```bash
-npm run test:proxy
-```
-
 Expected successful test exit summary includes:
 
 - `# fail 0`
 - non-zero pass count
-
-## Multi-Tenant Local Defaults
-
-Without extra env vars, proxy bootstraps a default control-plane tenant mapping:
-
-- mode: `local`
-- bootstrap host/domain: `localhost`
-- control DB: `./data/mindgraph-control.sqlite`
-
-For hosted routing, set:
-
-- `TENANCY_MODE=hosted`
-- `CONTROL_DB_CLIENT=sqlite|mysql`
-- `CONTROL_DB_*` connection settings
-- `MINDGRAPH_PROXY_TOKEN` (recommended in hosted environments)

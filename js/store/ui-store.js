@@ -8,7 +8,8 @@ const cap = (items, max = 80) => items.slice(0, max);
 const readRuntimeMode = () => {
   try {
     const raw = window.localStorage.getItem(PERSISTENCE.storage.runtimeMode);
-    return raw === "http" ? "http" : "mock";
+    if (raw === "http" || raw === "webllm") return raw;
+    return "mock";
   } catch {
     return "mock";
   }

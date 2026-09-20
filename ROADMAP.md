@@ -1,14 +1,16 @@
 # MindGraph AI Roadmap
 
-Last updated: 2026-04
+Last updated: 2026-09
 
 ## Recently Shipped
 
+- In-browser inference via WebLLM/WebGPU, on by default when supported — no backend required for the default experience.
+- Cloud providers (OpenAI / Anthropic / Gemini) demoted to an optional, stateless edge proxy (`edge/llm-proxy.mjs`); the old hosted multi-tenant proxy server and control-plane DB were removed.
+- Human-in-the-loop checkpoints moved to IndexedDB with cross-tab `BroadcastChannel` sync; `approval.html` works fully offline.
 - Semantic graph contracts for nodes/edges with role-aware port presets and schema helpers.
 - Planner diagnostics with snapshot persistence and bottom-panel `Planner Diff`.
 - Batch execution with dependency-aware branch parallelism, retries/backoff, fail-fast, and cancellation.
 - Runtime timeline with run-session modeling, grouped node events, and filter modes (`All`, `Current Run`, `Selected Node`).
-- Provider proxy integration for OpenAI / Anthropic / Gemini via HTTP + WebSocket runtime transport.
 - UI quality updates:
   - running-state animations for queue/history/timeline/node badges
   - theme-adaptive toolbar icons via inline SVG + `currentColor`
